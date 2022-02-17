@@ -37,6 +37,11 @@ protected:
     onStream _on_stream;
 };
 
+/*
+实现将PT/TS包解包、注入到MediaSink的过程
+- addTrack
+- inputFrame
+*/
 class DecoderImp{
 public:
     typedef enum {
@@ -45,9 +50,16 @@ public:
     }Type;
 
     typedef std::shared_ptr<DecoderImp> Ptr;
-    ~DecoderImp() = default;
-
     static Ptr createDecoder(Type type, MediaSinkInterface *sink);
+
+    /*
+    - Decoder::input()
+      - onStream
+        - onTrack(new Track)
+          - sink->addTrack
+      - onFrame
+        - sink->inputFrame()
+    */
     ssize_t input(const uint8_t *data, size_t bytes);
 
 protected:
