@@ -26,12 +26,14 @@ public:
                          const std::string &strId,
                          const TitleMeta::Ptr &title = nullptr) : RtmpMuxer(title){
         _media_src = std::make_shared<RtmpMediaSource>(vhost, strApp, strId);
+        // 将ring数据拦截到RtmpMediaSource上的RtmpRing上去
         getRtmpRing()->setDelegate(_media_src);
     }
 
     ~RtmpMediaSourceMuxer() override{}
 
     void setListener(const std::weak_ptr<MediaSourceEvent> &listener){
+        // 事件路径: RtmpMediaSource-> this -> listener
         setDelegate(listener);
         _media_src->setListener(shared_from_this());
     }
@@ -52,7 +54,7 @@ public:
     void onReaderChanged(MediaSource &sender, int size) override {
         GET_CONFIG(bool, rtmp_demand, General::kRtmpDemand);
         _enabled = rtmp_demand ? size : true;
-        if (!size && rtmp_demand) {
+        if (!_enabled) {
             _clear_cache = true;
         }
         MediaSourceEventInterceptor::onReaderChanged(sender, size);
