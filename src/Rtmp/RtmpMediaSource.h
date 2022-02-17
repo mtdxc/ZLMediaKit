@@ -33,7 +33,10 @@ namespace mediakit {
  * 只要生成了这三要素，那么要实现rtmp推流、rtmp服务器就很简单了
  * rtmp推拉流协议中，先传递metadata，然后传递config帧，然后一直传递普通帧
  */
-class RtmpMediaSource : public MediaSource, public toolkit::RingDelegate<RtmpPacket::Ptr>, private PacketCache<RtmpPacket>{
+class RtmpMediaSource : public MediaSource, 
+    public toolkit::RingDelegate<RtmpPacket::Ptr>, // onWrite劫持RtmpRing写入
+    private PacketCache<RtmpPacket> // 合并写缓存
+{
 public:
     using Ptr = std::shared_ptr<RtmpMediaSource>;
     using RingDataType = std::shared_ptr<toolkit::List<RtmpPacket::Ptr> >;
@@ -96,6 +99,7 @@ public:
 
     /**
      * 设置metadata
+     * 由RtmpMediaSourceMuxer在onAllTrackReady中设入
      */
     virtual void setMetaData(const AMFValue &metadata) {
         _metadata = metadata;
@@ -154,9 +158,11 @@ private:
     bool _have_video = false;
     bool _have_audio = false;
     int _ring_size;
+    RingType::Ptr _ring;
+
+    // 记录当前时间戳
     uint32_t _track_stamps[TrackMax] = {0};
     AMFValue _metadata;
-    RingType::Ptr _ring;
 
     mutable std::recursive_mutex _mtx;
     std::unordered_map<int, RtmpPacket::Ptr> _config_frame_map;

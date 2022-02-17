@@ -12,12 +12,16 @@
 #define ZLMEDIAKIT_RTMPMUXER_H
 
 #include "Rtmp/Rtmp.h"
-#include "Extension/Frame.h"
 #include "Common/MediaSink.h"
 #include "RtmpCodec.h"
 
 namespace mediakit{
-
+class RtmpCodec;
+/*
+Rtmp混合器.
+- 拦截MediaSink的addTrack回调，生成metadata
+- 处理MediaSink的inputFrame，编码后传给 RtmpRing
+*/
 class RtmpMuxer : public MediaSinkInterface {
 public:
     typedef std::shared_ptr<RtmpMuxer> Ptr;
@@ -29,14 +33,12 @@ public:
     ~RtmpMuxer() override = default;
 
     /**
-     * 获取完整的SDP字符串
-     * @return SDP字符串
+     * 获取完整的MetaData头部
      */
     const AMFValue &getMetadata() const ;
 
     /**
-     * 获取rtmp环形缓存
-     * @return
+     * 获取rtmp环形缓存，用于输出数据
      */
     RtmpRing::RingType::Ptr getRtmpRing() const;
 
@@ -46,7 +48,7 @@ public:
     bool addTrack(const Track::Ptr & track) override;
 
     /**
-     * 写入帧数据
+     * 写入帧数据，最终数据从_rtmp_ring出
      * @param frame 帧
      */
     bool inputFrame(const Frame::Ptr &frame) override;
@@ -66,9 +68,9 @@ public:
      */
      void makeConfigPacket();
 private:
-    RtmpRing::RingType::Ptr _rtmp_ring;
     AMFValue _metadata;
-    RtmpCodec::Ptr _encoder[TrackMax];
+    std::shared_ptr<RtmpCodec> _encoder[TrackMax];
+    RtmpRing::RingType::Ptr _rtmp_ring;
 };
 
 
