@@ -201,7 +201,7 @@ bool MP4MuxerInterface::addTrack(const Track::Ptr &track) {
                                                  audio_track->getAudioSampleRate(),
                                                  nullptr, 0);
             if (track_id < 0) {
-                WarnL << "添加Track[" << track->getCodecName() << "]失败:" << track_id;
+                WarnL << "Track[" << track->getCodecName() << "]添加失败:" << track_id;
                 return false;
             }
             _codec_to_trackid[track->getCodecId()].track_id = track_id;
@@ -302,7 +302,9 @@ bool MP4MuxerInterface::addTrack(const Track::Ptr &track) {
             break;
         }
 
-        default: WarnL << "MP4录制不支持该编码格式:" << track->getCodecName(); return false;
+        default: 
+            WarnL << "MP4录制不支持该编码格式:" << track->getCodecName(); 
+            return false;
     }
 
     //尝试音视频同步
@@ -317,6 +319,7 @@ MP4MuxerMemory::MP4MuxerMemory() {
 }
 
 MP4FileIO::Writer MP4MuxerMemory::createWriter() {
+    // fmp4
     return _memory_file->createWriter(MOV_FLAG_SEGMENT, true);
 }
 
@@ -324,6 +327,7 @@ const string &MP4MuxerMemory::getInitSegment() {
     if (_init_segment.empty()) {
         initSegment();
         saveSegment();
+        // 输出 ftyp 和 moov
         _init_segment = _memory_file->getAndClearMemory();
     }
     return _init_segment;

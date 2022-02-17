@@ -83,7 +83,7 @@ public:
     }
 
     /**
-     * 情况GOP缓存
+     * 清空GOP缓存
      */
     void clearCache() override {
         PacketCache<TSPacket>::clearCache();
@@ -94,11 +94,9 @@ private:
     void createRing(){
         std::weak_ptr<TSMediaSource> weak_self = std::dynamic_pointer_cast<TSMediaSource>(shared_from_this());
         _ring = std::make_shared<RingType>(_ring_size, [weak_self](int size) {
-            auto strong_self = weak_self.lock();
-            if (!strong_self) {
-                return;
+            if (auto strong_self = weak_self.lock()) {
+                strong_self->onReaderChanged(size);
             }
-            strong_self->onReaderChanged(size);
         });
         //注册媒体源
         regist();

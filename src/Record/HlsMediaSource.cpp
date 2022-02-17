@@ -40,8 +40,7 @@ void HlsCookieData::addReaderCount() {
 HlsCookieData::~HlsCookieData() {
     if (*_added) {
         uint64_t duration = (_ticker.createdTime() - _ticker.elapsedTime()) / 1000;
-        WarnL << _sock_info->getIdentifier() << "(" << _sock_info->get_peer_ip() << ":" << _sock_info->get_peer_port()
-              << ") " << "HLS播放器(" << _info.shortUrl() << ")断开,耗时(s):" << duration;
+        WarnP(_sock_info)<< "HLS播放器(" << _info.shortUrl() << ")断开,耗时(s):" << duration;
 
         GET_CONFIG(uint32_t, iFlowThreshold, General::kFlowThreshold);
         uint64_t bytes = _bytes.load();
