@@ -74,6 +74,7 @@ public:
 protected:
     void startThread(const std::string &name);
     bool addEncodeTask(std::function<void()> task);
+    // 解码要出现丢帧，则一直丢到关键帧才停止
     bool addDecodeTask(bool key_frame, std::function<void()> task);
     bool isEnabled() const;
 
@@ -88,6 +89,7 @@ private:
     };
 
 private:
+    // 解码丢包，直到下一个关键帧到来
     bool _decode_drop_start = false;
     bool _exit = false;
     size_t _max_task = 30;

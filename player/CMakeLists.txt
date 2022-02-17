@@ -32,6 +32,8 @@ endif ()
 message(STATUS "${PLAYER_NAME} enabled")
 
 aux_source_directory(. SRC_LIST)
+FILE (GLOB ALL_INCLUDES "*.hpp" "*.h")
+list(APPEND SRC_LIST ${ALL_INCLUDES})
 add_executable(${PLAYER_NAME} ${SRC_LIST})
 
 if (MSVC)
