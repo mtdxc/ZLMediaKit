@@ -15,7 +15,7 @@
 #include "Rtcp/RtcpContext.h"
 #include "Common/config.h"
 
-using namespace std;
+using std::string;
 using namespace toolkit;
 
 namespace mediakit{
@@ -49,7 +49,7 @@ public:
         _ssrc = ssrc;
     }
 
-    void setOnDetach(function<void()> cb) {
+    void setOnDetach(std::function<void()> cb) {
         if (_process) {
             _process->setOnDetach(std::move(cb));
         } else {
@@ -71,7 +71,7 @@ public:
     }
 
     void startRtcp() {
-        weak_ptr<RtcpHelper> weak_self = shared_from_this();
+        std::weak_ptr<RtcpHelper> weak_self = shared_from_this();
         _rtcp_sock->setOnRead([weak_self](const Buffer::Ptr &buf, struct sockaddr *addr, int addr_len) {
             // 用于接受rtcp打洞包
             auto strong_self = weak_self.lock();
@@ -101,7 +101,7 @@ public:
                 }
                 if (!process) { // process 未创建，触发rtp server 超时事件
                     NoticeCenter::Instance().emitEvent(Broadcast::KBroadcastRtpServerTimeout,strong_self->_local_port,strong_self->_stream_id,(int)strong_self->_tcp_mode,strong_self->_re_use_port,strong_self->_ssrc);
-                }
+            }
             }
             return 0;
         });
@@ -145,7 +145,7 @@ private:
     Socket::Ptr _rtcp_sock;
     RtpProcess::Ptr _process;
     std::string _stream_id;
-    function<void()> _on_detach;
+    std::function<void()> _on_detach;
     std::shared_ptr<struct sockaddr_storage> _rtcp_addr;
     EventPoller::DelayTask::Ptr _delay_task;
 };
@@ -203,9 +203,11 @@ void RtpServer::start(uint16_t local_port, const string &stream_id, TcpMode tcp_
         });
     } else {
 #if 1
-        //单端口多线程接收多个流，根据ssrc区分流
+        //单端口多线程接收多个流，根据客户端ip+port区分RtpSession，根据ssrc区分流(RtpSelector)
         udp_server = std::make_shared<UdpServer>(rtp_socket->getPoller());
+        // 此时的rtp_socket只是来判断端口是否可用而已，数据由udp_server接管，后者可以做到一个peer一个线程
         udp_server->start<RtpSession>(rtp_socket->get_local_port(), local_ip);
+        // 这边的rtp_socket只起到占用端口作用
         rtp_socket = nullptr;
 #else
         //单端口单线程接收多个流
@@ -229,7 +231,7 @@ void RtpServer::start(uint16_t local_port, const string &stream_id, TcpMode tcp_
     _rtcp_helper = helper;
 }
 
-void RtpServer::setOnDetach(function<void()> cb) {
+void RtpServer::setOnDetach(std::function<void()> cb) {
     if (_rtcp_helper) {
         _rtcp_helper->setOnDetach(std::move(cb));
     }
@@ -239,12 +241,12 @@ uint16_t RtpServer::getPort() {
     return _udp_server ? _udp_server->getPort() : _rtp_socket->get_local_port();
 }
 
-void RtpServer::connectToServer(const std::string &url, uint16_t port, const function<void(const SockException &ex)> &cb) {
+void RtpServer::connectToServer(const std::string &url, uint16_t port, const std::function<void(const SockException &ex)> &cb) {
     if (_tcp_mode != ACTIVE || !_rtp_socket) {
         cb(SockException(Err_other, "仅支持tcp主动模式"));
         return;
     }
-    weak_ptr<RtpServer> weak_self = shared_from_this();
+    std::weak_ptr<RtpServer> weak_self = shared_from_this();
     _rtp_socket->connect(url, port, [url, port, cb, weak_self](const SockException &err) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
@@ -268,7 +270,7 @@ void RtpServer::onConnect() {
     _rtp_socket->setOnRead([rtp_session](const Buffer::Ptr &buf, struct sockaddr *addr, int addr_len) {
         rtp_session->onRecv(buf);
     });
-    weak_ptr<RtpServer> weak_self = shared_from_this();
+    std::weak_ptr<RtpServer> weak_self = shared_from_this();
     _rtp_socket->setOnErr([weak_self](const SockException &err) {
         if (auto strong_self = weak_self.lock()) {
             strong_self->_rtp_socket->setOnRead(nullptr);

@@ -160,7 +160,8 @@ void DecoderImp::onStream(int stream, int codecid, const void *extra, size_t byt
     }
 }
 
-void DecoderImp::onDecode(int stream,int codecid,int flags,int64_t pts,int64_t dts,const void *data,size_t bytes) {
+void DecoderImp::onDecode(int stream, int codecid, int flags, int64_t pts, int64_t dts, const void* data, size_t bytes) {
+    // 单位换算成ms
     pts /= 90;
     dts /= 90;
 
@@ -190,7 +191,7 @@ void DecoderImp::onDecode(int stream,int codecid,int flags,int64_t pts,int64_t d
         case PSI_STREAM_MPEG4_AAC :
         case PSI_STREAM_AAC: {
             uint8_t *ptr = (uint8_t *)data;
-            if(!(bytes > 7 && ptr[0] == 0xFF && (ptr[1] & 0xF0) == 0xF0)){
+            if(!(bytes > ADTS_HEADER_LEN && ptr[0] == 0xFF && (ptr[1] & 0xF0) == 0xF0)){
                 //这不是aac
                 break;
             }

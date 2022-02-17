@@ -11,7 +11,6 @@
 #ifndef ZLMEDIAKIT_TSDECODER_H
 #define ZLMEDIAKIT_TSDECODER_H
 
-#include "Util/logger.h"
 #include "Http/HttpRequestSplitter.h"
 #include "Decoder.h"
 
@@ -23,10 +22,13 @@ namespace mediakit {
 //TS包分割器，用于split一个一个的ts包
 class TSSegment : public HttpRequestSplitter {
 public:
-    typedef std::function<void(const char *data,size_t len)> onSegment;
     TSSegment(size_t size = TS_PACKET_SIZE) : _size(size){}
     ~TSSegment(){}
+
+    // 收到TS包回调
+    typedef std::function<void(const char *data, size_t len)> onSegment;
     void setOnSegment(onSegment cb);
+
     static bool isTSPacket(const char *data, size_t len);
 
 protected:

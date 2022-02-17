@@ -32,21 +32,16 @@ RtpProcess::RtpProcess(const string &stream_id) {
     _media_info._streamid = stream_id;
 
     GET_CONFIG(string, dump_dir, RtpProxy::kDumpDir);
+    if(!dump_dir.empty())
     {
-        FILE *fp = !dump_dir.empty() ? File::create_file(File::absolutePath(_media_info._streamid + ".rtp", dump_dir).data(), "wb") : nullptr;
+        FILE *fp = File::create_file(File::absolutePath(_media_info._streamid + ".rtp", dump_dir).c_str(), "wb");
         if (fp) {
-            _save_file_rtp.reset(fp, [](FILE *fp) {
-                fclose(fp);
-            });
+            _save_file_rtp.reset(fp, fclose);
         }
-    }
 
-    {
-        FILE *fp = !dump_dir.empty() ? File::create_file(File::absolutePath(_media_info._streamid + ".video", dump_dir).data(), "wb") : nullptr;
+        fp = File::create_file(File::absolutePath(_media_info._streamid + ".video", dump_dir).c_str(), "wb");
         if (fp) {
-            _save_file_video.reset(fp, [](FILE *fp) {
-                fclose(fp);
-            });
+            _save_file_video.reset(fp, fclose);
         }
     }
 }
@@ -83,6 +78,7 @@ bool RtpProcess::inputRtp(bool is_udp, const Socket::Ptr &sock, const char *data
 
     _total_bytes += len;
     if (_save_file_rtp) {
+        // rtp dump格式
         uint16_t size = (uint16_t)len;
         size = htons(size);
         fwrite((uint8_t *) &size, 2, 1, _save_file_rtp.get());
@@ -95,8 +91,7 @@ bool RtpProcess::inputRtp(bool is_udp, const Socket::Ptr &sock, const char *data
     auto header = (RtpHeader *) data;
     onRtp(ntohs(header->seq), ntohl(header->stamp), 0/*不发送sr,所以可以设置为0*/ , 90000/*ps/ts流时间戳按照90K采样率*/, len);
 
-    GET_CONFIG(string, dump_dir, RtpProxy::kDumpDir);
-    if (_muxer && !_muxer->isEnabled() && !dts_out && dump_dir.empty()) {
+    if (_muxer && !_muxer->isEnabled() && !dts_out && _save_file_video) {
         //无人访问、且不取时间戳、不导出调试文件时，我们可以直接丢弃数据
         _last_frame_time.resetTime();
         return false;
@@ -118,6 +113,7 @@ bool RtpProcess::inputFrame(const Frame::Ptr &frame) {
         _last_frame_time.resetTime();
         return _muxer->inputFrame(frame);
     }
+    // else cache
     if (_cached_func.size() > kMaxCachedFrame) {
         WarnL << "cached frame of track(" << frame->getCodecName() << ") is too much, now dropped, please check your on_publish hook url in config.ini file";
         return false;
@@ -212,17 +208,11 @@ uint16_t RtpProcess::get_peer_port() {
 }
 
 string RtpProcess::get_local_ip() {
-    if (_sock) {
-        return _sock->get_local_ip();
-    }
-    return "::";
+    return _sock ? _sock->get_local_ip() : "::";
 }
 
 uint16_t RtpProcess::get_local_port() {
-    if (_sock) {
-        return _sock->get_local_port();
-    }
-    return 0;
+    return _sock ? _sock->get_local_port() : 0;
 }
 
 string RtpProcess::getIdentifier() const {

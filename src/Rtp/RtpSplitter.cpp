@@ -16,9 +16,6 @@ namespace mediakit{
 static const char kEHOME_MAGIC[] = "\x01\x00\x01\x00";
 static const int  kEHOME_OFFSET = 256;
 
-RtpSplitter::RtpSplitter() {}
-RtpSplitter::~RtpSplitter() {}
-
 ssize_t RtpSplitter::onRecvHeader(const char *data,size_t len){
     //忽略偏移量
     data += _offset;
@@ -69,9 +66,11 @@ const char *RtpSplitter::onSearchPacketTail(const char *data, size_t len) {
         _offset = 4;
         return onSearchPacketTail_l(data + 2, len - 2);
     }
-    //两个字节的rtp头
-    _offset = 2;
-    return onSearchPacketTail_l(data, len);
+    else {
+        //两个字节的rtp头
+        _offset = 2;
+        return onSearchPacketTail_l(data, len);
+    }
 }
 
 const char *RtpSplitter::onSearchPacketTail_l(const char *data, size_t len) {
