@@ -245,16 +245,14 @@ bool H264Encoder::init(int iWidth, int iHeight, int iFps, int iBitRate) {
     //* bitstream parameters
     /*open-GOP
      码流里面包含B帧的时候才会出现open-GOP。
-     一个GOP里面的某一帧在解码时要依赖于前一个GOP的某些帧，
-     这个GOP就称为open-GOP。
-     有些解码器不能完全支持open-GOP码流，
-     例如蓝光解码器，因此在x264里面open-GOP是默认关闭的。
+     一个GOP里面的某一帧在解码时要依赖于前一个GOP的某些帧，这个GOP就称为open-GOP。
+     有些解码器不能完全支持open-GOP码流，例如蓝光解码器，因此在x264里面open-GOP是默认关闭的。
      对于解码端，接收到的码流如果如下:I0 B0 B1 P0 B2 B3...这就是一个open-GOP码流（I帧后面紧跟B帧）。
      因此B0 B1的解码需要用到I0前面一个GOP的数据，B0 B1的dts是小于I0的。
      如果码流如下: I0 P0 B0 B1 P1 B2 B3...这就是一个close-GOP码流，
      I0后面所有帧的解码不依赖于I0前面的帧，I0后面所有帧的dts都比I0的大。
-     如果码流是IDR0 B0 B1 P0 B2 B3...那个这个GOP是close-GOP，B0,B1虽然dst比IDR0小，
-     但编解码端都刷新了参考缓冲，B0,B1参考不到前向GOP帧。
+     如果码流是IDR0 B0 B1 P0 B2 B3...那个这个GOP是close-GOP，
+     B0,B1虽然dst比IDR0小，但编解码端都刷新了参考缓冲，B0,B1参考不到前向GOP帧。
      对于编码端，如果编码帧类型决定如下: ...P0 B1 B2 P3 B4 B5 I6这就会输出open-Gop码流 （P0 P3 B1 B2 I6 B4 B5...），
      B4 B5的解码依赖P3。
      如果编码帧类型决定如下...P0 B1 B2 P3 B4 P5 I6这样就不会输出open-GOP码流（P0 P3 B1 B2 P5 B4 I6...）。

@@ -54,8 +54,8 @@ int main(int argc, char *argv[]) {
     Logger::Instance().add(std::make_shared<ConsoleChannel>());
     Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
 
-    if (argc < 3) {
-        ErrorL << "\r\n测试方法：./test_player rtxp_url rtp_type\r\n"
+    if (argc < 2) {
+        ErrorL << "\r\n测试方法：./test_player rtxp_url [rtp_type]\r\n"
                << "例如：./test_player rtsp://admin:123456@127.0.0.1/live/0 0\r\n"
                << endl;
         return 0;
@@ -78,6 +78,7 @@ int main(int argc, char *argv[]) {
         if (videoTrack) {
             auto decoder = std::make_shared<FFmpegDecoder>(videoTrack);
             decoder->setOnDecode([displayer](const FFmpegFrame::Ptr &yuv) {
+                // 解码完毕渲染，仍进行线程投递
                 SDLDisplayerHelper::Instance().doTask([yuv, displayer]() {
                     //sdl要求在main线程渲染
                     displayer->displayYUV(yuv->get());
@@ -85,6 +86,7 @@ int main(int argc, char *argv[]) {
                 });
             });
             videoTrack->addDelegate([decoder](const Frame::Ptr &frame) {
+                // 来帧解码,内部有线程投递
                 return decoder->inputFrame(frame, false, true);
             });
         }
@@ -95,17 +97,21 @@ int main(int argc, char *argv[]) {
             //FFmpeg解码时已经统一转换为16位整型pcm
             audio_player->setup(audioTrack->getAudioSampleRate(), audioTrack->getAudioChannel(), AUDIO_S16);
             FFmpegSwr::Ptr swr;
-
-            decoder->setOnDecode([audio_player, swr](const FFmpegFrame::Ptr &frame) mutable{
+            decoder->setOnDecode([audio_player, swr](const FFmpegFrame::Ptr &frame_ptr) mutable {
+                AVFrame* frame = frame_ptr->get();
                 if (!swr) {
-                    swr = std::make_shared<FFmpegSwr>(AV_SAMPLE_FMT_S16, frame->get()->channels,
-                                                      frame->get()->channel_layout, frame->get()->sample_rate);
+                    swr = std::make_shared<FFmpegSwr>(AV_SAMPLE_FMT_S16, frame->channels,
+                                                      frame->channel_layout, frame->sample_rate);
                 }
-                auto pcm = swr->inputFrame(frame);
-                auto len = pcm->get()->nb_samples * pcm->get()->channels * av_get_bytes_per_sample((enum AVSampleFormat)pcm->get()->format);
-                audio_player->playPCM((const char *) (pcm->get()->data[0]), MIN(len, frame->get()->linesize[0]));
+                // 重采样
+                auto pcm = swr->inputFrame(frame_ptr);
+                frame = pcm->get();
+                auto len = frame->nb_samples * frame->channels * av_get_bytes_per_sample((enum AVSampleFormat)frame->format);
+                // 播放
+                audio_player->playPCM((const char *) (frame->data[0]), MIN(len, frame->linesize[0]));
             });
             audioTrack->addDelegate([decoder](const Frame::Ptr &frame) {
+                // 来帧解码
                 return decoder->inputFrame(frame, false, true);
             });
         }
@@ -115,7 +121,8 @@ int main(int argc, char *argv[]) {
         WarnL << "play shutdown: " << ex.what();
     });
 
-    (*player)[Client::kRtpType] = atoi(argv[2]);
+    if(argc>2)
+        (*player)[Client::kRtpType] = atoi(argv[2]);
     //不等待track ready再回调播放成功事件，这样可以加快秒开速度
     (*player)[Client::kWaitTrackReady] = false;
     if (argc > 3) {

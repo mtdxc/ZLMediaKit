@@ -16,7 +16,7 @@
 #include "Player/MediaPlayer.h"
 
 namespace mediakit {
-
+/// 将MediaPlay代理成 MediaSource, 并实现重试逻辑
 class PlayerProxy : public MediaPlayer, public MediaSourceEvent, public std::enable_shared_from_this<PlayerProxy> {
 public:
     typedef std::shared_ptr<PlayerProxy> Ptr;
@@ -32,13 +32,15 @@ public:
      * 设置play结果回调，只触发一次；在play执行之前有效
      * @param cb 回调对象
      */
-    void setPlayCallbackOnce(const std::function<void(const toolkit::SockException &ex)> &cb);
-
+    void setPlayCallbackOnce(const std::function<void(const toolkit::SockException &ex)> &cb)
+    { _on_play = cb; }
     /**
      * 设置主动关闭回调
      * @param cb 回调对象
      */
-    void setOnClose(const std::function<void(const toolkit::SockException &ex)> &cb);
+    void setOnClose(const std::function<void(const toolkit::SockException &ex)> &cb) {
+        _on_close = cb ? cb : [](const toolkit::SockException &) {};
+    }
 
     /**
      * 开始拉流播放
