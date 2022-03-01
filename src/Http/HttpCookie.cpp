@@ -17,7 +17,7 @@
 #endif
 
 using namespace toolkit;
-using namespace std;
+using std::string;
 
 namespace mediakit {
 
@@ -33,14 +33,13 @@ void HttpCookie::setHost(const string &host) {
 static time_t time_to_epoch(const struct tm *ltm, int utcdiff) {
     const int mon_days[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
     long tyears, tdays, leaps, utc_hrs;
-    int i;
 
     tyears = ltm->tm_year - 70; // tm->tm_year is from 1900.
     leaps = (tyears + 2) / 4; // no of next two lines until year 2100.
     // i = (ltm->tm_year – 100) / 100;
     // leaps -= ( (i/4)*3 + i%4 );
     tdays = 0;
-    for (i = 0; i < ltm->tm_mon; i++)
+    for (int i = 0; i < ltm->tm_mon; i++)
         tdays += mon_days[i];
 
     tdays += ltm->tm_mday - 1; // days of month passed.
@@ -87,16 +86,16 @@ HttpCookieStorage &HttpCookieStorage::Instance() {
 }
 
 void HttpCookieStorage::set(const HttpCookie::Ptr &cookie) {
-    lock_guard<mutex> lck(_mtx_cookie);
+    std::lock_guard<std::mutex> lck(_mtx_cookie);
     if (!cookie || !(*cookie)) {
         return;
     }
     _all_cookie[cookie->_host][cookie->_path][cookie->_key] = cookie;
 }
 
-vector<HttpCookie::Ptr> HttpCookieStorage::get(const string &host, const string &path) {
-    vector<HttpCookie::Ptr> ret(0);
-    lock_guard<mutex> lck(_mtx_cookie);
+std::vector<HttpCookie::Ptr> HttpCookieStorage::get(const string &host, const string &path) {
+    std::vector<HttpCookie::Ptr> ret(0);
+    std::lock_guard<std::mutex> lck(_mtx_cookie);
     auto it = _all_cookie.find(host);
     if (it == _all_cookie.end()) {
         //未找到该host相关记录
