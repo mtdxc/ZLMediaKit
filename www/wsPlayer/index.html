@@ -1,0 +1,63 @@
+<html>
+<head>
+</head>
+<body>
+    <script type="text/javascript" src="mp4box.all.min.js"></script>
+    <script type="text/javascript" src="wsPlayer.js"></script>
+    <div>
+    Url:<input type="text" id="edUrl" style="width:300px;" />
+    <button type="button" onclick="PlayUrl()">PlayWs</button>
+    <button type="button" onclick="PlayHttp()">PlayHttp</button>
+    <button type="button" onclick="PlayHls()">PlayHls</button>
+    </div>
+    <video autoplay id="video"></video>
+    <script>
+        document.getElementById("edUrl").value = window.location.host + "/live/test";
+
+        var player = null;
+        function closePlayer() {
+            if (player) {
+                player.close();
+                player = null;
+            }
+        }
+
+        function PlayUrl() {
+            var edUrl = document.getElementById("edUrl").value;
+            if (-1==edUrl.indexOf("://")) {
+                var proto = "ws://";
+                if (window.location.protocol === 'https:')
+                    proto = "wss://";
+                edUrl = proto + edUrl;
+            }
+            if (!edUrl.endsWith(".mp4"))
+                edUrl += ".live.mp4";
+            closePlayer();
+            console.log("play " + edUrl);
+            player = new wsPlayer("video", edUrl);
+            player.open();
+        }
+        function PlayHttp() {
+            var edUrl = document.getElementById("edUrl").value;
+            if (-1==edUrl.indexOf("://"))
+                edUrl = window.location.protocol + "//" + edUrl;
+            if (!edUrl.endsWith(".mp4"))
+                edUrl += ".live.mp4";
+            closePlayer();
+            console.log("play " + edUrl);
+            document.getElementById("video").src = edUrl;
+        }
+        function PlayHls() {
+            var edUrl = document.getElementById("edUrl").value;
+            if (-1==edUrl.indexOf("://")) {
+                edUrl = window.location.protocol + "//" + edUrl;
+            }
+            if (!edUrl.endsWith(".m3u8"))
+                edUrl += "/hls.m3u8";
+            closePlayer();
+            console.log("play " + edUrl);
+            document.getElementById("video").src = edUrl;
+        }
+    </script>
+</body>
+</html>
