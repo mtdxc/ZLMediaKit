@@ -18,7 +18,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #define MS_CLASS "RTC::StunPacket"
 // #define MS_LOG_DEV_LEVEL 3
-
+#include "logger.h"
 #include "StunPacket.hpp"
 #include <cstdio>  // std::snprintf()
 #include <cstring> // std::memcmp(), std::memcpy()

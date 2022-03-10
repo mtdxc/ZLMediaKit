@@ -15,8 +15,7 @@
 #pragma pack(push, 1)
 #endif // defined(_WIN32)
 
-using namespace std;
-using namespace toolkit;
+using std::string;
 
 namespace mediakit {
 
@@ -37,10 +36,10 @@ namespace mediakit {
 class RtpExtOneByte {
 public:
     static constexpr uint16_t kMinSize = 1;
-    size_t getSize() const;
-    uint8_t getId() const;
-    void setId(uint8_t id);
-    uint8_t* getData();
+    size_t getSize() const {return len + 1;}
+    uint8_t getId() const { return id; }
+    void setId(uint8_t in) {id = in & 0x0F;}
+    uint8_t* getData() {return data;}
 
 private:
 #if __BYTE_ORDER == __BIG_ENDIAN
@@ -68,10 +67,10 @@ class RtpExtTwoByte {
 public:
     static constexpr uint16_t kMinSize = 2;
 
-    size_t getSize() const;
-    uint8_t getId() const;
-    void setId(uint8_t id);
-    uint8_t* getData();
+    size_t getSize() const {return len;}
+    uint8_t getId() const {return id;}
+    void setId(uint8_t in) {id = in;}
+    uint8_t* getData() {return data;}
 
 private:
     uint8_t id;
@@ -82,42 +81,6 @@ private:
 #if defined(_WIN32)
 #pragma pack(pop)
 #endif // defined(_WIN32)
-
-//////////////////////////////////////////////////////////////////
-
-size_t RtpExtOneByte::getSize() const {
-    return len + 1;
-}
-
-uint8_t RtpExtOneByte::getId() const {
-    return id;
-}
-
-void RtpExtOneByte::setId(uint8_t in) {
-    id = in & 0x0F;
-}
-
-uint8_t *RtpExtOneByte::getData() {
-    return data;
-}
-
-//////////////////////////////////////////////////////////////////
-
-size_t RtpExtTwoByte::getSize() const {
-    return len;
-}
-
-uint8_t RtpExtTwoByte::getId() const {
-    return id;
-}
-
-void RtpExtTwoByte::setId(uint8_t in) {
-    id = in;
-}
-
-uint8_t *RtpExtTwoByte::getData() {
-    return data;
-}
 
 //////////////////////////////////////////////////////////////////
 
@@ -135,7 +98,7 @@ bool isOneByteExt<RtpExtOneByte>(){
 }
 
 template<typename Type>
-void appendExt(map<uint8_t, RtpExt> &ret, uint8_t *ptr, const uint8_t *end) {
+void appendExt(std::map<uint8_t, RtpExt> &ret, uint8_t *ptr, const uint8_t *end) {
     while (ptr < end) {
         auto ext = reinterpret_cast<Type *>(ptr);
         if (ext->getId() == (uint8_t) RtpExtType::padding) {
@@ -173,11 +136,11 @@ const uint8_t& RtpExt::operator[](size_t pos) const{
 }
 
 RtpExt::operator std::string() const{
-    return string(_data, _size);
+    return std::string(_data, _size);
 }
 
-map<uint8_t/*id*/, RtpExt/*data*/> RtpExt::getExtValue(const RtpHeader *header) {
-    map<uint8_t, RtpExt> ret;
+std::map<uint8_t/*id*/, RtpExt/*data*/> RtpExt::getExtValue(const RtpHeader *header) {
+    std::map<uint8_t, RtpExt> ret;
     assert(header);
     auto ext_size = header->getExtSize();
     if (!ext_size) {
@@ -198,12 +161,12 @@ map<uint8_t/*id*/, RtpExt/*data*/> RtpExt::getExtValue(const RtpHeader *header) 
 }
 
 #define XX(type, url) {RtpExtType::type , url},
-static map<RtpExtType/*id*/, string/*ext*/> s_type_to_url = {RTP_EXT_MAP(XX)};
+static std::map<RtpExtType/*id*/, string/*ext*/> s_type_to_url = {RTP_EXT_MAP(XX)};
 #undef XX
 
 
 #define XX(type, url) {url, RtpExtType::type},
-static unordered_map<string/*ext*/, RtpExtType/*id*/> s_url_to_type = {RTP_EXT_MAP(XX)};
+static std::unordered_map<string/*ext*/, RtpExtType/*id*/> s_url_to_type = {RTP_EXT_MAP(XX)};
 #undef XX
 
 RtpExtType RtpExt::getExtType(const string &url) {
@@ -214,10 +177,10 @@ RtpExtType RtpExt::getExtType(const string &url) {
     return it->second;
 }
 
-const string &RtpExt::getExtUrl(RtpExtType type) {
+const std::string &RtpExt::getExtUrl(RtpExtType type) {
     auto it = s_type_to_url.find(type);
     if (it == s_type_to_url.end()) {
-        throw std::invalid_argument(string("未识别的rtp ext类型:") + to_string((int) type));
+        throw std::invalid_argument(string("未识别的rtp ext类型:") + std::to_string((int) type));
     }
     return it->second;
 }
@@ -231,8 +194,8 @@ const char *RtpExt::getExtName(RtpExtType type) {
 #undef XX
 }
 
-string RtpExt::dumpString() const {
-    _StrPrinter printer;
+std::string RtpExt::dumpString() const {
+    toolkit::_StrPrinter printer;
     switch (_type) {
         case RtpExtType::ssrc_audio_level : {
             bool vad;
@@ -261,9 +224,10 @@ string RtpExt::dumpString() const {
         }
         case RtpExtType::video_timing : {
             uint8_t flags;
-            uint16_t encode_start, encode_finish, packetization_complete, last_pkt_left_pacer, reserved_net0, reserved_net1;
-            getVideoTiming(flags, encode_start, encode_finish, packetization_complete, last_pkt_left_pacer,
-                           reserved_net0, reserved_net1);
+            uint16_t encode_start, encode_finish, packetization_complete, 
+                last_pkt_left_pacer, reserved_net0, reserved_net1;
+            getVideoTiming(flags, encode_start, encode_finish, packetization_complete, 
+                last_pkt_left_pacer, reserved_net0, reserved_net1);
             printer << "video timing, flags:" << (int) flags
                     << ",encode:" << encode_start << "-" << encode_finish
                     << ",packetization_complete:" << packetization_complete
@@ -297,7 +261,7 @@ string RtpExt::dumpString() const {
             break;
         }
         default: {
-            printer << getExtName(_type) << ", hex:" << hexdump(data(), size());
+            printer << getExtName(_type) << ", hex:" << toolkit::hexdump(data(), size());
             break;
         }
     }
@@ -389,8 +353,7 @@ string RtpExt::getSdesMid() const {
 //
 //   The RtpStreamId payload is UTF-8 encoded and is not null-terminated.
 //
-//      RFC EDITOR NOTE: Please replace TBD with the assigned SDES
-//      identifier value.
+//      RFC EDITOR NOTE: Please replace TBD with the assigned SDES identifier value.
 
 //3.2.  RTCP 'RepairedRtpStreamId' SDES Extension
 //
@@ -400,11 +363,9 @@ string RtpExt::getSdesMid() const {
 //       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 //
 //
-//   The RepairedRtpStreamId payload is UTF-8 encoded and is not null-
-//   terminated.
+//   The RepairedRtpStreamId payload is UTF-8 encoded and is not null-terminated.
 //
-//      RFC EDITOR NOTE: Please replace TBD with the assigned SDES
-//      identifier value.
+//      RFC EDITOR NOTE: Please replace TBD with the assigned SDES identifier value.
 
 string RtpExt::getRtpStreamId() const {
     CHECK(_type == RtpExtType::sdes_rtp_stream_id && size() >= 1);
@@ -421,13 +382,11 @@ string RtpExt::getRepairedRtpStreamId() const {
 //Wire format: 1-byte extension, 13 bytes of data. Total 14 bytes extra per packet (plus 1-3 padding byte in some cases, plus shared 4 bytes for all extensions present: 2 byte magic word 0xBEDE, 2 byte # of extensions).
 //
 //First byte is a flags field. Defined flags:
-//
 //0x01 - extension is set due to timer.
 //0x02 - extension is set because the frame is larger than usual.
 //Both flags may be set at the same time. All remaining 6 bits are reserved and should be ignored.
 //
 //Next, 6 timestamps are stored as 16-bit values in big-endian order, representing delta from the capture time of a packet in ms. Timestamps are, in order:
-//
 //Encode start.
 //Encode finish.
 //Packetization complete.
@@ -578,8 +537,8 @@ void RtpExtContext::setRid(uint32_t ssrc, const string &rid) {
 RtpExt RtpExtContext::changeRtpExtId(const RtpHeader *header, bool is_recv, string *rid_ptr, RtpExtType type) {
     string rid, repaired_rid;
     RtpExt ret;
-    auto ext_map = RtpExt::getExtValue(header);
-    for (auto &pr : ext_map) {
+    // 遍历所有扩展包头
+    for (auto &pr : RtpExt::getExtValue(header)) {
         if (is_recv) {
             auto it = _rtp_ext_id_to_type.find(pr.first);
             if (it == _rtp_ext_id_to_type.end()) {
@@ -590,10 +549,16 @@ RtpExt RtpExtContext::changeRtpExtId(const RtpHeader *header, bool is_recv, stri
             pr.second.setType(it->second);
             //重新赋值ext id为 ext type，作为后面处理ext的统一中间类型
             pr.second.setExtId((uint8_t) it->second);
+            
             switch (it->second) {
-                case RtpExtType::sdes_rtp_stream_id : rid = pr.second.getRtpStreamId(); break;
-                case RtpExtType::sdes_repaired_rtp_stream_id : repaired_rid = pr.second.getRepairedRtpStreamId(); break;
-                default : break;
+                case RtpExtType::sdes_rtp_stream_id :
+                    rid = pr.second.getRtpStreamId();
+                    break;
+                case RtpExtType::sdes_repaired_rtp_stream_id :
+                    repaired_rid = pr.second.getRepairedRtpStreamId();
+                    break;
+                default :
+                    break;
             }
         } else {
             pr.second.setType((RtpExtType) pr.first);
@@ -626,7 +591,8 @@ RtpExt RtpExtContext::changeRtpExtId(const RtpHeader *header, bool is_recv, stri
         auto it = _ssrc_to_rid.find(ssrc);
         if (it == _ssrc_to_rid.end() || it->second != rid) {
             _ssrc_to_rid[ssrc] = rid;
-            onGetRtp(header->pt, ssrc, rid);
+            if(_cb)
+              _cb(header->pt, ssrc, rid);
         }
     }
     if (rid_ptr) {
@@ -635,14 +601,4 @@ RtpExt RtpExtContext::changeRtpExtId(const RtpHeader *header, bool is_recv, stri
     return ret;
 }
 
-void RtpExtContext::setOnGetRtp(OnGetRtp cb) {
-    _cb = std::move(cb);
 }
-
-void RtpExtContext::onGetRtp(uint8_t pt, uint32_t ssrc, const string &rid){
-    if (_cb) {
-        _cb(pt, ssrc, rid);
-    }
-}
-
-}// namespace mediakit

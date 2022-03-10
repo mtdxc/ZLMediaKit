@@ -30,7 +30,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <cstring> // std::memcpy(), std::strcmp()
 #include "Util/util.h"
 
-using namespace std;
+//using namespace std;
 
 #define LOG_OPENSSL_ERROR(desc)                                                                    \
 	do                                                                                               \
@@ -124,7 +124,7 @@ namespace RTC
 
 	/* Class methods. */
 
-    DtlsTransport::DtlsEnvironment::DtlsEnvironment()
+	DtlsTransport::DtlsEnvironment::DtlsEnvironment()
 	{
 		MS_TRACE();
 
@@ -147,7 +147,7 @@ namespace RTC
 		GenerateFingerprints();
 	}
 
-    DtlsTransport::DtlsEnvironment::~DtlsEnvironment()
+	DtlsTransport::DtlsEnvironment::~DtlsEnvironment()
 	{
 		MS_TRACE();
 
@@ -167,15 +167,13 @@ namespace RTC
 		EC_KEY* ecKey{ nullptr };
 		X509_NAME* certName{ nullptr };
 		std::string subject =
-		  std::string("mediasoup") + to_string(rand() % 999999 + 100000);
+		  std::string("mediasoup") + std::to_string(rand() % 999999 + 100000);
 
 		// Create key with curve.
 		ecKey = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-
 		if (!ecKey)
 		{
 			LOG_OPENSSL_ERROR("EC_KEY_new_by_curve_name() failed");
-
 			goto error;
 		}
 
@@ -183,31 +181,25 @@ namespace RTC
 
 		// NOTE: This can take some time.
 		ret = EC_KEY_generate_key(ecKey);
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("EC_KEY_generate_key() failed");
-
 			goto error;
 		}
 
 		// Create a private key object.
 		privateKey = EVP_PKEY_new();
-
 		if (!privateKey)
 		{
 			LOG_OPENSSL_ERROR("EVP_PKEY_new() failed");
-
 			goto error;
 		}
 
 		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
 		ret = EVP_PKEY_assign_EC_KEY(privateKey, ecKey);
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("EVP_PKEY_assign_EC_KEY() failed");
-
 			goto error;
 		}
 
@@ -216,11 +208,9 @@ namespace RTC
 
 		// Create the X509 certificate.
 		certificate = X509_new();
-
 		if (!certificate)
 		{
 			LOG_OPENSSL_ERROR("X509_new() failed");
-
 			goto error;
 		}
 
@@ -238,21 +228,17 @@ namespace RTC
 
 		// Set the public key for the certificate using the key.
 		ret = X509_set_pubkey(certificate, privateKey);
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("X509_set_pubkey() failed");
-
 			goto error;
 		}
 
 		// Set certificate fields.
 		certName = X509_get_subject_name(certificate);
-
 		if (!certName)
 		{
 			LOG_OPENSSL_ERROR("X509_get_subject_name() failed");
-
 			goto error;
 		}
 
@@ -263,21 +249,17 @@ namespace RTC
 
 		// It is self-signed so set the issuer name to be the same as the subject.
 		ret = X509_set_issuer_name(certificate, certName);
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("X509_set_issuer_name() failed");
-
 			goto error;
 		}
 
 		// Sign the certificate with its own private key.
 		ret = X509_sign(certificate, privateKey, EVP_sha1());
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("X509_sign() failed");
-
 			goto error;
 		}
 
@@ -302,43 +284,33 @@ namespace RTC
 #if 0
 		MS_TRACE();
 
-		FILE* file{ nullptr };
-
-		file = fopen(Settings::configuration.dtlsCertificateFile.c_str(), "r");
-
+		FILE* file = fopen(Settings::configuration.dtlsCertificateFile.c_str(), "r");
 		if (!file)
 		{
 			MS_ERROR("error reading DTLS certificate file: %s", std::strerror(errno));
-
 			goto error;
 		}
 
 		certificate = PEM_read_X509(file, nullptr, nullptr, nullptr);
-
 		if (!certificate)
 		{
 			LOG_OPENSSL_ERROR("PEM_read_X509() failed");
-
 			goto error;
 		}
 
 		fclose(file);
 
 		file = fopen(Settings::configuration.dtlsPrivateKeyFile.c_str(), "r");
-
 		if (!file)
 		{
 			MS_ERROR("error reading DTLS private key file: %s", std::strerror(errno));
-
 			goto error;
 		}
 
 		privateKey = PEM_read_PrivateKey(file, nullptr, nullptr, nullptr);
-
 		if (!privateKey)
 		{
 			LOG_OPENSSL_ERROR("PEM_read_PrivateKey() failed");
-
 			goto error;
 		}
 
@@ -363,46 +335,36 @@ namespace RTC
 
 		// Both DTLS 1.0 and 1.2 (requires OpenSSL >= 1.1.0).
 		sslCtx = SSL_CTX_new(DTLS_method());
-
 		if (!sslCtx)
 		{
 			LOG_OPENSSL_ERROR("SSL_CTX_new() failed");
-
 			goto error;
 		}
 
 		ret = SSL_CTX_use_certificate(sslCtx, certificate);
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("SSL_CTX_use_certificate() failed");
-
 			goto error;
 		}
 
 		ret = SSL_CTX_use_PrivateKey(sslCtx, privateKey);
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("SSL_CTX_use_PrivateKey() failed");
-
 			goto error;
 		}
 
 		ret = SSL_CTX_check_private_key(sslCtx);
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("SSL_CTX_check_private_key() failed");
-
 			goto error;
 		}
 
 		// Set options.
-		SSL_CTX_set_options(
-		  sslCtx,
-		  SSL_OP_CIPHER_SERVER_PREFERENCE | SSL_OP_NO_TICKET | SSL_OP_SINGLE_ECDH_USE |
-		    SSL_OP_NO_QUERY_MTU);
+		SSL_CTX_set_options(sslCtx,
+			SSL_OP_CIPHER_SERVER_PREFERENCE | SSL_OP_NO_TICKET | SSL_OP_SINGLE_ECDH_USE | SSL_OP_NO_QUERY_MTU);
 
 		// Don't use sessions cache.
 		SSL_CTX_set_session_cache_mode(sslCtx, SSL_SESS_CACHE_OFF);
@@ -420,16 +382,15 @@ namespace RTC
 
 		// Set SSL info callback.
 		SSL_CTX_set_info_callback(sslCtx, [](const SSL* ssl, int where, int ret){
-            static_cast<RTC::DtlsTransport*>(SSL_get_ex_data(ssl, 0))->OnSslInfo(where, ret);
-        });
+			static_cast<RTC::DtlsTransport*>(SSL_get_ex_data(ssl, 0))->OnSslInfo(where, ret);
+		});
+
 		// Set ciphers.
 		ret = SSL_CTX_set_cipher_list(
 		  sslCtx, "DEFAULT:!NULL:!aNULL:!SHA256:!SHA384:!aECDH:!AESGCM+AES256:!aPSK");
-
 		if (ret == 0)
 		{
 			LOG_OPENSSL_ERROR("SSL_CTX_set_cipher_list() failed");
-
 			goto error;
 		}
 
@@ -443,8 +404,8 @@ namespace RTC
 
 		// Set the "use_srtp" DTLS extension.
 		for (auto it = DtlsTransport::srtpCryptoSuites.begin();
-		     it != DtlsTransport::srtpCryptoSuites.end();
-		     ++it)
+			it != DtlsTransport::srtpCryptoSuites.end();
+			++it)
 		{
 			if (it != DtlsTransport::srtpCryptoSuites.begin())
 				dtlsSrtpCryptoSuites += ":";
@@ -457,7 +418,6 @@ namespace RTC
 
 		// NOTE: This function returns 0 on success.
 		ret = SSL_CTX_set_tlsext_use_srtp(sslCtx, dtlsSrtpCryptoSuites.c_str());
-
 		if (ret != 0)
 		{
 			MS_ERROR(
@@ -521,7 +481,6 @@ namespace RTC
 			}
 
 			ret = X509_digest(certificate, hashFunction, binaryFingerprint, &size);
-
 			if (ret == 0)
 			{
 				MS_ERROR("X509_digest() failed");
@@ -539,10 +498,8 @@ namespace RTC
 
 			// Store it in the vector.
 			DtlsTransport::Fingerprint fingerprint;
-
 			fingerprint.algorithm = DtlsTransport::GetFingerprintAlgorithm(algorithmString);
 			fingerprint.value     = hexFingerprint;
-
 			localFingerprints.push_back(fingerprint);
 		}
 	}
@@ -552,16 +509,13 @@ namespace RTC
 	DtlsTransport::DtlsTransport(EventPoller::Ptr poller,Listener* listener) : poller(std::move(poller)), listener(listener)
 	{
 		MS_TRACE();
-        env = DtlsEnvironment::Instance().shared_from_this();
+		env = DtlsEnvironment::Instance().shared_from_this();
 
 		/* Set SSL. */
-
 		this->ssl = SSL_new(env->sslCtx);
-
 		if (!this->ssl)
 		{
 			LOG_OPENSSL_ERROR("SSL_new() failed");
-
 			goto error;
 		}
 
@@ -569,25 +523,19 @@ namespace RTC
 		SSL_set_ex_data(this->ssl, 0, static_cast<void*>(this));
 
 		this->sslBioFromNetwork = BIO_new(BIO_s_mem());
-
 		if (!this->sslBioFromNetwork)
 		{
 			LOG_OPENSSL_ERROR("BIO_new() failed");
-
 			SSL_free(this->ssl);
-
 			goto error;
 		}
 
 		this->sslBioToNetwork = BIO_new(BIO_s_mem());
-
 		if (!this->sslBioToNetwork)
 		{
 			LOG_OPENSSL_ERROR("BIO_new() failed");
-
 			BIO_free(this->sslBioFromNetwork);
 			SSL_free(this->ssl);
-
 			goto error;
 		}
 
@@ -649,7 +597,7 @@ namespace RTC
 		MS_TRACE();
 
 		std::string state{ "new" };
-		std::string role{ "none " };
+		std::string role{ "none" };
 
 		switch (this->state)
 		{
@@ -702,7 +650,6 @@ namespace RTC
 		if (localRole == previousLocalRole)
 		{
 			MS_ERROR("same local DTLS role provided, doing nothing");
-
 			return;
 		}
 
@@ -710,7 +657,6 @@ namespace RTC
 		if (previousLocalRole == Role::CLIENT || previousLocalRole == Role::SERVER)
 		{
 			MS_DEBUG_TAG(dtls, "resetting DTLS due to local role change");
-
 			Reset();
 		}
 
@@ -777,18 +723,14 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		int written;
-		int read;
-
 		if (!IsRunning())
 		{
 			MS_ERROR("cannot process data while not running");
-
 			return;
 		}
 
 		// Write the received DTLS data into the sslBioFromNetwork.
-		written =
+		int written =
 		  BIO_write(this->sslBioFromNetwork, static_cast<const void*>(data), static_cast<int>(len));
 
 		if (written != static_cast<int>(len))
@@ -801,7 +743,7 @@ namespace RTC
 		}
 
 		// Must call SSL_read() to process received DTLS data.
-		read = SSL_read(this->ssl, static_cast<void*>(DtlsTransport::sslReadBuffer), SslReadBufferSize);
+		int read = SSL_read(this->ssl, static_cast<void*>(DtlsTransport::sslReadBuffer), SslReadBufferSize);
 
 		// Send data if it's ready.
 		SendPendingOutgoingDtlsData();
@@ -821,7 +763,6 @@ namespace RTC
 			if (!this->handshakeDone)
 			{
 				MS_WARN_TAG(dtls, "ignoring application data received while DTLS handshake not done");
-
 				return;
 			}
 
@@ -839,25 +780,19 @@ namespace RTC
 		if (this->state != DtlsState::CONNECTED)
 		{
 			MS_WARN_TAG(dtls, "cannot send application data while DTLS is not fully connected");
-
 			return;
 		}
 
 		if (len == 0)
 		{
 			MS_WARN_TAG(dtls, "ignoring 0 length data");
-
 			return;
 		}
 
-		int written;
-
-		written = SSL_write(this->ssl, static_cast<const void*>(data), static_cast<int>(len));
-
+		int written = SSL_write(this->ssl, static_cast<const void*>(data), static_cast<int>(len));
 		if (written < 0)
 		{
 			LOG_OPENSSL_ERROR("SSL_write() failed");
-
 			if (!CheckStatus(written))
 				return;
 		}
@@ -874,8 +809,6 @@ namespace RTC
 	void DtlsTransport::Reset()
 	{
 		MS_TRACE();
-
-		int ret;
 
 		if (!IsRunning())
 			return;
@@ -899,8 +832,7 @@ namespace RTC
 		// NOTE: For this to properly work, SSL_shutdown() must be called before.
 		// NOTE: This may fail if not enough DTLS handshake data has been received,
 		// but we don't care so just clear the error queue.
-		ret = SSL_clear(this->ssl);
-
+		int ret = SSL_clear(this->ssl);
 		if (ret == 0)
 			ERR_clear_error();
 	}
@@ -909,11 +841,9 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		int err;
 		bool wasHandshakeDone = this->handshakeDone;
 
-		err = SSL_get_error(this->ssl, returnCode);
-
+		int err = SSL_get_error(this->ssl, returnCode);
 		switch (err)
 		{
 			case SSL_ERROR_NONE:
@@ -1007,11 +937,8 @@ namespace RTC
 		if (BIO_eof(this->sslBioToNetwork))
 			return;
 
-		int64_t read;
 		char* data{ nullptr };
-
-		read = BIO_get_mem_data(this->sslBioToNetwork, &data); // NOLINT
-
+		int64_t read = BIO_get_mem_data(this->sslBioToNetwork, &data); // NOLINT
 		if (read <= 0)
 			return;
 
@@ -1034,19 +961,15 @@ namespace RTC
 		  this->state == DtlsState::CONNECTING || this->state == DtlsState::CONNECTED,
 		  "invalid DTLS state");
 
-		int64_t ret;
-        struct timeval dtlsTimeout{ 0, 0 };
-		uint64_t timeoutMs;
+		struct timeval dtlsTimeout{ 0, 0 };
 
 		// NOTE: If ret == 0 then ignore the value in dtlsTimeout.
 		// NOTE: No DTLSv_1_2_get_timeout() or DTLS_get_timeout() in OpenSSL 1.1.0-dev.
-		ret = DTLSv1_get_timeout(this->ssl, static_cast<void*>(&dtlsTimeout)); // NOLINT
-
+		int64_t ret = DTLSv1_get_timeout(this->ssl, static_cast<void*>(&dtlsTimeout)); // NOLINT
 		if (ret == 0)
 			return true;
 
-		timeoutMs = (dtlsTimeout.tv_sec * static_cast<uint64_t>(1000)) + (dtlsTimeout.tv_usec / 1000);
-
+		uint64_t timeoutMs = (dtlsTimeout.tv_sec * static_cast<uint64_t>(1000)) + (dtlsTimeout.tv_usec / 1000);
 		if (timeoutMs == 0)
 		{
 			return true;
@@ -1055,13 +978,13 @@ namespace RTC
 		{
 			MS_DEBUG_DEV("DTLS timer set in %" PRIu64 "ms", timeoutMs);
 
-			weak_ptr<DtlsTransport> weak_self = shared_from_this();
+			std::weak_ptr<DtlsTransport> weak_self = shared_from_this();
 			this->timer = std::make_shared<Timer>(timeoutMs / 1000.0f, [weak_self](){
-			    auto strong_self = weak_self.lock();
-			    if(strong_self){
-                    strong_self->OnTimer();
-			    }
-                return true;
+				auto strong_self = weak_self.lock();
+				if(strong_self){
+					strong_self->OnTimer();
+				}
+				return true;
 			}, this->poller);
 
 			return true;
@@ -1129,22 +1052,17 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		MS_ASSERT(
-		  this->remoteFingerprint.algorithm != FingerprintAlgorithm::NONE, "remote fingerprint not set");
+		MS_ASSERT(this->remoteFingerprint.algorithm != FingerprintAlgorithm::NONE, "remote fingerprint not set");
 
-		X509* certificate;
 		uint8_t binaryFingerprint[EVP_MAX_MD_SIZE];
 		unsigned int size{ 0 };
 		char hexFingerprint[(EVP_MAX_MD_SIZE * 3) + 1];
 		const EVP_MD* hashFunction;
-		int ret;
 
-		certificate = SSL_get_peer_certificate(this->ssl);
-
+		X509* certificate = SSL_get_peer_certificate(this->ssl);
 		if (!certificate)
 		{
 			MS_WARN_TAG(dtls, "no certificate was provided by the peer");
-
 			return false;
 		}
 
@@ -1175,14 +1093,11 @@ namespace RTC
 		}
 
 		// Compare the remote fingerprint with the value given via signaling.
-		ret = X509_digest(certificate, hashFunction, binaryFingerprint, &size);
-
+		int ret = X509_digest(certificate, hashFunction, binaryFingerprint, &size);
 		if (ret == 0)
 		{
 			MS_ERROR("X509_digest() failed");
-
 			X509_free(certificate);
-
 			return false;
 		}
 
@@ -1195,8 +1110,7 @@ namespace RTC
 
 		if (this->remoteFingerprint.value != hexFingerprint)
 		{
-			MS_WARN_TAG(
-			  dtls,
+			MS_WARN_TAG(dtls,
 			  "fingerprint in the remote certificate (%s) does not match the announced one (%s)",
 			  hexFingerprint,
 			  this->remoteFingerprint.value.c_str());
@@ -1216,7 +1130,6 @@ namespace RTC
 		(void)BIO_set_close(bio, BIO_CLOSE);
 
 		ret = PEM_write_bio_X509(bio, certificate);
-
 		if (ret != 1)
 		{
 			LOG_OPENSSL_ERROR("PEM_write_bio_X509() failed");
@@ -1228,9 +1141,7 @@ namespace RTC
 		}
 
 		BUF_MEM* mem;
-
 		BIO_get_mem_ptr(bio, &mem); // NOLINT[cppcoreguidelines-pro-type-cstyle-cast]
-
 		if (!mem || !mem->data || mem->length == 0u)
 		{
 			LOG_OPENSSL_ERROR("BIO_get_mem_ptr() failed");
@@ -1300,9 +1211,7 @@ namespace RTC
 		uint8_t* srtpRemoteSalt{ nullptr };
 		auto* srtpLocalMasterKey  = new uint8_t[srtpMasterLength];
 		auto* srtpRemoteMasterKey = new uint8_t[srtpMasterLength];
-		int ret;
-
-		ret = SSL_export_keying_material(
+		int ret = SSL_export_keying_material(
 		  this->ssl, srtpMaterial, srtpMasterLength * 2, "EXTRACTOR-dtls_srtp", 19, nullptr, 0, 0);
 
 		MS_ASSERT(ret != 0, "SSL_export_keying_material() failed");
@@ -1315,7 +1224,6 @@ namespace RTC
 				srtpLocalKey   = srtpRemoteKey + srtpKeyLength;
 				srtpRemoteSalt = srtpLocalKey + srtpKeyLength;
 				srtpLocalSalt  = srtpRemoteSalt + srtpSaltLength;
-
 				break;
 			}
 
@@ -1325,7 +1233,6 @@ namespace RTC
 				srtpRemoteKey  = srtpLocalKey + srtpKeyLength;
 				srtpLocalSalt  = srtpRemoteKey + srtpKeyLength;
 				srtpRemoteSalt = srtpLocalSalt + srtpSaltLength;
-
 				break;
 			}
 
@@ -1379,7 +1286,6 @@ namespace RTC
 			if (std::strcmp(sslSrtpCryptoSuite->name, cryptoSuiteEntry->name) == 0)
 			{
 				MS_DEBUG_2TAGS(dtls, srtp, "chosen SRTP crypto suite: %s", cryptoSuiteEntry->name);
-
 				negotiatedSrtpCryptoSuite = cryptoSuiteEntry->cryptoSuite;
 			}
 		}

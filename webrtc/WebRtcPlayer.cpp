@@ -11,7 +11,6 @@
 #include "WebRtcPlayer.h"
 #include "Common/config.h"
 
-using namespace std;
 
 namespace mediakit {
 
@@ -42,8 +41,8 @@ void WebRtcPlayer::onStartWebRTC() {
     if (canSendRtp()) {
         _play_src->pause(false);
         _reader = _play_src->getRing()->attach(getPoller(), true);
-        weak_ptr<WebRtcPlayer> weak_self = static_pointer_cast<WebRtcPlayer>(shared_from_this());
-        weak_ptr<Session> weak_session = getSession();
+        std::weak_ptr<WebRtcPlayer> weak_self = std::static_pointer_cast<WebRtcPlayer>(shared_from_this());
+        std::weak_ptr<Session> weak_session = getSession();
         _reader->setGetInfoCB([weak_session]() { return weak_session.lock(); });
         _reader->setReadCB([weak_self](const RtspMediaSource::RingDataType &pkt) {
             auto strong_self = weak_self.lock();
@@ -57,16 +56,15 @@ void WebRtcPlayer::onStartWebRTC() {
             });
         });
         _reader->setDetachCB([weak_self]() {
-            auto strong_self = weak_self.lock();
-            if (!strong_self) {
-                return;
+            if (auto strong_self = weak_self.lock()) {
+                strong_self->onShutdown(SockException(Err_shutdown, "rtsp ring buffer detached"));
             }
-            strong_self->onShutdown(SockException(Err_shutdown, "rtsp ring buffer detached"));
         });
     }
     //使用完毕后，释放强引用，这样确保推流器断开后能及时注销媒体
     _play_src = nullptr;
 }
+
 void WebRtcPlayer::onDestory() {
     WebRtcTransportImp::onDestory();
 
