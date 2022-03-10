@@ -37,7 +37,9 @@ class WebRtcInterface {
 public:
     WebRtcInterface() = default;
     virtual ~WebRtcInterface() = default;
+    // sdp interface: in offer, out answer
     virtual std::string getAnswerSdp(const std::string &offer) = 0;
+    // Identifier, use as ice_username
     virtual const std::string &getIdentifier() const = 0;
 };
 
@@ -45,6 +47,7 @@ class WebRtcException : public WebRtcInterface {
 public:
     WebRtcException(const SockException &ex) : _ex(ex) {};
     ~WebRtcException() override = default;
+    // 这边用来重抛异常
     std::string getAnswerSdp(const std::string &offer) override {
         throw _ex;
     }
@@ -57,11 +60,13 @@ private:
     SockException _ex;
 };
 
-class WebRtcTransport : public WebRtcInterface, public RTC::DtlsTransport::Listener, public RTC::IceServer::Listener, public std::enable_shared_from_this<WebRtcTransport>
+class WebRtcTransport : public WebRtcInterface, 
+    public RTC::DtlsTransport::Listener, 
+    public RTC::IceServer::Listener, 
 #ifdef ENABLE_SCTP
-    , public RTC::SctpAssociation::Listener
+    public RTC::SctpAssociation::Listener,
 #endif
-{
+    public std::enable_shared_from_this<WebRtcTransport> {
 public:
     using Ptr = std::shared_ptr<WebRtcTransport>;
     WebRtcTransport(const EventPoller::Ptr &poller);
@@ -144,26 +149,38 @@ protected:
 #endif
 
 protected:
+    /// virtual function/api to implement in subclass ///
+    // dlts密钥协商完毕后回调
     virtual void onStartWebRTC() = 0;
+    // 重写此函数配置answer的生成参数
     virtual void onRtcConfigure(RtcConfigure &configure) const;
+    // 检查sdp(offer,answer)合法性
     virtual void onCheckSdp(SdpType type, RtcSession &sdp) = 0;
-    virtual void onSendSockData(Buffer::Ptr buf, bool flush = true, RTC::TransportTuple *tuple = nullptr) = 0;
 
+    // 明文rtp接收函数回调
     virtual void onRtp(const char *buf, size_t len, uint64_t stamp_ms) = 0;
+    // 明文rtcp接收函数回调
     virtual void onRtcp(const char *buf, size_t len) = 0;
+
     virtual void onShutdown(const SockException &ex) = 0;
+    // 明文rtp发送函数回调, call by sendRtpPacket
     virtual void onBeforeEncryptRtp(const char *buf, int &len, void *ctx) = 0;
+    // 明文rtcp发送函数回调, call by sendRtcpPacket
     virtual void onBeforeEncryptRtcp(const char *buf, int &len, void *ctx) = 0;
 
+    // 实现udp发送函数
+    virtual void onSendSockData(Buffer::Ptr buf, bool flush = true, RTC::TransportTuple *tuple = nullptr) = 0;
+
 protected:
+    // send data to network, internal call onSendSockData
+    void sendSockData(const char *buf, size_t len, RTC::TransportTuple *tuple);
+
     RTC::TransportTuple* getSelectedTuple() const;
+
     void sendRtcpRemb(uint32_t ssrc, size_t bit_rate);
     void sendRtcpPli(uint32_t ssrc);
 
-private:
-    void sendSockData(const char *buf, size_t len, RTC::TransportTuple *tuple);
     void setRemoteDtlsFingerprint(const RtcSession &remote);
-
 protected:
     RtcSession::Ptr _offer_sdp;
     RtcSession::Ptr _answer_sdp;
@@ -185,6 +202,7 @@ private:
 };
 
 class RtpChannel;
+// 代表一路音频或视频流的(发送和接收)
 class MediaTrack {
 public:
     using Ptr = std::shared_ptr<MediaTrack>;
@@ -194,6 +212,7 @@ public:
     uint32_t offer_ssrc_rtx = 0;
     uint32_t answer_ssrc_rtp = 0;
     uint32_t answer_ssrc_rtx = 0;
+    // sdp m line
     const RtcMedia *media;
     RtpExtContext::Ptr rtp_ext_ctx;
 
@@ -223,9 +242,7 @@ class WebRtcTransportImp;
 
 struct WrappedRtpTrack : public WrappedMediaTrack {
     explicit WrappedRtpTrack(MediaTrack::Ptr ptr, TwccContext& twcc, WebRtcTransportImp& t)
-        : WrappedMediaTrack(std::move(ptr))
-        , _twcc_ctx(twcc)
-        , _transport(t) {}
+        : WrappedMediaTrack(std::move(ptr)), _twcc_ctx(twcc), _transport(t) {}
     TwccContext& _twcc_ctx;
     WebRtcTransportImp& _transport;
     void inputRtp(const char *buf, size_t len, uint64_t stamp_ms, mediakit::RtpHeader *rtp) override;
@@ -238,29 +255,39 @@ public:
 
     void setSession(Session::Ptr session);
     const Session::Ptr& getSession() const;
+
     uint64_t getBytesUsage() const;
     uint64_t getDuration() const;
+
     bool canSendRtp() const;
     bool canRecvRtp() const;
-    void onSendRtp(const mediakit::RtpPacket::Ptr &rtp, bool flush, bool rtx = false);
 
     void createRtpChannel(const std::string &rid, uint32_t ssrc, MediaTrack &track);
 
+    // 发送rtp数据包，带rtcp和nack功能
+    void onSendRtp(const mediakit::RtpPacket::Ptr &rtp, bool flush, bool rtx = false);
 protected:
+    // rtp包经排序和nack后的数据回调
+    virtual void onRecvRtp(MediaTrack &track, const std::string &rid, mediakit::RtpPacket::Ptr rtp) = 0;
+
     WebRtcTransportImp(const EventPoller::Ptr &poller);
-    void onStartWebRTC() override;
+
     void onSendSockData(Buffer::Ptr buf, bool flush = true, RTC::TransportTuple *tuple = nullptr) override;
+
     void onCheckSdp(SdpType type, RtcSession &sdp) override;
     void onRtcConfigure(RtcConfigure &configure) const override;
 
     void onRtp(const char *buf, size_t len, uint64_t stamp_ms) override;
     void onRtcp(const char *buf, size_t len) override;
+
     void onBeforeEncryptRtp(const char *buf, int &len, void *ctx) override;
     void onBeforeEncryptRtcp(const char *buf, int &len, void *ctx) override {};
+
     void onCreate() override;
     void onDestory() override;
+    void onStartWebRTC() override;
     void onShutdown(const SockException &ex) override;
-    virtual void onRecvRtp(MediaTrack &track, const std::string &rid, mediakit::RtpPacket::Ptr rtp) = 0;
+
     void updateTicker();
     int getLossRate(mediakit::TrackType type);
 
@@ -272,10 +299,10 @@ private:
     void registerSelf();
     void unregisterSelf();
     void unrefSelf();
+
     void onCheckAnswer(RtcSession &sdp);
 
 private:
-    uint16_t _rtx_seq[2] = {0, 0};
     //用掉的总流量
     uint64_t _bytes_usage = 0;
     //保持自我强引用
@@ -286,14 +313,19 @@ private:
     Ticker _alive_ticker;
     //pli rtcp计时器
     Ticker _pli_ticker;
+
     //当前选中的udp链接
     Session::Ptr _selected_session;
     //链接迁移前后使用过的udp链接
     std::unordered_map<Session *, std::weak_ptr<Session> > _history_sessions;
+    
     //twcc rtcp发送上下文对象
     TwccContext _twcc_ctx;
+
     //根据发送rtp的track类型获取相关信息
     MediaTrack::Ptr _type_to_track[2];
+    uint16_t _rtx_seq[2] = {0, 0};
+
     //根据rtcp的ssrc获取相关信息，收发rtp和rtx的ssrc都会记录
     std::unordered_map<uint32_t/*ssrc*/, MediaTrack::Ptr> _ssrc_to_track;
     //根据接收rtp的pt获取相关信息
@@ -316,6 +348,7 @@ private:
     std::unordered_map<std::string, std::weak_ptr<WebRtcTransportImp> > _map;
 };
 
+// 抽象通过http传递的参数
 class WebRtcArgs {
 public:
     WebRtcArgs() = default;
@@ -332,6 +365,7 @@ public:
     static WebRtcPluginManager &Instance();
 
     void registerPlugin(const std::string &type, Plugin cb);
+    // 抽象出http接口，给出 offer sdp，创建 WebRtcInterface, 然后响应 answer sdp
     void getAnswerSdp(Session &sender, const std::string &type, const std::string &offer, const WebRtcArgs &args, const onCreateRtc &cb);
 
 private:
