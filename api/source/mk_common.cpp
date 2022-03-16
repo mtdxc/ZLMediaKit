@@ -22,7 +22,7 @@
 #include "Rtmp/RtmpSession.h"
 #include "Http/HttpSession.h"
 #include "Shell/ShellSession.h"
-using namespace std;
+//using namespace std;
 using namespace toolkit;
 using namespace mediakit;
 
@@ -109,8 +109,8 @@ API_EXPORT void API_CALL mk_env_init1(int thread_num,
         if (log_mask & LOG_FILE) {
             //日志文件
             auto channel = std::make_shared<FileChannel>("FileChannel",
-                                                         log_file_path ? File::absolutePath("", log_file_path) :
-                                                         exeDir() + "log/", (LogLevel) log_level);
+                log_file_path ? File::absolutePath("", log_file_path) : exeDir() + "log/", 
+                (LogLevel) log_level);
             channel->setMaxDay(log_file_days ? log_file_days : 1);
             Logger::Instance().add(channel);
         }
@@ -144,7 +144,7 @@ API_EXPORT void API_CALL mk_env_init1(int thread_num,
 }
 
 API_EXPORT void API_CALL mk_set_log(int file_max_size, int file_max_count) {
-    auto channel = dynamic_pointer_cast<FileChannel>(Logger::Instance().get("FileChannel"));
+    auto channel = std::dynamic_pointer_cast<FileChannel>(Logger::Instance().get("FileChannel"));
     if (channel) {
         channel->setFileMaxSize(file_max_size);
         channel->setFileMaxCount(file_max_count);
@@ -177,7 +177,7 @@ API_EXPORT uint16_t API_CALL mk_http_server_start(uint16_t port, int ssl) {
         http_server[ssl] = std::make_shared<TcpServer>();
         if(ssl){
             http_server[ssl]->start<SessionWithSSL<HttpSession> >(port);
-        } else{
+        } else {
             http_server[ssl]->start<HttpSession>(port);
         }
         return http_server[ssl]->getPort();

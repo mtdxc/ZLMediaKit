@@ -12,7 +12,7 @@
 #include "Extension/Track.h"
 #include "Extension/Factory.h"
 
-using namespace std;
+using std::dynamic_pointer_cast;
 using namespace toolkit;
 using namespace mediakit;
 
