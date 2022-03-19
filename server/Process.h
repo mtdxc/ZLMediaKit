@@ -19,13 +19,13 @@ typedef int pid_t;
 #include <sys/wait.h>
 #endif // _WIN32
 
-#include <fcntl.h>
 #include <string>
 
 class Process {
 public:
     Process();
     ~Process();
+
     void run(const std::string &cmd, std::string &log_file);
     void kill(int max_delay,bool force = false);
     bool wait(bool block = true);

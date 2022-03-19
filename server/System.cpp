@@ -37,8 +37,7 @@ using namespace mediakit;
 #endif
 
 string System::execute(const string &cmd) {
-    FILE *fPipe = NULL;
-    fPipe = popen(cmd.data(), "r");
+    FILE *fPipe = popen(cmd.data(), "r");
     if(!fPipe){
         return "";
     }
@@ -60,8 +59,8 @@ static void sig_crash(int sig) {
     void *array[MAX_STACK_FRAMES];
     int size = backtrace(array, MAX_STACK_FRAMES);
     char ** strings = backtrace_symbols(array, size);
-    vector<vector<string> > stack(size);
 
+    std::vector<std::vector<std::string> > stack(size);
     for (int i = 0; i < size; ++i) {
         auto &ref = stack[i];
         std::string symbol(strings[i]);
