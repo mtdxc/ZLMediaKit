@@ -38,8 +38,7 @@ const char kBroadcastOnCrashDump[] = "kBroadcastOnCrashDump";
 #endif
 
 string System::execute(const string &cmd) {
-    FILE *fPipe = NULL;
-    fPipe = popen(cmd.data(), "r");
+    FILE *fPipe = popen(cmd.data(), "r");
     if(!fPipe){
         return "";
     }
@@ -58,8 +57,8 @@ static void sig_crash(int sig) {
     void *array[MAX_STACK_FRAMES];
     int size = backtrace(array, MAX_STACK_FRAMES);
     char ** strings = backtrace_symbols(array, size);
-    vector<vector<string> > stack(size);
 
+    std::vector<std::vector<std::string> > stack(size);
     for (int i = 0; i < size; ++i) {
         auto &ref = stack[i];
         std::string symbol(strings[i]);
@@ -150,7 +149,7 @@ void System::systemSetup(){
     //忽略挂起信号
     signal(SIGHUP, SIG_IGN);
     NoticeCenter::Instance().addListener(nullptr,kBroadcastOnCrashDump,[](BroadcastOnCrashDumpArgs){
-        stringstream ss;
+        std::stringstream ss;
         ss << "## crash date:" << getTimeStr("%Y-%m-%d %H:%M:%S") << endl;
         ss << "## exe:       " << exeName() << endl;
         ss << "## signal:    " << sig << endl;
