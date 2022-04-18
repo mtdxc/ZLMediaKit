@@ -11,7 +11,7 @@
 #include "RtspMuxer.h"
 #include "Extension/Factory.h"
 
-using namespace std;
+//using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
@@ -86,7 +86,7 @@ bool RtspMuxer::inputFrame(const Frame::Ptr &frame) {
     return encoder ? encoder->inputFrame(frame) : false;
 }
 
-string RtspMuxer::getSdp() {
+std::string RtspMuxer::getSdp() {
     return _sdp;
 }
 
