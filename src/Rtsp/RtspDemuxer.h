@@ -46,6 +46,7 @@ private:
     void loadSdp(const SdpParser &parser);
 
 private:
+    // 从TitleSdp中获取duration
     float _duration = 0;
     AudioTrack::Ptr _audio_track;
     VideoTrack::Ptr _video_track;

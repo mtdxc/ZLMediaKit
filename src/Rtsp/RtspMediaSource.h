@@ -91,7 +91,7 @@ public:
     /**
      * 获取相应轨道的seqence
      */
-    virtual uint16_t getSeqence(TrackType trackType) {
+    virtual uint16_t getSequence(TrackType trackType) {
         assert(trackType >= 0 && trackType < TrackMax);
         auto &track = _tracks[trackType];
         if (!track) {
@@ -134,7 +134,7 @@ private:
      * @param key_pos 是否包含关键帧
      */
     void onFlush(std::shared_ptr<toolkit::List<RtpPacket::Ptr> > rtp_list, bool key_pos) override {
-        //如果不存在视频，那么就没有存在GOP缓存的意义，所以is_key一直为true确保一直清空GOP缓存
+        //如不存在视频，那就没必要使用GOP缓存，因此让is_key为true，以确保一直清空GOP缓存
         _ring->write(std::move(rtp_list), _have_video ? key_pos : true);
     }
 

@@ -11,7 +11,7 @@
 #include "RtspMuxer.h"
 #include "Extension/Factory.h"
 
-using namespace std;
+//using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
@@ -94,7 +94,7 @@ void RtspMuxer::flush() {
     }
 }
 
-string RtspMuxer::getSdp() {
+std::string RtspMuxer::getSdp() {
     return _sdp;
 }
 

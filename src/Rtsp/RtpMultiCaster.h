@@ -19,10 +19,11 @@
 #include "Network/Socket.h"
 
 namespace mediakit{
-
+// 多播地址分配器
 class MultiCastAddressMaker {
 public:
     ~MultiCastAddressMaker() = default;
+
     static MultiCastAddressMaker& Instance();
     static bool isMultiCastAddress(uint32_t addr);
     static std::string toString(uint32_t addr);
@@ -39,6 +40,7 @@ private:
     std::unordered_set<uint32_t> _used_addr;
 };
 
+// 多播广播器，负责将RtspMediaSource在多播地址上广播
 class RtpMultiCaster {
 public:
     typedef std::shared_ptr<RtpMultiCaster> Ptr;
@@ -46,6 +48,7 @@ public:
     ~RtpMultiCaster();
 
     static Ptr get(toolkit::SocketHelper &helper, const std::string &local_ip, const std::string &vhost, const std::string &app, const std::string &stream);
+    // add or remove from _detach_map
     void setDetachCB(void *listener,const onDetach &cb);
 
     std::string getMultiCasterIP();
@@ -56,6 +59,7 @@ private:
 
 private:
     std::recursive_mutex _mtx;
+    // audio/video sock
     toolkit::Socket::Ptr _udp_sock[2];
     std::shared_ptr<uint32_t> _multicast_ip;
     std::unordered_map<void * , onDetach > _detach_map;

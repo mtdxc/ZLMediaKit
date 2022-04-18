@@ -25,13 +25,12 @@ class RtpMultiCaster;
 class RtspSession;
 class RtcpContext;
 using BufferRtp = toolkit::BufferOffset<toolkit::Buffer::Ptr>;
-
 class RtspSession : public toolkit::Session, public RtspSplitter, public RtpReceiver, public MediaSourceEvent {
 public:
     using Ptr = std::shared_ptr<RtspSession>;
     using onGetRealm = std::function<void(const std::string &realm)>;
     //encrypted为true是则表明是md5加密的密码，否则是明文密码
-    //在请求明文密码时如果提供md5密码者则会导致认证失败
+    //在请求明文密码时，如果提供md5密码者则会导致认证失败
     using onAuth = std::function<void(bool encrypted, const std::string &pwd_or_md5)>;
 
     RtspSession(const toolkit::Socket::Ptr &sock);
@@ -127,6 +126,7 @@ private:
     void emitOnPlay();
     //发送rtp给客户端
     void sendRtpPacket(const RtspMediaSource::RingDataType &pkt);
+    void sendRtcpPacket(int track_idx, toolkit::Buffer::Ptr ptr);
     //触发rtcp发送
     void updateRtcpContext(const RtpPacket::Ptr &rtp);
     //回复客户端
