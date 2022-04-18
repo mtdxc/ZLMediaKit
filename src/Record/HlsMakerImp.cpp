@@ -16,7 +16,7 @@
 #include "Util/File.h"
 #include "Common/config.h"
 
-using namespace std;
+using std::string;
 using namespace toolkit;
 
 namespace mediakit {
@@ -102,11 +102,10 @@ string HlsMakerImp::onOpenSegment(uint64_t index) {
 
 void HlsMakerImp::onDelSegment(uint64_t index) {
     auto it = _segment_file_paths.find(index);
-    if (it == _segment_file_paths.end()) {
-        return;
+    if (it != _segment_file_paths.end()) {
+        File::delete_file(it->second.data());
+        _segment_file_paths.erase(it);
     }
-    File::delete_file(it->second.data());
-    _segment_file_paths.erase(it);
 }
 
 void HlsMakerImp::onWriteSegment(const char *data, size_t len) {
@@ -114,6 +113,7 @@ void HlsMakerImp::onWriteSegment(const char *data, size_t len) {
         fwrite(data, len, 1, _file.get());
     }
     if (_media_src) {
+        // 更新speed
         _media_src->onSegmentSize(len);
     }
 }
@@ -127,7 +127,7 @@ void HlsMakerImp::onWriteHls(const std::string &data) {
             _media_src->setIndexFile(data);
         }
     } else {
-        WarnL << "create hls file failed," << _path_hls << " " << get_uv_errmsg();
+        WarnL << "create hls file " << _path_hls << " failed:" << get_uv_errmsg();
     }
     //DebugL << "\r\n"  << string(data,len);
 }
@@ -146,7 +146,7 @@ void HlsMakerImp::onFlushLastSegment(uint64_t duration_ms) {
 
 std::shared_ptr<FILE> HlsMakerImp::makeFile(const string &file, bool setbuf) {
     auto file_buf = _file_buf;
-    auto ret = shared_ptr<FILE>(File::create_file(file.data(), "wb"), [file_buf](FILE *fp) {
+    auto ret = std::shared_ptr<FILE>(File::create_file(file.data(), "wb"), [file_buf](FILE *fp) {
         if (fp) {
             fclose(fp);
         }

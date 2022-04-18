@@ -25,7 +25,7 @@ public:
      * @param seg_keep 是否保留切片文件
      */
     HlsMaker(float seg_duration = 5, uint32_t seg_number = 3, bool seg_keep = false);
-    virtual ~HlsMaker();
+    virtual ~HlsMaker() = default;
 
     /**
      * 写入ts数据
@@ -39,7 +39,9 @@ public:
     /**
      * 是否为直播
      */
-    bool isLive();
+    bool isLive() {
+        return _seg_number != 0;
+    }
 
     /**
      * 是否保留切片文件
@@ -48,25 +50,26 @@ public:
 
     /**
      * 清空记录
+     * 这会导致重新等关键帧才产生下一个切片
      */
     void clear();
 
 protected:
     /**
      * 创建ts切片文件回调
-     * @param index
-     * @return
+     * @param index 索引
+     * @return 新的切片文件名
      */
     virtual std::string onOpenSegment(uint64_t index) = 0;
 
     /**
      * 删除ts切片文件回调
-     * @param index
+     * @param index 索引
      */
     virtual void onDelSegment(uint64_t index) = 0;
 
     /**
-     * 写ts切片文件回调
+     * 写当前ts切片文件回调
      * @param data
      * @param len
      */
@@ -109,12 +112,14 @@ private:
 
 private:
     float _seg_duration = 0;
+    // 0 点播模式, > 0 live模式(只保留_seg_number个最新的segment)
     uint32_t _seg_number = 0;
     bool _seg_keep = false;
     uint64_t _last_timestamp = 0;
     uint64_t _last_seg_timestamp = 0;
     uint64_t _file_index = 0;
     std::string _last_file_name;
+    // 索引 + 文件名 列表，用于生成m3u8文件
     std::deque<std::tuple<int,std::string> > _seg_dur_list;
 };
 

@@ -16,7 +16,7 @@
 #include "HlsRecorder.h"
 #include "Util/File.h"
 
-using namespace std;
+using std::string;
 using namespace toolkit;
 
 namespace mediakit {
@@ -32,11 +32,7 @@ string Recorder::getRecordPath(Recorder::type type, const string &vhost, const s
             } else {
                 m3u8FilePath = app + "/" + stream_id + "/hls.m3u8";
             }
-            //Here we use the customized file path.
-            if (!customized_path.empty()) {
-                return File::absolutePath(m3u8FilePath, customized_path);
-            }
-            return File::absolutePath(m3u8FilePath, hlsPath);
+            return File::absolutePath(m3u8FilePath, customized_path.empty() ? hlsPath : customized_path);
         }
         case Recorder::type_mp4: {
             GET_CONFIG(string, recordPath, Protocol::kMP4SavePath);
@@ -47,11 +43,7 @@ string Recorder::getRecordPath(Recorder::type type, const string &vhost, const s
             } else {
                 mp4FilePath = recordAppName + "/" + app + "/" + stream_id + "/";
             }
-            //Here we use the customized file path.
-            if (!customized_path.empty()) {
-                return File::absolutePath(mp4FilePath, customized_path);
-            }
-            return File::absolutePath(mp4FilePath, recordPath);
+            return File::absolutePath(mp4FilePath, customized_path.empty() ? recordPath : customized_path);
         }
         default:
             return "";

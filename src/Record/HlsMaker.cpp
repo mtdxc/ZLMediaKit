@@ -22,14 +22,8 @@ HlsMaker::HlsMaker(float seg_duration, uint32_t seg_number, bool seg_keep) {
     _seg_keep = seg_keep;
 }
 
-HlsMaker::~HlsMaker() {
-}
-
-
 void HlsMaker::makeIndexFile(bool eof) {
-    char file_content[1024];
     int maxSegmentDuration = 0;
-
     for (auto &tp : _seg_dur_list) {
         int dur = std::get<0>(tp);
         if (dur > maxSegmentDuration) {
@@ -37,10 +31,9 @@ void HlsMaker::makeIndexFile(bool eof) {
         }
     }
 
+    char file_content[1024];
     auto sequence = _seg_number ? (_file_index > _seg_number ? _file_index - _seg_number : 0LL) : 0LL;
-
-    string m3u8;
-     if (_seg_number == 0) {
+    if (_seg_number == 0) {
         // 录像点播支持时移
         snprintf(file_content, sizeof(file_content),
                  "#EXTM3U\n"
@@ -61,6 +54,7 @@ void HlsMaker::makeIndexFile(bool eof) {
                  sequence);
     }
     
+    std::string m3u8;
     m3u8.assign(file_content);
 
     for (auto &tp : _seg_dur_list) {
@@ -100,10 +94,10 @@ void HlsMaker::inputData(void *data, size_t len, uint64_t timestamp, bool is_idr
 
 void HlsMaker::delOldSegment() {
     if (_seg_number == 0) {
-        //如果设置为保留0个切片，则认为是保存为点播
+        // 点播模式不删除Segment
         return;
     }
-    //在hls m3u8索引文件中,我们保存的切片个数跟_seg_number相关设置一致
+    // 实时模式, 保证切片个数 <= _seg_number
     if (_file_index > _seg_number) {
         _seg_dur_list.pop_front();
     }
@@ -112,7 +106,7 @@ void HlsMaker::delOldSegment() {
         return;
     }
     GET_CONFIG(uint32_t, segRetain, Hls::kSegmentRetain);
-    //但是实际保存的切片个数比m3u8所述多若干个,这样做的目的是防止播放器在切片删除前能下载完毕
+    // 延迟删除切片，避免播放器下载不到刚被删除的切片
     if (_file_index > _seg_number + segRetain) {
         onDelSegment(_file_index - _seg_number - segRetain - 1);
     }
@@ -124,7 +118,7 @@ void HlsMaker::addNewSegment(uint64_t stamp) {
         return;
     }
 
-    //关闭并保存上一个切片，如果_seg_number==0,那么是点播。
+    //关闭并保存上一个切片
     flushLastSegment(false);
     //新增切片
     _last_file_name = onOpenSegment(_file_index++);
@@ -143,15 +137,12 @@ void HlsMaker::flushLastSegment(bool eof){
         seg_dur = 100;
     }
     _seg_dur_list.emplace_back(seg_dur, std::move(_last_file_name));
-    delOldSegment();
-    //先flush ts切片，否则可能存在ts文件未写入完毕就被访问的情况
-    onFlushLastSegment(seg_dur);
-    //然后写m3u8文件
-    makeIndexFile(eof);
-}
 
-bool HlsMaker::isLive() {
-    return _seg_number != 0;
+    delOldSegment();
+    //先flush ts切片，否则可能存在ts文件未写完，就被访问的情况
+    onFlushLastSegment(seg_dur);
+    //后写m3u8文件
+    makeIndexFile(eof);
 }
 
 bool HlsMaker::isKeep() {
