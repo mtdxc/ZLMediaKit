@@ -7347,8 +7347,10 @@ var ZLMRTCClient = (function (exports) {
 	      direction: 'recvonly',
 	      sendEncodings: []
 	    };
-	    this.pc.addTransceiver('audio', AudioTransceiverInit);
-	    this.pc.addTransceiver('video', VideoTransceiverInit);
+		if (this.options.audioEnable)
+	    	this.pc.addTransceiver('audio', AudioTransceiverInit);
+		if (this.options.videoEnable)
+	    	this.pc.addTransceiver('video', VideoTransceiverInit);
 	    this.pc.createOffer().then(desc => {
 	      log(this.TAG, 'offer:', desc.sdp);
 	      this.pc.setLocalDescription(desc).then(() => {
