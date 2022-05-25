@@ -86,6 +86,27 @@ static void setupPadding(RtcpHeader *rtcp, size_t padding_size) {
 }
 
 /////////////////////////////////////////////////////////////////////////////
+std::string RtcpHeader::dump(int len) const {
+    RtcpType type = (RtcpType)pt;
+    _StrPrinter printer;
+    printer << rtcpTypeToStr(type) << " ";
+    switch (type) {
+        case RtcpType::RTCP_RTPFB : {
+            printer << rtpfbTypeToStr((RTPFBType) count);
+            break;
+        }
+        case RtcpType::RTCP_PSFB : {
+            printer << psfbTypeToStr((PSFBType) count);
+            break;
+        }
+        default : {
+            printer << "count:" << count;
+            break;
+        }
+    }
+    printer << " len:" << len;
+    return std::move(printer);
+}
 
 string RtcpHeader::dumpHeader() const {
     _StrPrinter printer;
