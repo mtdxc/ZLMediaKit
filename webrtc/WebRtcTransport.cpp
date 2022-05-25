@@ -36,19 +36,34 @@ const string kExternIP = RTC_FIELD"externIP";
 const string kRembBitRate = RTC_FIELD"rembBitRate";
 //webrtc单端口udp服务器
 const string kPort =  RTC_FIELD"port";
-
+const string kDumpRtcp =  RTC_FIELD"dumpRtcp";
+const string kDumpRtp1 =  RTC_FIELD"dumpRtp1";
+const string kDumpRtp2 =  RTC_FIELD"dumpRtp2";
+const string kDumpNack =  RTC_FIELD"dumpNack";
 static onceToken token([]() {
     mINI::Instance()[kTimeOutSec] = 15;
     mINI::Instance()[kExternIP] = "";
     mINI::Instance()[kRembBitRate] = 0;
     mINI::Instance()[kPort] = 8000;
+    mINI::Instance()[kDumpRtcp] = false;
+    mINI::Instance()[kDumpRtp1] = false;
+    mINI::Instance()[kDumpRtp2] = false;
+    mINI::Instance()[kDumpNack] = false;
 });
 
 }//namespace RTC
-static bool dumpRtcp = false;
-static bool dumpRtp1 = false;
-static bool dumpRtp2 = false;
-static bool dumpNack = false;
+
+GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, RTC::kExternIP, [](string str){
+    std::vector<std::string> ret;
+    if (str.length())
+        ret = split(str, ",");
+    return ret;
+});
+GET_CONFIG(bool, dumpRtcp, RTC::kDumpRtcp);
+GET_CONFIG(bool, dumpRtp1, RTC::kDumpRtp1);
+GET_CONFIG(bool, dumpRtp2, RTC::kDumpRtp2);
+GET_CONFIG(bool, dumpNack, RTC::kDumpNack);
+
 std::string getTupleString(RTC::TransportTuple* tuple) {
     char str[64];
     uint16_t port;
@@ -561,12 +576,6 @@ void WebRtcTransportImp::onStartWebRTC() {
 
 void WebRtcTransportImp::onCheckAnswer(RtcSession &sdp) {
     //修改answer sdp的ip、端口信息
-    GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, RTC::kExternIP, [](string str){
-        std::vector<std::string> ret;
-        if (str.length())
-            ret = split(str, ",");
-        return ret;
-    });
     for (auto &m : sdp.media) {
         m.addr.reset();
         m.addr.address = extern_ips.empty() ? SockUtil::get_local_ip() : extern_ips[0];
@@ -637,12 +646,6 @@ void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
     
     GET_CONFIG(uint16_t, local_port, RTC::kPort);
     //添加接收端口candidate信息
-    GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, RTC::kExternIP, [](string str){
-        std::vector<std::string> ret;
-        if (str.length())
-            ret = split(str, ",");
-        return ret;
-    });
     if (extern_ips.empty()) {
         std::string localIp = SockUtil::get_local_ip();
         configure.addCandidate(*makeIceCandidate(localIp, local_port, 120, "udp"));

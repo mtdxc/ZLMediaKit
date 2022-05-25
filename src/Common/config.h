@@ -113,15 +113,13 @@ extern const std::string kBroadcastReloadConfig;
     } while(0)
 
 //监听某个配置发送变更
-#define LISTEN_RELOAD_KEY(arg, key, ...)                                            \
-    do {                                                                            \
-        static ::toolkit::onceToken s_token_listen([](){                            \
-            ::toolkit::NoticeCenter::Instance().addListener(ReloadConfigTag,        \
-                Broadcast::kBroadcastReloadConfig,[](BroadcastReloadConfigArgs) {   \
-                __VA_ARGS__;                                                        \
-            });                                                                     \
-        });                                                                         \
-    } while(0)
+#define LISTEN_RELOAD_KEY(arg, key, ...)                                        \
+    static ::toolkit::onceToken arg##_token_listen_([](){                        \
+        ::toolkit::NoticeCenter::Instance().addListener(ReloadConfigTag,        \
+            Broadcast::kBroadcastReloadConfig,[](BroadcastReloadConfigArgs) {   \
+            __VA_ARGS__;                                                        \
+        });                                                                     \
+    });                                                                         
 
 #define GET_CONFIG(type, arg, key)                      \
     static type arg = ::toolkit::mINI::Instance()[key]; \
@@ -129,20 +127,17 @@ extern const std::string kBroadcastReloadConfig;
         RELOAD_KEY(arg, key);                           \
     });
 
-#define GET_CONFIG_FUNC(type, arg, key, ...)                          \
-    static type arg;                                                  \
-    do {                                                              \
-        static ::toolkit::onceToken s_token_set([](){                 \
-            static auto lam = __VA_ARGS__ ;                           \
-            static auto arg##_str = ::toolkit::mINI::Instance()[key]; \
-            arg = lam(arg##_str);                                     \
-            LISTEN_RELOAD_KEY(arg, key, {                             \
-                RELOAD_KEY(arg##_str, key);                           \
-                arg = lam(arg##_str);                                 \
-            });                                                       \
-        });                                                           \
-    } while(0)
-
+#define GET_CONFIG_FUNC(type, arg, key, ...)                      \
+    static type arg;                                              \
+    static ::toolkit::onceToken arg##_token_set_([](){             \
+        static auto lam = __VA_ARGS__ ;                           \
+        static auto arg##_str = ::toolkit::mINI::Instance()[key]; \
+        arg = lam(arg##_str);                                     \
+        LISTEN_RELOAD_KEY(arg, key, {                             \
+            RELOAD_KEY(arg##_str, key);                           \
+            arg = lam(arg##_str);                                 \
+        });                                                       \
+    });
 } //namespace Broadcast
 
 ////////////通用配置///////////
