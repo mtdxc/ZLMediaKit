@@ -15,7 +15,8 @@ namespace mediakit {
 
 RtpTrack::RtpTrack() {
     setOnSort([this](uint16_t seq, RtpPacket::Ptr &packet) {
-        onRtpSorted(std::move(packet));
+        if(packet->getPayloadSize())
+            onRtpSorted(std::move(packet));
     });
 }
 
@@ -48,8 +49,9 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
         throw BadRtpException("only support rtp ver 2");
     }
     if (!header->getPayloadSize(len)) {
-        //略过payload为空的rtp包
-        return nullptr;
+        //无有效负载的rtp包
+        TraceL << "got empty rtp " << header->dump(len);
+        // return nullptr;
     }
 
     //比对缓存ssrc
@@ -95,9 +97,8 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
     data[1] = 2 * type;
     data[2] = (len >> 8) & 0xFF;
     data[3] = len & 0xFF;
-    //拷贝rtp包体
+    //拷贝rtp
     memcpy(&data[4], ptr, len);
-
     if (_disable_ntp) {
         // 不支持ntp时间戳，例如国标推流，那么直接使用rtp时间戳
         rtp->ntp_stamp = rtp->getStamp() * uint64_t(1000) / sample_rate;

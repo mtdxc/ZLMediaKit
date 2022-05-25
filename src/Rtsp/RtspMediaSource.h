@@ -93,7 +93,7 @@ public:
     /**
      * 获取相应轨道的seqence
      */
-    virtual uint16_t getSeqence(TrackType trackType) {
+    virtual uint16_t getSequence(TrackType trackType) {
         assert(trackType >= 0 && trackType < TrackMax);
         auto &track = _tracks[trackType];
         if (!track) {
@@ -142,7 +142,7 @@ public:
         SdpParser sdp_parser(sdp);
         _tracks[TrackVideo] = sdp_parser.getTrack(TrackVideo);
         _tracks[TrackAudio] = sdp_parser.getTrack(TrackAudio);
-        _have_video = (bool) _tracks[TrackVideo];
+        _have_video = nullptr != _tracks[TrackVideo];
         _sdp = sdp_parser.toString();
         if (_ring) {
             regist();
@@ -160,7 +160,7 @@ public:
         auto &track = _tracks[rtp->type];
         if (track) {
             track->_seq = rtp->getSeq();
-            track->_time_stamp = rtp->getStamp() * uint64_t(1000) / rtp->sample_rate;
+            track->_time_stamp = rtp->getStampMS(false);
             track->_ssrc = rtp->getSSRC();
         }
         if (!_ring) {
@@ -177,7 +177,7 @@ public:
                 regist();
             }
         }
-        auto stamp = rtp->getStampMS();
+        auto stamp = rtp->getStampMS(true);
         bool is_video = rtp->type == TrackVideo;
         PacketCache<RtpPacket>::inputPacket(stamp, is_video, std::move(rtp), keyPos);
     }
@@ -194,7 +194,7 @@ private:
      * @param key_pos 是否包含关键帧
      */
     void onFlush(std::shared_ptr<toolkit::List<RtpPacket::Ptr> > rtp_list, bool key_pos) override {
-        //如果不存在视频，那么就没有存在GOP缓存的意义，所以is_key一直为true确保一直清空GOP缓存
+        //如不存在视频，那就没必要使用GOP缓存，因此让is_key为true，以确保一直清空GOP缓存
         _ring->write(std::move(rtp_list), _have_video ? key_pos : true);
     }
 

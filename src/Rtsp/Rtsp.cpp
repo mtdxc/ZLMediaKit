@@ -540,6 +540,13 @@ string RtpHeader::dumpString(size_t rtp_size) const {
     return std::move(printer);
 }
 
+std::string RtpHeader::dump(size_t rtp_size) const {
+    char line[256] = { 0 };
+    int n = sprintf(line, "ssrc:%" PRIu32 " pt:%" PRIu8 " seq:%" PRIu16 " tsp:%" PRIu32 "%c%c len:%d",
+        ntohl(ssrc), pt, ntohs(seq), ntohl(stamp), mark?'M':' ', ext?'E':' ', rtp_size);
+    return line;
+}
+
 ///////////////////////////////////////////////////////////////////////
 
 RtpHeader *RtpPacket::getHeader() {
@@ -553,6 +560,16 @@ const RtpHeader *RtpPacket::getHeader() const {
 
 string RtpPacket::dumpString() const {
     return getHeader()->dumpString(size() - RtpPacket::kRtpTcpHeaderSize);
+}
+
+string RtpPacket::dump(int t) const {
+	char line[256] = { 0 };
+    const RtpHeader* header = getHeader();
+    int n = sprintf(line, "%sRtp %s MS:%" PRIu32 "",
+        getTrackString(type), 
+        header->dump(size() - RtpPacket::kRtpTcpHeaderSize).c_str(),
+        getStampMS(t));
+    return line;
 }
 
 uint16_t RtpPacket::getSeq() const {

@@ -45,7 +45,10 @@ static onceToken token([]() {
 });
 
 }//namespace RTC
-
+static bool dumpRtcp = false;
+static bool dumpRtp1 = false;
+static bool dumpRtp2 = false;
+static bool dumpNack = false;
 std::string getTupleString(RTC::TransportTuple* tuple) {
     char str[64];
     uint16_t port;
@@ -326,6 +329,7 @@ void WebRtcTransport::inputSockData(char *buf, int len, RTC::TransportTuple *tup
             return;
         }
         if (_srtp_session_recv->DecryptSrtp((uint8_t *) buf, &len)) {
+            if(dumpRtp1) TraceL << getIdentifier() <<  " recvRtp " << ((const RtpHeader*)buf)->dump(len);
             onRtp(buf, len, _ticker.createdTime());
         }
         return;
@@ -350,6 +354,8 @@ void WebRtcTransport::sendRtpPacket(const char *buf, int len, bool flush, void *
         pkt->assign(buf, len);
         // 回调发送的明文Rtp数据
         onBeforeEncryptRtp(pkt->data(), len, ctx);
+        if (dumpRtp1) TraceL << getIdentifier() <<  " sendRtp " << ((const RtpHeader*)buf)->dump(len);
+
         // 加密
         if (_srtp_session_send->EncryptRtp(reinterpret_cast<uint8_t *>(pkt->data()), &len)) {
             pkt->setSize(len);
@@ -360,6 +366,7 @@ void WebRtcTransport::sendRtpPacket(const char *buf, int len, bool flush, void *
 }
 
 void WebRtcTransport::sendRtcpPacket(const char *buf, int len, bool flush, void *ctx) {
+    if (dumpRtcp) TraceL << getIdentifier() <<  " sendRtcp " << ((const RtcpHeader*)buf)->dump(len);
     if (_srtp_session_send) {
         auto pkt = _packet_pool.obtain2();
         //预留rtx加入的两个字节
@@ -667,13 +674,22 @@ public:
     }
 
     ~RtpChannel() override = default;
-
+    uint16_t next_seq = 0;
     RtpPacket::Ptr inputRtp(TrackType type, int sample_rate, uint8_t *ptr, size_t len, bool is_rtx) {
+        if(!ptr||!len) return nullptr;
+        RtpHeader* head = (RtpHeader*)ptr;
+        auto seq = ntohs(head->seq);
+        /* 乱序检测
+        if (!is_rtx) {
+            if(seq != next_seq) TraceL << "seq jump " << next_seq << ": " << head->dump(len);
+            next_seq = seq + 1;
+        }*/
         auto rtp = RtpTrack::inputRtp(type, sample_rate, ptr, len);
         if (!rtp) {
+            TraceL << "skip " << (is_rtx?"rtx":"") << "packet " << head->dump(len);
             return rtp;
         }
-        auto seq = rtp->getSeq();
+        // auto seq = rtp->getSeq();
         _nack_ctx.received(seq, is_rtx);
         if (!is_rtx) {
             //统计rtp接收情况，便于生成nack rtcp包
@@ -728,6 +744,7 @@ void WebRtcTransportImp::onRtcp(const char *buf, size_t len) {
     _bytes_usage += len;
     auto rtcps = RtcpHeader::loadFromBytes((char *) buf, len);
     for (auto rtcp : rtcps) {
+        if (dumpRtcp) TraceL << getIdentifier() <<  " recvRtcp " << rtcp->dumpString();
         switch ((RtcpType) rtcp->pt) {
             case RtcpType::RTCP_SR : {
                 //对方汇报rtp发送情况
@@ -798,6 +815,7 @@ void WebRtcTransportImp::onRtcp(const char *buf, size_t len) {
                         auto &fci = fb->getFci<FCI_NACK>();
                         // 收到nack请求，直接重传
                         track->nack_list.forEach(fci, [&](const RtpPacket::Ptr &rtp) {
+                            if(dumpNack) TraceL << getIdentifier() << " sendRtx " << rtp->dump();
                             //rtp重传
                             onSendRtp(rtp, true, true);
                         });
@@ -914,6 +932,7 @@ void WrappedRtxTrack::inputRtp(const char *buf, size_t len, uint64_t stamp_ms, R
 }
 
 void WebRtcTransportImp::onSendNack(MediaTrack &track, const FCI_NACK &nack, uint32_t ssrc) {
+    if(dumpNack) TraceL << getIdentifier() << " " << ssrc << " send nack " << nack.dumpString();
     auto rtcp = RtcpFB::create(RTPFBType::RTCP_RTPFB_NACK, &nack, FCI_NACK::kSize);
     rtcp->ssrc = htonl(track.answer_ssrc_rtp);
     rtcp->ssrc_media = htonl(ssrc);
@@ -941,7 +960,7 @@ void WebRtcTransportImp::onSortedRtp(MediaTrack &track, const string &rid, RtpPa
             sendRtcpRemb(rtp->getSSRC(), remb_bit_rate);
         }
     }
-
+    if (dumpRtp2) TraceL << getIdentifier() << " " << rid << " onSortedRtp " << rtp->dump();
     onRecvRtp(track, rid, std::move(rtp));
 }
 
@@ -952,6 +971,7 @@ WebRtcTransportImp::onSendRtp -> WebRtcTransport::sendRtpPacket
                                    + WebRtcTransport::onSendSockData            + rtxEncode
 */
 void WebRtcTransportImp::onSendRtp(const RtpPacket::Ptr &rtp, bool flush, bool rtx) {
+    if (dumpRtp2) TraceL << getIdentifier() << " " << (rtx?"onSendRtx ":"onSendRtp ") << rtp->dump() << " flush:" << flush;
     auto &track = _type_to_track[rtp->type];
     if (!track) {
         //忽略，对方不支持该编码类型

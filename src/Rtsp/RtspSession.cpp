@@ -440,7 +440,7 @@ void RtspSession::onAuthSuccess() {
         strongSelf->_play_src = rtsp_src;
         for(auto &track : strongSelf->_sdp_track){
             track->_ssrc = rtsp_src->getSsrc(track->_type);
-            track->_seq = rtsp_src->getSeqence(track->_type);
+            track->_seq = rtsp_src->getSequence(track->_type);
             track->_time_stamp = rtsp_src->getTimeStamp(track->_type);
         }
 
@@ -805,7 +805,7 @@ void RtspSession::handleReq_Play(const Parser &parser) {
             return;
         }
         track->_ssrc = play_src->getSsrc(track->_type);
-        track->_seq = play_src->getSeqence(track->_type);
+        track->_seq = play_src->getSequence(track->_type);
         track->_time_stamp = play_src->getTimeStamp(track->_type);
 
         rtp_info << "url=" << track->getControlUrl(_content_base) << ";"
