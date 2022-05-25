@@ -204,7 +204,7 @@ public:
      * 使用net2Host转换成主机字节序后才可使用此函数
      */
     std::string dumpString() const;
-
+    std::string dump(int len) const;
     /**
      * 根据length字段获取rtcp总长度
      */

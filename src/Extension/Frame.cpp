@@ -14,12 +14,11 @@
 #else
 #include <netinet/in.h>
 #endif
-//#include "Network/sockutil.h"
-
 #include "Frame.h"
+#include <inttypes.h>
 #include "Common/Parser.h"
+#include "Util/logger.h"
 
-using std::string;
 using namespace toolkit;
 
 namespace toolkit {
@@ -28,6 +27,14 @@ namespace toolkit {
 }
 
 namespace mediakit{
+
+std::string Frame::dump() const{
+    char line[256];
+    sprintf(line, "%s pts:%" PRIu32 " dts:%" PRIu32 " size:%3d %s%s", 
+        getCodecName(), pts(), dts(), (int)size(), 
+        keyFrame()?"key":"", configFrame()?"config":"");
+    return line;
+}
 
 Frame::Ptr Frame::getCacheAbleFrame(const Frame::Ptr &frame){
     if(frame->cacheAble()){
@@ -55,21 +62,21 @@ const char *getCodecName(CodecId codec) {
 }
 
 #define XX(name, type, value, str, mpeg_id) {str, name},
-static std::map<string, CodecId, StrCaseCompare> codec_map = {CODEC_MAP(XX)};
+static std::map<std::string, CodecId, StrCaseCompare> codec_map = {CODEC_MAP(XX)};
 #undef XX
 
-CodecId getCodecId(const string &str){
+CodecId getCodecId(const std::string &str){
     auto it = codec_map.find(str);
     return it == codec_map.end() ? CodecInvalid : it->second;
 }
 
-static std::map<string, TrackType, StrCaseCompare> track_str_map = {
+static std::map<std::string, TrackType, StrCaseCompare> track_str_map = {
         {"video",       TrackVideo},
         {"audio",       TrackAudio},
         {"application", TrackApplication}
 };
 
-TrackType getTrackType(const string &str) {
+TrackType getTrackType(const std::string &str) {
     auto it = track_str_map.find(str);
     return it == track_str_map.end() ? TrackInvalid : it->second;
 }
@@ -100,10 +107,15 @@ bool FrameMerger::willFlush(const Frame::Ptr &frame) const{
     }
     else if (_frame_cache.size() > kMaxFrameCacheSize) {
         // 缓存太多，防止内存溢出，强制flush输出
+        InfoL << "帧缓存过多:" << _frame_cache.size() << "，强制刷新";
         return true;
     }
     if (!frame) {
-      return true;
+        InfoL << "flush with empty frame";
+        return true;
+    } else if (_frame_cache.back()->dts() != frame->dts()) {
+        // 遇到新帧
+        return true;
     }
     switch (_type) {
         case none : {
@@ -119,15 +131,14 @@ bool FrameMerger::willFlush(const Frame::Ptr &frame) const{
                     break;
             }
             //遇到新帧、或时间戳变化或
-            return new_frame || _frame_cache.back()->dts() != frame->dts();
+            return new_frame;
         }
 
         case mp4_nal_size:
         case h264_prefix: {
             if (_have_decode_able_frame) {
                 //时间戳变化了,或新的一帧，或遇到config帧，立即flush
-                return _frame_cache.back()->dts() != frame->dts()
-                    || frame->decodeAble() || frame->configFrame();
+                return frame->decodeAble() || frame->configFrame();
             }
             return false;
         }

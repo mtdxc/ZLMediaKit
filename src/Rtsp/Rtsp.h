@@ -128,7 +128,7 @@ public:
     ssize_t getPayloadSize(size_t rtp_size) const;
     //打印调试信息
     std::string dumpString(size_t rtp_size) const;
-
+    std::string dump(size_t rtp_size) const;
 private:
     //返回有效负载偏移量
     size_t getPayloadOffset() const;
@@ -156,7 +156,7 @@ public:
 
     //打印调试信息
     std::string dumpString() const;
-
+    std::string dump(int type = 0) const;
     //主机字节序的seq
     uint16_t getSeq() const;
     uint32_t getStamp() const;

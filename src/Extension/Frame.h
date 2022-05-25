@@ -123,7 +123,7 @@ public:
 
     /**
      * 前缀长度，譬如264前缀为0x00 00 00 01,那么前缀长度就是4
-     * aac前缀则为7个字节
+     * aac前缀则为7个字节的adts头部
      */
     virtual size_t prefixSize() const = 0;
 
@@ -154,14 +154,14 @@ public:
      * sps pps等帧不能解码
      */
     virtual bool decodeAble() const {
-        if (getTrackType() != TrackVideo) {
-            //非视频帧都可以解码
-            return true;
-        }
-        //默认非sps pps帧都可以解码
-        return !configFrame();
+        if (getTrackType() == TrackVideo) {
+            //默认非sps pps帧都可以解码
+            return !configFrame();
+        } 
+        //非视频帧都可以解码
+        return true;
     }
-
+    std::string dump() const;
     /**
      * 返回可缓存的frame
      */
