@@ -10,3 +10,6 @@
 [submodule "3rdpart/usrsctp"]
 	path = 3rdpart/usrsctp
 	url = https://github.com/sctplab/usrsctp.git
+[submodule "3rdpart/srt"]
+	path = 3rdpart/srt
+	url = https://github.com/Haivision/srt.git
