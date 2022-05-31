@@ -77,13 +77,34 @@ private:
     SwrContext *_ctx = nullptr;
 };
 
+class FFmpegAudioFifo {
+public:
+    FFmpegAudioFifo() = default;
+    ~FFmpegAudioFifo();
+
+    bool Write(const AVFrame *frame);
+    bool Read(AVFrame *frame, int sample_size);
+    int size() const;
+
+private:
+    int _channels = 0;
+    int _samplerate = 0;
+    double _tsp = 0;
+    double _timebase = 0;
+    AVAudioFifo *_fifo = nullptr;
+    AVSampleFormat _format = AV_SAMPLE_FMT_NONE;
+};
+
 class TaskManager {
 public:
     virtual ~TaskManager();
 
+    size_t getMaxTaskSize() const { return _max_task; }
     void setMaxTaskSize(size_t size);
     void stopThread(bool drop_task);
 
+    void addDecodeDrop() {_decode_drop++;}
+    int getDecodeDrop() const {return _decode_drop;}
 protected:
     void startThread(const std::string &name);
     bool addEncodeTask(std::function<void()> task);
@@ -100,7 +121,7 @@ private:
     };
 
 private:
-    bool _decode_drop_start = false;
+    int _decode_drop = 0;
     bool _exit = false;
     size_t _max_task = 30;
     std::mutex _task_mtx;
@@ -109,7 +130,7 @@ private:
     std::shared_ptr<std::thread> _thread;
 };
 
-class FFmpegDecoder : public TaskManager {
+class FFmpegDecoder : public TaskManager, public CodecInfo {
 public:
     using Ptr = std::shared_ptr<FFmpegDecoder>;
     using onDec = std::function<void(const FFmpegFrame::Ptr &)>;
@@ -120,7 +141,8 @@ public:
     bool inputFrame(const Frame::Ptr &frame, bool live, bool async, bool enable_merge = true);
     void setOnDecode(onDec cb);
     void flush();
-    const AVCodecContext *getContext() const;
+    CodecId getCodecId() const override { return _codecId; }
+    const AVCodecContext *getContext() const { return _context.get(); }
 
 private:
     void onDecode(const FFmpegFrame::Ptr &frame);
@@ -128,6 +150,7 @@ private:
     bool decodeFrame(const char *data, size_t size, uint64_t dts, uint64_t pts, bool live, bool key_frame);
 
 private:
+    CodecId _codecId;
     // default merge frame
     bool _do_merger = true;
     toolkit::Ticker _ticker;
@@ -158,6 +181,35 @@ private:
     AVPixelFormat _target_format = AV_PIX_FMT_NONE;
 };
 
+class FFmpegEncoder : public TaskManager, public CodecInfo {
+public:
+    using Ptr = std::shared_ptr<FFmpegEncoder>;
+    using onEnc = std::function<void(const Frame::Ptr &)>;
+
+    FFmpegEncoder(const Track::Ptr &track, int thread_num = 2, int format = -1, const std::vector<std::string>& codec_name = {});
+    ~FFmpegEncoder() override;
+
+    void flush();
+    CodecId getCodecId() const override { return _codecId; }
+    const AVCodecContext *getContext() const { return _context.get(); }
+
+    void setOnEncode(onEnc cb) { _cb = std::move(cb); }
+    bool inputFrame(const FFmpegFrame::Ptr &frame, bool async);
+
+private:
+    void inputFrame_l(FFmpegFrame::Ptr frame);
+    bool encodeFrame(AVFrame *frame);
+    void onEncode(AVPacket *packet);
+
+private:
+    CodecId _codecId;
+    onEnc _cb;
+
+    std::shared_ptr<AVCodecContext> _context;
+    std::unique_ptr<FFmpegSws> _sws;
+    std::unique_ptr<FFmpegSwr> _swr;
+    std::unique_ptr<FFmpegAudioFifo> _fifo;
+};
 }//namespace mediakit
 #endif// ENABLE_FFMPEG
 #endif //ZLMEDIAKIT_TRANSCODE_H
