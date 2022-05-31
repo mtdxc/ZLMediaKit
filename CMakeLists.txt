@@ -36,7 +36,7 @@ option(ENABLE_API_STATIC_LIB "Enable mk_api static lib" OFF)
 option(ENABLE_ASAN "Enable Address Sanitize" OFF)
 option(ENABLE_CXX_API "Enable C++ API SDK" OFF)
 option(ENABLE_FAAC "Enable FAAC" OFF)
-option(ENABLE_FFMPEG "Enable FFmpeg" OFF)
+option(ENABLE_FFMPEG "Enable FFmpeg" ON)
 option(ENABLE_HLS "Enable HLS" ON)
 option(ENABLE_JEMALLOC_STATIC "Enable static linking to the jemalloc library" OFF)
 option(ENABLE_MEM_DEBUG "Enable Memory Debug" OFF)
@@ -430,8 +430,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdpart)
 
 add_subdirectory(3rdpart)
 
-add_subdirectory(src)
-
 if(ENABLE_SRT)
   add_subdirectory(srt)
 endif()
@@ -439,6 +437,8 @@ endif()
 if(ENABLE_WEBRTC)
   add_subdirectory(webrtc)
 endif()
+
+add_subdirectory(src)
 
 if(ENABLE_API)
   add_subdirectory(api)
