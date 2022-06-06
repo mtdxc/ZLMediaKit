@@ -7,18 +7,6 @@
 
 namespace SRT {
 
-class PacketRecvRateContext {
-public:
-    PacketRecvRateContext(TimePoint start)
-        : _start(start) {};
-    ~PacketRecvRateContext() = default;
-    void inputPacket(TimePoint &ts);
-    uint32_t getPacketRecvRate();
-
-private:
-    TimePoint _start;
-    std::map<int64_t, int64_t> _pkt_map;
-};
 
 class EstimatedLinkCapacityContext {
 public:
@@ -39,7 +27,7 @@ public:
     ~RecvRateContext() = default;
     void inputPacket(TimePoint &ts, size_t size);
     uint32_t getRecvRate();
-
+    uint32_t getPacketRecvRate();
 private:
     TimePoint _start;
     std::map<int64_t, size_t> _pkt_map;

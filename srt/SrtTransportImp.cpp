@@ -23,7 +23,6 @@ SrtTransportImp::~SrtTransportImp() {
 }
 
 void SrtTransportImp::onHandShakeFinished(std::string &streamid, struct sockaddr_storage *addr) {
-    // TODO parse stream id like this zlmediakit.com/live/test?token=1213444&type=push
     if (!_addr) {
         _addr.reset(new sockaddr_storage(*((sockaddr_storage *)addr)));
     }
@@ -33,7 +32,8 @@ void SrtTransportImp::onHandShakeFinished(std::string &streamid, struct sockaddr
         onShutdown(SockException(Err_shutdown, "stream id not vaild"));
         return;
     }
-
+    
+    // parse streamid like this zlmediakit.com/live/test?token=1213444&type=push
     auto params = Parser::parseArgs(_media_info._param_strs);
     if (params["m"] == "publish") {
         _is_pusher = true;
@@ -97,7 +97,7 @@ bool SrtTransportImp::parseStreamid(std::string &streamid) {
 
 void SrtTransportImp::onSRTData(DataPacket::Ptr pkt) {
     if (!_is_pusher) {
-        WarnP(this) << "this is a player data ignore";
+        WarnP(this)<<"ignore player data";
         return;
     }
     if (_decoder) {
@@ -117,7 +117,7 @@ bool SrtTransportImp::close(mediakit::MediaSource &sender, bool force) {
     }
     std::string err = StrPrinter << "close media:" << sender.getSchema() << "/" << sender.getVhost() << "/"
                                  << sender.getApp() << "/" << sender.getId() << " " << force;
-    weak_ptr<SrtTransportImp> weak_self = static_pointer_cast<SrtTransportImp>(shared_from_this());
+    std::weak_ptr<SrtTransportImp> weak_self = std::static_pointer_cast<SrtTransportImp>(shared_from_this());
     getPoller()->async([weak_self, err]() {
         auto strong_self = weak_self.lock();
         if (strong_self) {
@@ -146,7 +146,7 @@ std::string SrtTransportImp::getOriginUrl(mediakit::MediaSource &sender) const {
 
 // 获取媒体源客户端相关信息
 std::shared_ptr<SockInfo> SrtTransportImp::getOriginSock(mediakit::MediaSource &sender) const {
-    return static_pointer_cast<SockInfo>(getSession());
+    return std::static_pointer_cast<SockInfo>(getSession());
 }
 
 toolkit::EventPoller::Ptr SrtTransportImp::getOwnerPoller(MediaSource &sender){
@@ -155,7 +155,7 @@ toolkit::EventPoller::Ptr SrtTransportImp::getOwnerPoller(MediaSource &sender){
 }
 
 void SrtTransportImp::emitOnPublish() {
-    std::weak_ptr<SrtTransportImp> weak_self = static_pointer_cast<SrtTransportImp>(shared_from_this());
+    std::weak_ptr<SrtTransportImp> weak_self = std::static_pointer_cast<SrtTransportImp>(shared_from_this());
     Broadcast::PublishAuthInvoker invoker = [weak_self](const std::string &err, const ProtocolOption &option) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
@@ -185,8 +185,8 @@ void SrtTransportImp::emitOnPublish() {
 }
 
 void SrtTransportImp::emitOnPlay() {
-    std::weak_ptr<SrtTransportImp> weak_self = static_pointer_cast<SrtTransportImp>(shared_from_this());
-    Broadcast::AuthInvoker invoker = [weak_self](const string &err) {
+    std::weak_ptr<SrtTransportImp> weak_self = std::static_pointer_cast<SrtTransportImp>(shared_from_this());
+    Broadcast::AuthInvoker invoker = [weak_self](const std::string &err) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
@@ -211,7 +211,7 @@ void SrtTransportImp::doPlay() {
     // 异步查找直播流
     MediaInfo info = _media_info;
     info._schema = TS_SCHEMA;
-    std::weak_ptr<SrtTransportImp> weak_self = static_pointer_cast<SrtTransportImp>(shared_from_this());
+    std::weak_ptr<SrtTransportImp> weak_self = std::static_pointer_cast<SrtTransportImp>(shared_from_this());
     MediaSource::findAsync(info, getSession(), [weak_self](const MediaSource::Ptr &src) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
@@ -225,27 +225,21 @@ void SrtTransportImp::doPlay() {
             strong_self->onShutdown(SockException(Err_shutdown));
         } else {
             TraceL << "找到该流";
-            auto ts_src = dynamic_pointer_cast<TSMediaSource>(src);
+            auto ts_src = std::dynamic_pointer_cast<TSMediaSource>(src);
             assert(ts_src);
             ts_src->pause(false);
             strong_self->_ts_reader = ts_src->getRing()->attach(strong_self->getPoller());
             strong_self->_ts_reader->setDetachCB([weak_self]() {
-                auto strong_self = weak_self.lock();
-                if (!strong_self) {
-                    // 本对象已经销毁
-                    return;
+                if (auto strong_self = weak_self.lock()) {
+                    strong_self->onShutdown(SockException(Err_shutdown));
                 }
-                strong_self->onShutdown(SockException(Err_shutdown));
             });
             strong_self->_ts_reader->setReadCB([weak_self](const TSMediaSource::RingDataType &ts_list) {
-                auto strong_self = weak_self.lock();
-                if (!strong_self) {
-                    // 本对象已经销毁
-                    return;
+                if (auto strong_self = weak_self.lock()) {
+                    size_t i = 0;
+                    auto size = ts_list->size();
+                    ts_list->for_each([&](const TSPacket::Ptr &ts) { strong_self->onSendTSData(ts, ++i == size); });
                 }
-                size_t i = 0;
-                auto size = ts_list->size();
-                ts_list->for_each([&](const TSPacket::Ptr &ts) { strong_self->onSendTSData(ts, ++i == size); });
             });
         }
     });
@@ -266,16 +260,14 @@ uint16_t SrtTransportImp::get_peer_port() {
 }
 
 std::string SrtTransportImp::get_local_ip() {
-    auto s = getSession();
-    if (s) {
+    if (auto s = getSession()) {
         return s->get_local_ip();
     }
     return "::";
 }
 
 uint16_t SrtTransportImp::get_local_port() {
-    auto s = getSession();
-    if (s) {
+    if (auto s = getSession()) {
         return s->get_local_port();
     }
     return 0;
@@ -297,7 +289,7 @@ bool SrtTransportImp::inputFrame(const Frame::Ptr &frame) {
         return false;
     }
     auto frame_cached = Frame::getCacheAbleFrame(frame);
-    lock_guard<recursive_mutex> lck(_func_mtx);
+    AutoLock lck(_func_mtx);
     _cached_func.emplace_back([this, frame_cached]() { 
         //TraceL<<"before type "<<frame_cached->getCodecName()<<" dts "<<frame_cached->dts()<<" pts "<<frame_cached->pts();
         auto frame_tmp = std::make_shared<FrameStamp>(frame_cached, _type_to_stamp[frame_cached->getTrackType()],false);
@@ -313,7 +305,7 @@ bool SrtTransportImp::addTrack(const Track::Ptr &track) {
         return _muxer->addTrack(track);
     }
 
-    lock_guard<recursive_mutex> lck(_func_mtx);
+    AutoLock lck(_func_mtx);
     _cached_func.emplace_back([this, track]() { _muxer->addTrack(track); });
     return true;
 }
@@ -322,7 +314,7 @@ void SrtTransportImp::addTrackCompleted() {
     if (_muxer) {
         _muxer->addTrackCompleted();
     } else {
-        lock_guard<recursive_mutex> lck(_func_mtx);
+        AutoLock lck(_func_mtx);
         _cached_func.emplace_back([this]() { _muxer->addTrackCompleted(); });
     }
     if(_type_to_stamp.size() >1){
@@ -331,7 +323,7 @@ void SrtTransportImp::addTrackCompleted() {
 }
 
 void SrtTransportImp::doCachedFunc() {
-    lock_guard<recursive_mutex> lck(_func_mtx);
+    AutoLock lck(_func_mtx);
     for (auto &func : _cached_func) {
         func();
     }

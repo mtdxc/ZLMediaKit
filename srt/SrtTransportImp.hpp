@@ -5,11 +5,10 @@
 #include "Rtp/Decoder.h"
 #include "SrtTransport.hpp"
 #include "TS/TSMediaSource.h"
+#include <deque>
 #include <mutex>
 
 namespace SRT {
-
-using namespace std;
 using namespace toolkit;
 using namespace mediakit;
 class SrtTransportImp
@@ -88,6 +87,7 @@ private:
     MultiMediaSourceMuxer::Ptr _muxer;
     DecoderImp::Ptr _decoder;
     std::recursive_mutex _func_mtx;
+    using AutoLock = std::lock_guard<std::recursive_mutex>;
     std::deque<std::function<void()>> _cached_func;
 
     std::unordered_map<int, Stamp> _type_to_stamp;

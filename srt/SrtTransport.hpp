@@ -32,6 +32,7 @@ public:
 
     SrtTransport(const EventPoller::Ptr &poller);
     virtual ~SrtTransport();
+
     const EventPoller::Ptr &getPoller() const;
     void setSession(Session::Ptr session);
     const Session::Ptr &getSession() const;
@@ -132,13 +133,12 @@ private:
     UTicker _ack_ticker;
     std::map<uint32_t, TimePoint> _ack_send_timestamp;
 
-    std::shared_ptr<PacketRecvRateContext> _pkt_recv_rate_context;
     std::shared_ptr<EstimatedLinkCapacityContext> _estimated_link_capacity_context;
     std::shared_ptr<RecvRateContext> _recv_rate_context;
 
     UTicker _nak_ticker;
 
-    // 保持发送的握手消息，防止丢失重发
+    //保存发送的握手消息，防止丢失重发
     HandshakePacket::Ptr _handleshake_res;
 
     ResourcePool<BufferRaw> _packet_pool;
@@ -147,13 +147,14 @@ private:
 class SrtTransportManager {
 public:
     static SrtTransportManager &Instance();
+
     SrtTransport::Ptr getItem(const std::string &key);
     void addItem(const std::string &key, const SrtTransport::Ptr &ptr);
     void removeItem(const std::string &key);
 
+    SrtTransport::Ptr getHandshakeItem(const std::string &key);
     void addHandshakeItem(const std::string &key, const SrtTransport::Ptr &ptr);
     void removeHandshakeItem(const std::string &key);
-    SrtTransport::Ptr getHandshakeItem(const std::string &key);
 
 private:
     SrtTransportManager() = default;

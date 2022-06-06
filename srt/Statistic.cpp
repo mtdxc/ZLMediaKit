@@ -4,19 +4,12 @@
 
 namespace SRT {
 
-void PacketRecvRateContext::inputPacket(TimePoint &ts) {
-    if (_pkt_map.size() > 100) {
-        _pkt_map.erase(_pkt_map.begin());
-    }
-    auto tmp = DurationCountMicroseconds(ts - _start);
-    _pkt_map.emplace(tmp, tmp);
-}
-
-uint32_t PacketRecvRateContext::getPacketRecvRate() {
+uint32_t RecvRateContext::getPacketRecvRate() {
     if (_pkt_map.size() < 2) {
         return 50000;
     }
     int64_t dur = 1000;
+    // 取包接收间隔的最小值
     for (auto it = _pkt_map.begin(); it != _pkt_map.end(); ++it) {
         auto next = it;
         ++next;
@@ -45,29 +38,28 @@ void EstimatedLinkCapacityContext::inputPacket(TimePoint &ts) {
 }
 
 uint32_t EstimatedLinkCapacityContext::getEstimatedLinkCapacity() {
-    decltype(_pkt_map.begin()) next;
-    std::vector<int64_t> tmp;
+   std::vector<int64_t> tmp;
+   for (auto it = _pkt_map.begin(); it != _pkt_map.end(); ++it) {
+       auto next = it;
+       ++next;
+       if (next != _pkt_map.end()) {
+           tmp.push_back(next->first -it->first);
+       } else {
+           break;
+       }
+   }
 
-    for (auto it = _pkt_map.begin(); it != _pkt_map.end(); ++it) {
-        next = it;
-        ++next;
-        if (next != _pkt_map.end()) {
-            tmp.push_back(next->first - it->first);
-        } else {
-            break;
-        }
-    }
-    std::sort(tmp.begin(), tmp.end());
-    if (tmp.empty()) {
-        return 1000;
-    }
+   if (tmp.empty()) {
+       return 1000;
+   }
 
     if (tmp.size() < 16) {
         return 1000;
     }
 
-    double dur = tmp[0] / 1e6;
-    return (uint32_t)(1.0 / dur);
+   std::sort(tmp.begin(), tmp.end());
+   double dur = tmp[0] / 1e6;
+   return  (uint32_t)(1.0 / dur);
 }
 
 void RecvRateContext::inputPacket(TimePoint &ts, size_t size) {
@@ -75,7 +67,7 @@ void RecvRateContext::inputPacket(TimePoint &ts, size_t size) {
         _pkt_map.erase(_pkt_map.begin());
     }
     auto tmp = DurationCountMicroseconds(ts - _start);
-    _pkt_map.emplace(tmp, tmp);
+    _pkt_map.emplace(tmp, size);
 }
 
 uint32_t RecvRateContext::getRecvRate() {

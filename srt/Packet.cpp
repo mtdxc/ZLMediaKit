@@ -15,16 +15,13 @@ bool DataPacket::isDataPacket(uint8_t *buf, size_t len) {
         WarnL << "data size" << len << " less " << HEADER_SIZE;
         return false;
     }
-    if (!(buf[0] & 0x80)) {
-        return true;
-    }
-    return false;
+    return !(buf[0] & 0x80);
 }
 
 uint32_t DataPacket::getSocketID(uint8_t *buf, size_t len) {
-    uint8_t *ptr = buf;
-    ptr += 12;
-    return loadUint32(ptr);
+    if(len >= HEADER_SIZE)
+        return loadUint32(buf + 12);
+    return 0;
 }
 
 bool DataPacket::loadFromData(uint8_t *buf, size_t len) {
@@ -50,7 +47,7 @@ bool DataPacket::loadFromData(uint8_t *buf, size_t len) {
     dst_socket_id = loadUint32(ptr);
     ptr += 4;
 
-    _data = BufferRaw::create();
+    _data = toolkit::BufferRaw::create();
     _data->assign((char *)(buf), len);
     return true;
 }
@@ -62,7 +59,7 @@ bool DataPacket::storeToHeader() {
     }
     uint8_t *ptr = (uint8_t *)_data->data();
 
-    ptr[0] = packet_seq_number >> 24;
+    ptr[0] = (packet_seq_number >> 24) & 0x7f;
     ptr[1] = (packet_seq_number >> 16) & 0xff;
     ptr[2] = (packet_seq_number >> 8) & 0xff;
     ptr[3] = packet_seq_number & 0xff;
@@ -72,9 +69,9 @@ bool DataPacket::storeToHeader() {
     ptr[0] |= O << 5;
     ptr[0] |= KK << 3;
     ptr[0] |= R << 2;
-    ptr[0] |= (msg_number & 0xff000000) >> 24;
-    ptr[1] = (msg_number & 0xff0000) >> 16;
-    ptr[2] = (msg_number & 0xff00) >> 8;
+    ptr[0] |= (msg_number >> 24) & 0x03;
+    ptr[1] = (msg_number >> 16) & 0xff;
+    ptr[2] = (msg_number >> 8) & 0xff;
     ptr[3] = msg_number & 0xff;
     ptr += 4;
 
@@ -87,35 +84,13 @@ bool DataPacket::storeToHeader() {
 }
 
 bool DataPacket::storeToData(uint8_t *buf, size_t len) {
-    _data = BufferRaw::create();
+    _data = toolkit::BufferRaw::create();
     _data->setCapacity(len + HEADER_SIZE);
     _data->setSize(len + HEADER_SIZE);
 
-    uint8_t *ptr = (uint8_t *)_data->data();
+    storeToHeader();
 
-    ptr[0] = packet_seq_number >> 24;
-    ptr[1] = (packet_seq_number >> 16) & 0xff;
-    ptr[2] = (packet_seq_number >> 8) & 0xff;
-    ptr[3] = packet_seq_number & 0xff;
-    ptr += 4;
-
-    ptr[0] = PP << 6;
-    ptr[0] |= O << 5;
-    ptr[0] |= KK << 3;
-    ptr[0] |= R << 2;
-    ptr[0] |= (msg_number & 0xff000000) >> 24;
-    ptr[1] = (msg_number & 0xff0000) >> 16;
-    ptr[2] = (msg_number & 0xff00) >> 8;
-    ptr[3] = msg_number & 0xff;
-    ptr += 4;
-
-    storeUint32(ptr, timestamp);
-    ptr += 4;
-
-    storeUint32(ptr, dst_socket_id);
-    ptr += 4;
-
-    memcpy(ptr, buf, len);
+    memcpy(payloadData(), buf, len);
     return true;
 }
 
@@ -150,16 +125,11 @@ bool ControlPacket::isControlPacket(uint8_t *buf, size_t len) {
         WarnL << "data size" << len << " less " << HEADER_SIZE;
         return false;
     }
-    if (buf[0] & 0x80) {
-        return true;
-    }
-    return false;
+    return (buf[0] & 0x80);
 }
 
 uint16_t ControlPacket::getControlType(uint8_t *buf, size_t len) {
-    uint8_t *ptr = buf;
-    uint16_t control_type = (ptr[0] & 0x7f) << 8 | ptr[1];
-    return control_type;
+    return (buf[0] & 0x7f) << 8 | buf[1];
 }
 
 bool ControlPacket::loadHeader() {
@@ -209,6 +179,27 @@ bool ControlPacket::storeToHeader() {
     return true;
 }
 
+bool ControlPacket::storeHeader(uint16_t type, uint16_t subType, int payload_size) {
+    control_type = type;
+    sub_type = subType;
+
+    _data = toolkit::BufferRaw::create();
+    _data->setCapacity(HEADER_SIZE + payload_size);
+    _data->setSize(HEADER_SIZE + payload_size);
+    return storeToHeader();
+}
+
+bool ControlPacket::loadFromData(uint8_t *buf, size_t len){
+    if (len < HEADER_SIZE) {
+        WarnL << "data size" << len << " less " << HEADER_SIZE;
+        return false;
+    }
+    _data = toolkit::BufferRaw::create();
+    _data->assign((char*)buf, len);
+    
+    return loadHeader();
+}
+
 char *ControlPacket::data() const {
     if (!_data)
         return nullptr;
@@ -225,8 +216,9 @@ size_t ControlPacket::size() const {
 uint32_t ControlPacket::getSocketID(uint8_t *buf, size_t len) {
     return loadUint32(buf + 12);
 }
+
 std::string HandshakePacket::dump(){
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     printer <<"flag:"<< (int)f<<"\r\n";
     printer <<"control_type:"<< (int)control_type<<"\r\n";
     printer <<"sub_type:"<< (int)sub_type<<"\r\n";
@@ -254,16 +246,17 @@ std::string HandshakePacket::dump(){
     }
     return std::move(printer);
 }
+
 bool HandshakePacket::loadFromData(uint8_t *buf, size_t len) {
     if (HEADER_SIZE + HS_CONTENT_MIN_SIZE > len) {
-        ErrorL << "size too smalle " << encryption_field;
+        ErrorL << "size too small " << encryption_field;
         return false;
     }
-    _data = BufferRaw::create();
-    _data->assign((char *)(buf), len);
-    ControlPacket::loadHeader();
 
-    uint8_t *ptr = (uint8_t *)_data->data() + HEADER_SIZE;
+    if (!ControlPacket::loadFromData(buf, len))
+        return false;
+
+    uint8_t *ptr = payloadData();
     // parse CIF
     version = loadUint32(ptr);
     ptr += 4;
@@ -303,12 +296,15 @@ bool HandshakePacket::loadFromData(uint8_t *buf, size_t len) {
         return true;
     }
 
-    if (len == HEADER_SIZE + HS_CONTENT_MIN_SIZE) {
-        // ErrorL << "extension filed not exist " << extension_field;
+    len -= HEADER_SIZE + HS_CONTENT_MIN_SIZE;
+    if (len) {
+        return loadExtMessage(ptr, len);
+    }
+    else {
+        ext_list.clear();
+        //ErrorL << "extension filed not exist " << extension_field;
         return true;
     }
-
-    return loadExtMessage(ptr, len - HS_CONTENT_MIN_SIZE - HEADER_SIZE);
 }
 
 bool HandshakePacket::loadExtMessage(uint8_t *buf, size_t len) {
@@ -347,8 +343,7 @@ bool HandshakePacket::loadExtMessage(uint8_t *buf, size_t len) {
 }
 
 bool HandshakePacket::storeExtMessage() {
-    uint8_t *buf = (uint8_t *)_data->data() + HEADER_SIZE + 48;
-    size_t len = _data->size() - HEADER_SIZE - 48;
+    uint8_t* buf = extenseData();
     for (auto ex : ext_list) {
         memcpy(buf, ex->data(), ex->size());
         buf += ex->size();
@@ -363,21 +358,16 @@ size_t HandshakePacket::getExtSize() {
     }
     return size;
 }
+
 bool HandshakePacket::storeToData() {
-    _data = BufferRaw::create();
+    size_t ext_size = 0;
     for (auto ex : ext_list) {
         ex->storeToData();
+        ext_size += ex->size();
     }
-    auto ext_size = getExtSize();
-    _data->setCapacity(HEADER_SIZE + 48 + ext_size);
-    _data->setSize(HEADER_SIZE + 48 + ext_size);
+    ControlPacket::storeHeader(HANDSHAKE, 0, HS_CONTENT_MIN_SIZE + ext_size);
 
-    control_type = ControlPacket::HANDSHAKE;
-    sub_type = 0;
-
-    ControlPacket::storeToHeader();
-
-    uint8_t *ptr = (uint8_t *)_data->data() + HEADER_SIZE;
+    uint8_t *ptr = payloadData();
 
     storeUint32(ptr, version);
     ptr += 4;
@@ -419,10 +409,10 @@ bool HandshakePacket::storeToData() {
 }
 
 bool HandshakePacket::isHandshakePacket(uint8_t *buf, size_t len) {
-    if (!ControlPacket::isControlPacket(buf, len)) {
+    if (len < HEADER_SIZE + HS_CONTENT_MIN_SIZE) {
         return false;
     }
-    if (len < HEADER_SIZE + 48) {
+    if (!ControlPacket::isControlPacket(buf, len)) {
         return false;
     }
     return ControlPacket::getControlType(buf, len) == HANDSHAKE;
@@ -466,13 +456,13 @@ uint32_t HandshakePacket::generateSynCookie(
         int64_t timestamp = (DurationCountMicroseconds(SteadyClock::now() - ts) / 60000000) + distractor.load()
             + correction; // secret changes every one minute
         std::stringstream cookiestr;
-        cookiestr << SockUtil::inet_ntoa((struct sockaddr *)addr) << ":" << SockUtil::inet_port((struct sockaddr *)addr)
+        cookiestr << toolkit::SockUtil::inet_ntoa((struct sockaddr *)addr) << ":" << toolkit::SockUtil::inet_port((struct sockaddr *)addr)
                   << ":" << timestamp;
         union {
             unsigned char cookie[16];
             uint32_t cookie_val;
         };
-        MD5 md5(cookiestr.str());
+        toolkit::MD5 md5(cookiestr.str());
         memcpy(cookie, md5.rawdigest().c_str(), 16);
 
         if (cookie_val != current_cookie) {
@@ -489,36 +479,11 @@ uint32_t HandshakePacket::generateSynCookie(
     }
 }
 
-bool KeepLivePacket::loadFromData(uint8_t *buf, size_t len) {
-    if (len < HEADER_SIZE) {
-        WarnL << "data size" << len << " less " << HEADER_SIZE;
-        return false;
-    }
-    _data = BufferRaw::create();
-    _data->assign((char *)buf, len);
-
-    return loadHeader();
-}
-bool KeepLivePacket::storeToData() {
-    control_type = ControlPacket::KEEPALIVE;
-    sub_type = 0;
-
-    _data = BufferRaw::create();
-    _data->setCapacity(HEADER_SIZE);
-    _data->setSize(HEADER_SIZE);
-    return storeToHeader();
-}
-
 bool NAKPacket::loadFromData(uint8_t *buf, size_t len) {
-    if (len < HEADER_SIZE) {
-        WarnL << "data size" << len << " less " << HEADER_SIZE;
+    if (!ControlPacket::loadFromData(buf, len))
         return false;
-    }
-    _data = BufferRaw::create();
-    _data->assign((char *)buf, len);
-    loadHeader();
 
-    uint8_t *ptr = (uint8_t *)_data->data() + HEADER_SIZE;
+    uint8_t *ptr = payloadData();
     uint8_t *end = (uint8_t *)_data->data() + _data->size();
     LostPair lost;
     while (ptr < end) {
@@ -536,18 +501,12 @@ bool NAKPacket::loadFromData(uint8_t *buf, size_t len) {
     }
     return true;
 }
+
 bool NAKPacket::storeToData() {
-    control_type = NAK;
-    sub_type = 0;
     size_t cif_size = getCIFSize(lost_list);
+    storeHeader(NAK, 0, cif_size);
 
-    _data = BufferRaw::create();
-    _data->setCapacity(HEADER_SIZE + cif_size);
-    _data->setSize(HEADER_SIZE + cif_size);
-
-    storeToHeader();
-
-    uint8_t *ptr = (uint8_t *)_data->data() + HEADER_SIZE;
+    uint8_t *ptr = payloadData();
 
     for (auto it : lost_list) {
         if (it.first + 1 == it.second) {
@@ -559,7 +518,7 @@ bool NAKPacket::storeToData() {
             ptr[0] |= 0x80;
 
             storeUint32(ptr + 4, it.second - 1);
-            // ptr[4] = ptr[4]&0x7f;
+            // ptr[4] = ptr[4] & 0x7f;
 
             ptr += 8;
         }
@@ -581,7 +540,7 @@ size_t NAKPacket::getCIFSize(std::list<LostPair> &lost) {
 }
 
 std::string NAKPacket::dump() {
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     for (auto it : lost_list) {
         printer << "[ " << it.first << " , " << it.second - 1 << " ]";
     }
@@ -593,11 +552,10 @@ bool MsgDropReqPacket::loadFromData(uint8_t *buf, size_t len) {
         WarnL << "data size" << len << " less " << HEADER_SIZE;
         return false;
     }
-    _data = BufferRaw::create();
-    _data->assign((char *)buf, len);
-    loadHeader();
+    if (!ControlPacket::loadFromData(buf, len))
+        return false;
 
-    uint8_t *ptr = (uint8_t *)_data->data() + HEADER_SIZE;
+    uint8_t *ptr = payloadData();
 
     first_pkt_seq_num = loadUint32(ptr);
     ptr += 4;
@@ -606,16 +564,11 @@ bool MsgDropReqPacket::loadFromData(uint8_t *buf, size_t len) {
     ptr += 4;
     return true;
 }
+
 bool MsgDropReqPacket::storeToData() {
-    control_type = DROPREQ;
-    sub_type = 0;
-    _data = BufferRaw::create();
-    _data->setCapacity(HEADER_SIZE + 8);
-    _data->setSize(HEADER_SIZE + 8);
+    storeHeader(DROPREQ, 0, 8);
 
-    storeToHeader();
-
-    uint8_t *ptr = (uint8_t *)_data->data() + HEADER_SIZE;
+    uint8_t *ptr = payloadData();
 
     storeUint32(ptr, first_pkt_seq_num);
     ptr += 4;
