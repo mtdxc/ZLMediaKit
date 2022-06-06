@@ -3,10 +3,7 @@
 namespace SRT {
 
 static inline bool isSeqEdge(uint32_t seq, uint32_t cap) {
-    if (seq > (MAX_SEQ - cap)) {
-        return true;
-    }
-    return false;
+    return seq > (MAX_SEQ - cap);
 }
 
 static inline bool isSeqCycle(uint32_t first, uint32_t second) {
@@ -32,11 +29,7 @@ static inline bool isTSCycle(uint32_t first, uint32_t second) {
         diff = second - first;
     }
 
-    if (diff > (MAX_TS >> 1)) {
-        return true;
-    } else {
-        return false;
-    }
+    return diff > (MAX_TS >> 1);
 }
 
 PacketQueue::PacketQueue(uint32_t max_size, uint32_t init_seq, uint32_t latency)
@@ -61,8 +54,8 @@ void PacketQueue::tryInsertPkt(DataPacket::Ptr pkt) {
             TraceL << " cycle packet "
                    << "expected seq=" << _pkt_expected_seq << " pkt seq=" << pkt->packet_seq_number;
         } else {
-            // TraceL << "drop packet too later "<< "expected seq=" << _pkt_expected_seq << " pkt seq=" <<
-            // pkt->packet_seq_number;
+            // TraceL << "drop packet too later "
+            //        << "expected seq=" << _pkt_expected_seq << " pkt seq=" << pkt->packet_seq_number;
         }
     }
 }
@@ -77,6 +70,7 @@ bool PacketQueue::inputPacket(DataPacket::Ptr pkt, std::list<DataPacket::Ptr> &o
         it = _pkt_map.find(_pkt_expected_seq);
     }
 
+    // 以下两种弹出方式都有可能导致seq存在空洞
     while (_pkt_map.size() > _pkt_cap) {
         // 防止回环
         it = _pkt_map.find(_pkt_expected_seq);
@@ -101,16 +95,14 @@ bool PacketQueue::inputPacket(DataPacket::Ptr pkt, std::list<DataPacket::Ptr> &o
 
 bool PacketQueue::drop(uint32_t first, uint32_t last, std::list<DataPacket::Ptr> &out) {
     uint32_t end = genExpectedSeq(last + 1);
-    decltype(_pkt_map.end()) it;
-    for (uint32_t i = _pkt_expected_seq; i < end;) {
-        it = _pkt_map.find(i);
+    while (_pkt_expected_seq < end) {
+        auto it = _pkt_map.find(_pkt_expected_seq);
         if (it != _pkt_map.end()) {
             out.push_back(it->second);
             _pkt_map.erase(it);
         }
-        i = genExpectedSeq(i + 1);
+        _pkt_expected_seq = genExpectedSeq(_pkt_expected_seq + 1);
     }
-    _pkt_expected_seq = end;
     return true;
 }
 
@@ -118,7 +110,7 @@ uint32_t PacketQueue::timeLatency() {
     if (_pkt_map.empty()) {
         return 0;
     }
-
+    // @todo 考虑seq回环情况..
     auto first = _pkt_map.begin()->second->timestamp;
     auto last = _pkt_map.rbegin()->second->timestamp;
     uint32_t dur;
@@ -161,9 +153,9 @@ std::list<PacketQueue::LostPair> PacketQueue::getLostSeq() {
     lost.first = 0;
     lost.second = 0;
 
-    uint32_t i = _pkt_expected_seq;
     bool finish = true;
-    for (i = _pkt_expected_seq; i <= end;) {
+    uint32_t i = _pkt_expected_seq;
+    while (i <= end) {
         if (_pkt_map.find(i) == _pkt_map.end()) {
             if (finish) {
                 finish = false;
@@ -192,13 +184,12 @@ size_t PacketQueue::getExpectedSize() {
     if (_pkt_map.empty()) {
         return 0;
     }
-
+    // @todo seq回环情况
     uint32_t max = _pkt_map.rbegin()->first;
     uint32_t min = _pkt_map.begin()->first;
     if ((max - min) >= (MAX_SEQ >> 1)) {
-        TraceL << "cycle "
-               << "expected seq " << _pkt_expected_seq << " min " << min << " max " << max << " size "
-               << _pkt_map.size();
+        TraceL << "cycle expected seq " << _pkt_expected_seq << " min " << min << " max " << max 
+               << " size " << _pkt_map.size();
         return MAX_SEQ - _pkt_expected_seq + min + 1;
     } else {
         return max - _pkt_expected_seq + 1;
@@ -223,7 +214,7 @@ uint32_t PacketQueue::getExpectedSeq() {
 }
 
 std::string PacketQueue::dump() {
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     if (_pkt_map.empty()) {
         printer << " expected seq :" << _pkt_expected_seq;
     } else {
@@ -247,6 +238,7 @@ PacketRecvQueue::PacketRecvQueue(uint32_t max_size, uint32_t init_seq, uint32_t 
 bool  PacketRecvQueue::TLPKTDrop(){
     return (_srt_flag&HSExtMessage::HS_EXT_MSG_TLPKTDROP) && (_srt_flag &HSExtMessage::HS_EXT_MSG_TSBPDRCV);
 }
+
 bool PacketRecvQueue::inputPacket(DataPacket::Ptr pkt, std::list<DataPacket::Ptr> &out) {
     // TraceL << dump() << " seq:" << pkt->packet_seq_number;
     while (_size > 0 && _start == _end) {
@@ -305,6 +297,7 @@ uint32_t PacketRecvQueue::timeLatency() {
 
     return dur;
 }
+
 std::list<PacketQueueInterface::LostPair> PacketRecvQueue::getLostSeq() {
     std::list<PacketQueueInterface::LostPair> re;
     if (_size <= 0) {
@@ -343,6 +336,7 @@ std::list<PacketQueueInterface::LostPair> PacketRecvQueue::getLostSeq() {
 size_t PacketRecvQueue::getSize() {
     return _size;
 }
+
 size_t PacketRecvQueue::getExpectedSize() {
     if (_size <= 0) {
         return 0;
@@ -366,6 +360,7 @@ size_t PacketRecvQueue::getExpectedSize() {
         return max - _pkt_expected_seq + 1;
     }
 }
+
 size_t PacketRecvQueue::getAvailableBufferSize() {
     auto size = getExpectedSize();
     if (_pkt_cap > size) {
@@ -378,12 +373,13 @@ size_t PacketRecvQueue::getAvailableBufferSize() {
     WarnL << " cap " << _pkt_cap << " expected size " << size << " map size " << _size;
     return _pkt_cap;
 }
+
 uint32_t PacketRecvQueue::getExpectedSeq() {
     return _pkt_expected_seq;
 }
 
 std::string PacketRecvQueue::dump() {
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     if (_size <= 0) {
         printer << " expected seq :" << _pkt_expected_seq;
     } else {
@@ -396,6 +392,7 @@ std::string PacketRecvQueue::dump() {
     }
     return std::move(printer);
 }
+
 bool PacketRecvQueue::drop(uint32_t first, uint32_t last, std::list<DataPacket::Ptr> &out) {
     uint32_t diff = 0;
     if (isSeqCycle(_pkt_expected_seq, last)) {
@@ -462,6 +459,7 @@ void PacketRecvQueue::insertToCycleBuf(DataPacket::Ptr pkt, uint32_t diff) {
         return;
     }
 }
+
 void PacketRecvQueue::tryInsertPkt(DataPacket::Ptr pkt) {
     if (_pkt_expected_seq <= pkt->packet_seq_number) {
         auto diff = pkt->packet_seq_number - _pkt_expected_seq;
@@ -496,23 +494,25 @@ void PacketRecvQueue::tryInsertPkt(DataPacket::Ptr pkt) {
                    << "expected seq=" << _pkt_expected_seq << " pkt seq=" << pkt->packet_seq_number;
         } else {
             // TraceL << "drop packet too later "
-            //<< "expected seq=" << _pkt_expected_seq << " pkt seq=" << pkt->packet_seq_number;
+            //        << "expected seq=" << _pkt_expected_seq << " pkt seq=" << pkt->packet_seq_number;
         }
     }
 }
+
 DataPacket::Ptr PacketRecvQueue::getFirst() {
     if (_size <= 0) {
         return nullptr;
     }
 
     uint32_t i = _start;
-    while (1) {
+    while (i != _start) {
         if (_pkt_buf[i]) {
             return _pkt_buf[i];
         }
         i = (i + 1) % _pkt_cap;
     }
 }
+
 DataPacket::Ptr PacketRecvQueue::getLast() {
     if (_size <= 0) {
         return nullptr;
@@ -534,4 +534,5 @@ DataPacket::Ptr PacketRecvQueue::getLast() {
     }
     return _pkt_buf[i];
 }
+
 } // namespace SRT

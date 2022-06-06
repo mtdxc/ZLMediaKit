@@ -1,5 +1,6 @@
 ﻿#include <algorithm>
 #include <math.h>
+#include "Util/util.h"
 #include "Statistic.hpp"
 
 namespace SRT {
@@ -76,7 +77,7 @@ uint32_t PacketRecvRateContext::getPacketRecvRate(uint32_t &bytesps) {
 }
 
 std::string PacketRecvRateContext::dump(){
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     printer <<"dur array : ";
     for (size_t i = 0; i < SIZE; i++)
     {
@@ -199,30 +200,4 @@ uint32_t EstimatedLinkCapacityContext::getEstimatedLinkCapacity() {
    return (uint32_t)ceil(1000000.0 / (double(sum) / double(count)));
 }
 
-/*
-void RecvRateContext::inputPacket(TimePoint &ts, size_t size) {
-    if (_pkt_map.size() > 100) {
-        _pkt_map.erase(_pkt_map.begin());
-    }
-    auto tmp = DurationCountMicroseconds(ts - _start);
-    _pkt_map.emplace(tmp, size);
-}
-
-uint32_t RecvRateContext::getRecvRate() {
-    if (_pkt_map.size() < 2) {
-        return 0;
-    }
-
-    auto first = _pkt_map.begin();
-    auto last = _pkt_map.rbegin();
-    double dur = (last->first - first->first) / 1000000.0;
-
-    size_t bytes = 0;
-    for (auto it : _pkt_map) {
-        bytes += it.second;
-    }
-    double rate = (double)bytes / dur;
-    return (uint32_t)rate;
-}
-*/
 } // namespace SRT

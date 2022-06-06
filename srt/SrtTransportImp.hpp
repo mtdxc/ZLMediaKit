@@ -5,11 +5,10 @@
 #include "Rtp/Decoder.h"
 #include "SrtTransport.hpp"
 #include "TS/TSMediaSource.h"
+#include <deque>
 #include <mutex>
 
 namespace SRT {
-
-using namespace std;
 using namespace toolkit;
 using namespace mediakit;
 class SrtTransportImp

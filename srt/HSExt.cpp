@@ -7,7 +7,7 @@ bool HSExtMessage::loadFromData(uint8_t *buf, size_t len) {
         return false;
     }
 
-    _data = BufferRaw::create();
+    _data = toolkit::BufferRaw::create();
     _data->assign((char *)buf, len);
     extension_length = 3;
     HSExt::loadHeader();
@@ -31,14 +31,14 @@ bool HSExtMessage::loadFromData(uint8_t *buf, size_t len) {
 }
 
 std::string HSExtMessage::dump() {
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     printer << "srt version : " << std::hex << srt_version << " srt flag : " << std::hex << srt_flag
             << " recv_tsbpd_delay=" << recv_tsbpd_delay << " send_tsbpd_delay = " << send_tsbpd_delay;
     return std::move(printer);
 }
 
 bool HSExtMessage::storeToData() {
-    _data = BufferRaw::create();
+    _data = toolkit::BufferRaw::create();
     _data->setCapacity(HSEXT_MSG_SIZE);
     _data->setSize(HSEXT_MSG_SIZE);
     extension_length = 3;
@@ -63,7 +63,7 @@ bool HSExtStreamID::loadFromData(uint8_t *buf, size_t len) {
     if (buf == NULL || len < 4) {
         return false;
     }
-    _data = BufferRaw::create();
+    _data = toolkit::BufferRaw::create();
     _data->assign((char *)buf, len);
 
     HSExt::loadHeader();
@@ -92,7 +92,7 @@ bool HSExtStreamID::loadFromData(uint8_t *buf, size_t len) {
 bool HSExtStreamID::storeToData() {
     size_t content_size = ((streamid.length() + 4) + 3) / 4 * 4;
 
-    _data = BufferRaw::create();
+    _data = toolkit::BufferRaw::create();
     _data->setCapacity(content_size);
     _data->setSize(content_size);
     extension_length = (content_size - 4) / 4;
@@ -126,7 +126,7 @@ bool HSExtStreamID::storeToData() {
 }
 
 std::string HSExtStreamID::dump() {
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     printer << " streamid : " << streamid;
     return std::move(printer);
 }

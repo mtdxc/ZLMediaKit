@@ -26,12 +26,10 @@ static onceToken token([]() {
 
 static std::atomic<uint32_t> s_srt_socket_id_generate { 125 };
 ////////////  SrtTransport //////////////////////////
-SrtTransport::SrtTransport(const EventPoller::Ptr &poller)
-    : _poller(poller) {
+SrtTransport::SrtTransport(const EventPoller::Ptr &poller) : _poller(poller) {
     _start_timestamp = SteadyClock::now();
     _socket_id = s_srt_socket_id_generate.fetch_add(1);
     _pkt_recv_rate_context = std::make_shared<PacketRecvRateContext>(_start_timestamp);
-    //_recv_rate_context = std::make_shared<RecvRateContext>(_start_timestamp);
     _estimated_link_capacity_context = std::make_shared<EstimatedLinkCapacityContext>(_start_timestamp);
 }
 
@@ -46,9 +44,9 @@ const EventPoller::Ptr &SrtTransport::getPoller() const {
 void SrtTransport::setSession(Session::Ptr session) {
     _history_sessions.emplace(session.get(), session);
     if (_selected_session) {
-        InfoL << "srt network changed: " << _selected_session->get_peer_ip() << ":"
-              << _selected_session->get_peer_port() << " -> " << session->get_peer_ip() << ":"
-              << session->get_peer_port() << ", id:" << _selected_session->getIdentifier();
+        InfoL << _selected_session->getIdentifier() << " network changed: " 
+              << _selected_session->get_peer_ip() << ":" << _selected_session->get_peer_port() 
+              << " -> " << session->get_peer_ip() << ":" << session->get_peer_port();
     }
     _selected_session = session;
 }
@@ -57,16 +55,18 @@ const Session::Ptr &SrtTransport::getSession() const {
     return _selected_session;
 }
 
-void SrtTransport::switchToOtherTransport(uint8_t *buf, int len, uint32_t socketid, struct sockaddr_storage *addr) {
-    BufferRaw::Ptr tmp = BufferRaw::create();
-    struct sockaddr_storage tmp_addr = *addr;
-    tmp->assign((char *)buf, len);
+void SrtTransport::switchToOtherTransport(uint8_t *buf, int len, uint32_t socketid, struct sockaddr_storage *addr){
     auto trans = SrtTransportManager::Instance().getItem(std::to_string(socketid));
-    if (trans) {
-        trans->getPoller()->async([tmp, tmp_addr, trans] {
-            trans->inputSockData((uint8_t *)tmp->data(), tmp->size(), (struct sockaddr_storage *)&tmp_addr);
-        });
-    }
+    if (!trans)
+        return;
+    // copy data
+    struct sockaddr_storage tmp_addr = *addr;
+    BufferRaw::Ptr tmp = BufferRaw::create();
+    tmp->assign((char *)buf, len);
+    // async post
+    trans->getPoller()->async([tmp, tmp_addr, trans] {
+        trans->inputSockData((uint8_t*)tmp->data(), tmp->size(), (struct sockaddr_storage*)&tmp_addr);
+    });
 }
 
 void SrtTransport::createTimerForCheckAlive(){
@@ -115,7 +115,6 @@ void SrtTransport::inputSockData(uint8_t *buf, int len, struct sockaddr_storage 
                 _handleshake_timer.reset();
             }
             _pkt_recv_rate_context->inputPacket(_now,len+UDP_HDR_SIZE);
-            //_recv_rate_context->inputPacket(_now, len);
 
             handleDataPacket(buf, len, addr);
             checkAndSendAckNak();
@@ -136,7 +135,6 @@ void SrtTransport::inputSockData(uint8_t *buf, int len, struct sockaddr_storage 
             
             //_pkt_recv_rate_context->inputPacket(_now,len);
             //_estimated_link_capacity_context->inputPacket(_now);
-            //_recv_rate_context->inputPacket(_now, len);
 
             auto it = s_control_functions.find(type);
             if (it == s_control_functions.end()) {
@@ -201,11 +199,10 @@ void SrtTransport::handleHandshakeInduction(HandshakePacket &pkt, struct sockadd
     res->extension_field = 0x4A17;
     res->handshake_type = HandshakePacket::HS_TYPE_INDUCTION;
     res->srt_socket_id = _peer_socket_id;
-    res->syn_cookie = HandshakePacket::generateSynCookie(addr, _start_timestamp);
-    _sync_cookie = res->syn_cookie;
+    res->syn_cookie = _sync_cookie = HandshakePacket::generateSynCookie(addr, _start_timestamp);
     memcpy(res->peer_ip_addr, pkt.peer_ip_addr, sizeof(pkt.peer_ip_addr) * sizeof(pkt.peer_ip_addr[0]));
-    _handleshake_res = res;
     res->storeToData();
+    _handleshake_res = res;
 
     registerSelfHandshake();
     sendControlPacket(res, true);
@@ -217,7 +214,7 @@ void SrtTransport::handleHandshakeInduction(HandshakePacket &pkt, struct sockadd
 
 void SrtTransport::handleHandshakeConclusion(HandshakePacket &pkt, struct sockaddr_storage *addr) {
     if (!_handleshake_res) {
-        ErrorL << "must Induction Phase for handleshake ";
+        ErrorL << "must Induction Phase for handleshake";
         return;
     }
 
@@ -271,8 +268,6 @@ void SrtTransport::handleHandshakeConclusion(HandshakePacket &pkt, struct sockad
         res->ext_list.push_back(std::move(ext));
         res->storeToData();
         _handleshake_res = res;
-        unregisterSelfHandshake();
-        registerSelf();
         sendControlPacket(res, true);
         TraceL << " buf size = " << res->max_flow_window_size << " init seq =" << _init_seq_number
                << " latency=" << delay;
@@ -280,6 +275,9 @@ void SrtTransport::handleHandshakeConclusion(HandshakePacket &pkt, struct sockad
         _send_buf = std::make_shared<PacketSendQueue>(getPktBufSize(), delay * 1e3,srt_flag);
         _send_packet_seq_number = _init_seq_number;
         _buf_delay = delay;
+
+        unregisterSelfHandshake();
+        registerSelf();
         onHandShakeFinished(_stream_id, addr);
 
         if(!isPusher()){
@@ -310,13 +308,17 @@ void SrtTransport::handleHandshake(uint8_t *buf, int len, struct sockaddr_storag
         WarnL<<"is not vaild HandshakePacket";
         return;
     }
-
-    if (pkt.handshake_type == HandshakePacket::HS_TYPE_INDUCTION) {
+    switch (pkt.handshake_type)
+    {
+    case HandshakePacket::HS_TYPE_INDUCTION:
         handleHandshakeInduction(pkt, addr);
-    } else if (pkt.handshake_type == HandshakePacket::HS_TYPE_CONCLUSION) {
+        break;
+    case HandshakePacket::HS_TYPE_CONCLUSION:
         handleHandshakeConclusion(pkt, addr);
-    } else {
-        WarnL << " not support handshake type = " << pkt.handshake_type;
+        break;    
+    default:
+        WarnL<<" not support handshake type = " << pkt.handshake_type;
+        break;
         WarnL <<pkt.dump();
     }
     _ack_ticker.resetTime(_now);
@@ -350,7 +352,7 @@ void SrtTransport::handleACK(uint8_t *buf, int len, struct sockaddr_storage *add
     pkt->storeToData();
     _send_buf->drop(ack.last_ack_pkt_seq_number);
     sendControlPacket(pkt, true);
-    // TraceL<<"ack number "<<ack.ack_number;
+    // TraceL << "ack number " << ack.ack_number;
 }
 
 void SrtTransport::sendMsgDropReq(uint32_t first, uint32_t last) {
@@ -401,7 +403,7 @@ void SrtTransport::handleDropReq(uint8_t *buf, int len, struct sockaddr_storage 
     MsgDropReqPacket pkt;
     pkt.loadFromData(buf, len);
     std::list<DataPacket::Ptr> list;
-    // TraceL<<"drop "<<pkt.first_pkt_seq_num<<" last "<<pkt.last_pkt_seq_num;
+    // TraceL << "drop " << pkt.first_pkt_seq_num << " last " << pkt.last_pkt_seq_num;
     _recv_buf->drop(pkt.first_pkt_seq_num, pkt.last_pkt_seq_num, list);
     //checkAndSendAckNak();
     if (list.empty()) {
@@ -523,7 +525,6 @@ void SrtTransport::sendACKPacket() {
     pkt->recv_rate = recv_rate;
     if(0){
         TraceL<<pkt->pkt_recv_rate<<" pkt/s "<<recv_rate<<" byte/s "<<pkt->estimated_link_capacity<<" pkt/s (cap) "<<pkt->available_buf_size<<" available buf";
-        //TraceL<<_pkt_recv_rate_context->dump();
         //TraceL<<"recv estimated:";
         //TraceL<< _pkt_recv_rate_context->dump();
         //TraceL<<"recv queue:";

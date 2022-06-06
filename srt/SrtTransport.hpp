@@ -32,6 +32,7 @@ public:
 
     SrtTransport(const EventPoller::Ptr &poller);
     virtual ~SrtTransport();
+
     const EventPoller::Ptr &getPoller() const;
     void setSession(Session::Ptr session);
     const Session::Ptr &getSession() const;
@@ -142,11 +143,10 @@ private:
 
     std::shared_ptr<PacketRecvRateContext> _pkt_recv_rate_context;
     std::shared_ptr<EstimatedLinkCapacityContext> _estimated_link_capacity_context;
-    //std::shared_ptr<RecvRateContext> _recv_rate_context;
 
     UTicker _nak_ticker;
 
-    // 保持发送的握手消息，防止丢失重发
+    //保存发送的握手消息，防止丢失重发
     HandshakePacket::Ptr _handleshake_res;
 
     Timer::Ptr _handleshake_timer;
