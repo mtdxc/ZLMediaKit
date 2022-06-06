@@ -44,6 +44,7 @@ enum MediaOriginType {
     mp4_vod,
     device_chn,
     rtc_push,
+    srt_push,
 };
 
 std::string getOriginTypeString(MediaOriginType type);

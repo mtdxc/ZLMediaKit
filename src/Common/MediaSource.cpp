@@ -42,7 +42,8 @@ string getOriginTypeString(MediaOriginType type){
         SWITCH_CASE(mp4_vod);
         SWITCH_CASE(device_chn);
         SWITCH_CASE(rtc_push);
-        default : return "unknown";
+        SWITCH_CASE(srt_push);
+    default: return "unknown";
     }
 }
 

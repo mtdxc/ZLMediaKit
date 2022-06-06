@@ -14,7 +14,7 @@
 #include "Rtmp/RtmpPlayerImp.h"
 #include "Http/HlsPlayer.h"
 #include "Http/TsPlayerImp.h"
-
+#include "Srt/SrtTSPlayer.h"
 using namespace std;
 using namespace toolkit;
 
@@ -50,6 +50,10 @@ PlayerBase::Ptr PlayerBase::createPlayer(const EventPoller::Ptr &poller, const s
     if (strcasecmp("rtmp", prefix.data()) == 0) {
         return PlayerBase::Ptr(new RtmpPlayerImp(poller), releasePlayer);
     }
+    if (strcasecmp("srt", prefix.data()) == 0) {
+        return PlayerBase::Ptr(new PlayerImp<SrtTSPlayer, PlayerBase>(poller), releasePlayer);
+    }
+
     if ((strcasecmp("http", prefix.data()) == 0 || strcasecmp("https", prefix.data()) == 0)) {
         if (end_with(url, ".m3u8") || end_with(url_in, ".m3u8")) {
             return PlayerBase::Ptr(new HlsPlayerImp(poller), releasePlayer);
