@@ -204,7 +204,6 @@ namespace Rtsp {
 const string kAuthBasic = RTSP_FIELD "authBasic";
 const string kHandshakeSecond = RTSP_FIELD "handshakeSecond";
 const string kKeepAliveSecond = RTSP_FIELD "keepAliveSecond";
-const string kDirectProxy = RTSP_FIELD "directProxy";
 const string kLowLatency = RTSP_FIELD"lowLatency";
 
 static onceToken token([]() {
@@ -212,7 +211,6 @@ static onceToken token([]() {
     mINI::Instance()[kAuthBasic] = 0;
     mINI::Instance()[kHandshakeSecond] = 15;
     mINI::Instance()[kKeepAliveSecond] = 15;
-    mINI::Instance()[kDirectProxy] = 1;
     mINI::Instance()[kLowLatency] = 0;
 });
 } // namespace Rtsp
