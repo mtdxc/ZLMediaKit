@@ -16,7 +16,7 @@
 
 namespace mediakit {
 
-class RtspMediaSourceMuxer final : public RtspMuxer, public MediaSourceEventInterceptor,
+class RtspMediaSourceMuxer : public RtspMuxer, public MediaSourceEventInterceptor,
                                    public std::enable_shared_from_this<RtspMediaSourceMuxer> {
 public:
     typedef std::shared_ptr<RtspMediaSourceMuxer> Ptr;
@@ -25,10 +25,12 @@ public:
                          const std::string &strApp,
                          const std::string &strId,
                          const ProtocolOption &option,
-                         const TitleSdp::Ptr &title = nullptr) : RtspMuxer(title) {
+                         const TitleSdp::Ptr &title = nullptr,
+                         const std::string& schema = RTSP_SCHEMA) : RtspMuxer(title) {
         _option = option;
-        _media_src = std::make_shared<RtspMediaSource>(vhost,strApp,strId);
+        _media_src = std::make_shared<RtspMediaSource>(vhost,strApp,strId,schema);
         getRtpRing()->setDelegate(_media_src);
+        _on_demand = schema == RTSP_SCHEMA ? _option.rtsp_demand : _option.rtc_demand;
     }
 
     ~RtspMediaSourceMuxer() override { RtspMuxer::flush(); }
@@ -51,8 +53,8 @@ public:
     }
 
     void onReaderChanged(MediaSource &sender, int size) override {
-        _enabled = _option.rtsp_demand ? size : true;
-        if (!size && _option.rtsp_demand) {
+        _enabled = _on_demand ? size : true;
+        if (!size && _on_demand) {
             _clear_cache = true;
         }
         MediaSourceEventInterceptor::onReaderChanged(sender, size);
@@ -71,11 +73,12 @@ public:
 
     bool isEnabled() {
         //缓存尚未清空时，还允许触发inputFrame函数，以便及时清空缓存
-        return _option.rtsp_demand ? (_clear_cache ? true : _enabled) : true;
+        return _on_demand ? (_clear_cache ? true : _enabled) : true;
     }
 
-private:
+protected:
     bool _enabled = true;
+    bool _on_demand = false;
     bool _clear_cache = false;
     ProtocolOption _option;
     RtspMediaSource::Ptr _media_src;

@@ -63,6 +63,9 @@ ProtocolOption::ProtocolOption() {
     GET_CONFIG(bool, s_enable_rtmp, Protocol::kEnableRtmp);
     GET_CONFIG(bool, s_enable_ts, Protocol::kEnableTS);
     GET_CONFIG(bool, s_enable_fmp4, Protocol::kEnableFMP4);
+    GET_CONFIG(bool, s_enable_rtc, Protocol::kEnableRtc);
+    GET_CONFIG(bool, s_transcode_rtc_audio, Protocol::kTranscodeRtcAudio);
+    GET_CONFIG(bool, s_rtc_demand, Protocol::kRtcDemand);
 
     GET_CONFIG(bool, s_hls_demand, Protocol::kHlsDemand);
     GET_CONFIG(bool, s_rtsp_demand, Protocol::kRtspDemand);
@@ -87,7 +90,11 @@ ProtocolOption::ProtocolOption() {
     enable_rtmp = s_enable_rtmp;
     enable_ts = s_enable_ts;
     enable_fmp4 = s_enable_fmp4;
+    enable_rtc = s_enable_rtc;
 
+    transcode_rtc_audio = s_transcode_rtc_audio;
+    
+    rtc_demand = s_rtc_demand;
     hls_demand = s_hls_demand;
     rtsp_demand = s_rtsp_demand;
     rtmp_demand = s_rtmp_demand;

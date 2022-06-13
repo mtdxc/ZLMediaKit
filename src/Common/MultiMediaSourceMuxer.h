@@ -12,16 +12,16 @@
 #define ZLMEDIAKIT_MULTIMEDIASOURCEMUXER_H
 
 #include "Common/Stamp.h"
+#include "Common/MediaSource.h"
 #include "Rtp/RtpSender.h"
-#include "Record/Recorder.h"
-#include "Record/HlsRecorder.h"
-#include "Record/HlsMediaSource.h"
-#include "Rtsp/RtspMediaSourceMuxer.h"
-#include "Rtmp/RtmpMediaSourceMuxer.h"
-#include "TS/TSMediaSourceMuxer.h"
-#include "FMP4/FMP4MediaSourceMuxer.h"
 
 namespace mediakit {
+class RtmpMediaSourceMuxer;
+class RtspMediaSourceMuxer;
+class TSMediaSourceMuxer;
+class MediaSinkInterface;
+class FMP4MediaSourceMuxer;
+class HlsRecorder;
 
 class MultiMediaSourceMuxer : public MediaSourceEventInterceptor, public MediaSink, public std::enable_shared_from_this<MultiMediaSourceMuxer>{
 public:
@@ -164,13 +164,14 @@ private:
 #endif //ENABLE_RTPPROXY
 
 #if defined(ENABLE_MP4)
-    FMP4MediaSourceMuxer::Ptr _fmp4;
+    std::shared_ptr<FMP4MediaSourceMuxer> _fmp4;
 #endif
-    RtmpMediaSourceMuxer::Ptr _rtmp;
-    RtspMediaSourceMuxer::Ptr _rtsp;
-    TSMediaSourceMuxer::Ptr _ts;
-    MediaSinkInterface::Ptr _mp4;
-    HlsRecorder::Ptr _hls;
+    std::shared_ptr<RtmpMediaSourceMuxer> _rtmp;
+    std::shared_ptr<RtspMediaSourceMuxer> _rtsp;
+    std::shared_ptr<RtspMediaSourceMuxer> _rtc;
+    std::shared_ptr<TSMediaSourceMuxer> _ts;
+    std::shared_ptr<MediaSinkInterface> _mp4;
+    std::shared_ptr<HlsRecorder> _hls;
     toolkit::EventPoller::Ptr _poller;
 
     //对象个数统计

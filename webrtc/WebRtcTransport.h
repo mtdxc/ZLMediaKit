@@ -19,7 +19,7 @@
 #include "Sdp.h"
 #include "Poller/EventPoller.h"
 #include "Network/Socket.h"
-#include "Rtsp/RtspMediaSourceImp.h"
+#include "RtcMediaSource.h"
 #include "Rtcp/RtcpContext.h"
 #include "Rtcp/RtcpFCI.h"
 #include "Nack.h"
@@ -33,6 +33,8 @@ namespace mediakit {
 namespace Rtc {
 extern const std::string kPort;
 extern const std::string kTimeOutSec;
+extern const std::string kAacBitRate;
+extern const std::string kOpusBitRate;
 }//namespace RTC
 
 class WebRtcInterface {

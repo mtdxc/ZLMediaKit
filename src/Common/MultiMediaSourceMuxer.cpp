@@ -11,7 +11,16 @@
 #include <math.h>
 #include "Common/config.h"
 #include "MultiMediaSourceMuxer.h"
-
+#include "Record/Recorder.h"
+#include "Record/HlsRecorder.h"
+#include "Record/HlsMediaSource.h"
+#include "Rtsp/RtspMediaSourceMuxer.h"
+#include "Rtmp/RtmpMediaSourceMuxer.h"
+#include "TS/TSMediaSourceMuxer.h"
+#include "FMP4/FMP4MediaSourceMuxer.h"
+#ifdef ENABLE_WEBRTC
+#include "webrtc/RtcMediaSource.h"
+#endif
 using namespace std;
 using namespace toolkit;
 
@@ -93,6 +102,11 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const string &vhost, const string &
     if (option.enable_rtsp) {
         _rtsp = std::make_shared<RtspMediaSourceMuxer>(vhost, app, stream, option, std::make_shared<TitleSdp>(dur_sec));
     }
+#ifdef ENABLE_WEBRTC
+    if (option.enable_rtc) {
+        _rtc = std::make_shared<RtcMediaSourceMuxer>(vhost, app, stream, option, std::make_shared<TitleSdp>(dur_sec));
+    }
+#endif
     if (option.enable_hls) {
         _hls = dynamic_pointer_cast<HlsRecorder>(Recorder::createRecorder(Recorder::type_hls, vhost, app, stream, option));
     }
@@ -127,6 +141,9 @@ void MultiMediaSourceMuxer::setMediaListener(const std::weak_ptr<MediaSourceEven
     if (_ts) {
         _ts->setListener(self);
     }
+    if (_rtc) {
+        _rtc->setListener(self);
+    }
 #if defined(ENABLE_MP4)
     if (_fmp4) {
         _fmp4->setListener(self);
@@ -143,15 +160,16 @@ void MultiMediaSourceMuxer::setTrackListener(const std::weak_ptr<Listener> &list
 }
 
 int MultiMediaSourceMuxer::totalReaderCount() const {
-    auto hls = _hls;
-    auto ret = (_rtsp ? _rtsp->readerCount() : 0) +
-               (_rtmp ? _rtmp->readerCount() : 0) +
-               (_ts ? _ts->readerCount() : 0) +
-               #if defined(ENABLE_MP4)
-               (_fmp4 ? _fmp4->readerCount() : 0) +
-               #endif
-               (_mp4 ? _option.mp4_as_player : 0) +
-               (hls ? hls->readerCount() : 0);
+    int ret = 0;
+    if(_rtsp) ret += _rtsp->readerCount();
+    if (_rtc) ret += _rtc->readerCount();
+    if(_rtmp) ret += _rtmp->readerCount();
+    if(_ts) ret += _ts->readerCount();
+#if defined(ENABLE_MP4)
+    if(_fmp4) ret += _fmp4->readerCount();
+#endif
+    if(_mp4) ret += _option.mp4_as_player;
+    if(_hls) ret += _hls->readerCount();
 
 #if defined(ENABLE_RTPPROXY)
     return ret + (int)_rtp_sender.size();
@@ -312,18 +330,21 @@ EventPoller::Ptr MultiMediaSourceMuxer::getOwnerPoller(MediaSource &sender) {
 bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
 
     bool ret = false;
-    if (_rtmp) {
-        ret = _rtmp->addTrack(track) ? true : ret;
+    if (_rtmp && _rtmp->addTrack(track)) {
+        ret = true;
     }
-    if (_rtsp) {
-        ret = _rtsp->addTrack(track) ? true : ret;
+    if (_rtsp && _rtsp->addTrack(track)) {
+        ret = true;
     }
-    if (_ts) {
-        ret = _ts->addTrack(track) ? true : ret;
+    if (_rtc && _rtc->addTrack(track)) {
+        ret = true;
+    }
+    if (_ts && _ts->addTrack(track)) {
+        ret = true;
     }
 #if defined(ENABLE_MP4)
-    if (_fmp4) {
-        ret = _fmp4->addTrack(track) ? true : ret;
+    if (_fmp4 && _fmp4->addTrack(track)) {
+        ret = true;
     }
 #endif
 
@@ -349,6 +370,9 @@ void MultiMediaSourceMuxer::onAllTrackReady() {
     if (_rtsp) {
         _rtsp->onAllTrackReady();
     }
+    if (_rtc) {
+      _rtc->onAllTrackReady();
+    }
 #if defined(ENABLE_MP4)
     if (_fmp4) {
         _fmp4->onAllTrackReady();
@@ -369,6 +393,9 @@ void MultiMediaSourceMuxer::resetTracks() {
     }
     if (_rtsp) {
         _rtsp->resetTracks();
+    }
+    if (_rtc) {
+        _rtc->resetTracks();
     }
     if (_ts) {
         _ts->resetTracks();
@@ -405,30 +432,36 @@ bool MultiMediaSourceMuxer::onTrackFrame(const Frame::Ptr &frame_in) {
     }
 
     bool ret = false;
-    if (_rtmp) {
-        ret = _rtmp->inputFrame(frame) ? true : ret;
+    if (_rtmp && _rtmp->inputFrame(frame)) {
+      ret = true;
     }
-    if (_rtsp) {
-        ret = _rtsp->inputFrame(frame) ? true : ret;
+
+    if (_rtsp && _rtsp->inputFrame(frame)) {
+        ret =  true;
     }
-    if (_ts) {
-        ret = _ts->inputFrame(frame) ? true : ret;
+
+    if (_rtc && _rtc->inputFrame(frame)) {
+        ret = true;
+    }
+
+    if (_ts && _ts->inputFrame(frame)) {
+        ret = true;
     }
 
     //拷贝智能指针，目的是为了防止跨线程调用设置录像相关api导致的线程竞争问题
     //此处使用智能指针拷贝来确保线程安全，比互斥锁性能更优
     auto hls = _hls;
-    if (hls) {
-        ret = hls->inputFrame(frame) ? true : ret;
+    if (hls && hls->inputFrame(frame)) {
+        ret = true;
     }
     auto mp4 = _mp4;
-    if (mp4) {
-        ret = mp4->inputFrame(frame) ? true : ret;
+    if (mp4 && mp4->inputFrame(frame)) {
+        ret = true;
     }
 
 #if defined(ENABLE_MP4)
-    if (_fmp4) {
-        ret = _fmp4->inputFrame(frame) ? true : ret;
+    if (_fmp4 &&  _fmp4->inputFrame(frame)) {
+        ret = true;
     }
 #endif
 
@@ -446,13 +479,14 @@ bool MultiMediaSourceMuxer::isEnabled(){
         //无人观看时，每次检查是否真的无人观看
         //有人观看时，则延迟一定时间检查一遍是否无人观看了(节省性能)
         auto hls = _hls;
-        auto flag = (_rtmp ? _rtmp->isEnabled() : false) ||
-                    (_rtsp ? _rtsp->isEnabled() : false) ||
-                    (_ts ? _ts->isEnabled() : false) ||
+        auto flag = (_rtmp && _rtmp->isEnabled()) ||
+                    (_rtsp && _rtsp->isEnabled()) ||
+                    (_rtc && _rtc->isEnabled()) ||
+                    (_ts && _ts->isEnabled()) ||
                     #if defined(ENABLE_MP4)
-                    (_fmp4 ? _fmp4->isEnabled() : false) ||
+                    (_fmp4 && _fmp4->isEnabled()) ||
                     #endif
-                    (hls ? hls->isEnabled() : false) || _mp4;
+                    (hls && hls->isEnabled()) || _mp4;
 
 #if defined(ENABLE_RTPPROXY)
         _is_enable = flag || _rtp_sender.size();
