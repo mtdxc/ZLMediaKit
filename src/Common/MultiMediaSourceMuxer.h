@@ -12,17 +12,17 @@
 #define ZLMEDIAKIT_MULTIMEDIASOURCEMUXER_H
 
 #include "Common/Stamp.h"
-#include "Rtp/RtpSender.h"
-#include "Record/Recorder.h"
-#include "Record/HlsRecorder.h"
-#include "Record/HlsMediaSource.h"
-#include "Rtsp/RtspMediaSourceMuxer.h"
-#include "Rtmp/RtmpMediaSourceMuxer.h"
-#include "TS/TSMediaSourceMuxer.h"
-#include "FMP4/FMP4MediaSourceMuxer.h"
+#include "Common/MediaSource.h"
+#include "Common/MediaSink.h"
 
 namespace mediakit {
-
+class RtmpMediaSourceMuxer;
+class RtspMediaSourceMuxer;
+class TSMediaSourceMuxer;
+class MediaSinkInterface;
+class FMP4MediaSourceMuxer;
+class HlsRecorder;
+class RtpSender;
 class ProtocolOption {
 public:
     ProtocolOption();
@@ -65,6 +65,7 @@ public:
     public:
         Listener() = default;
         virtual ~Listener() = default;
+
         virtual void onAllTrackReady() = 0;
     };
 
@@ -180,17 +181,17 @@ private:
     std::weak_ptr<Listener> _track_listener;
     std::function<std::string()> _get_origin_url;
 #if defined(ENABLE_RTPPROXY)
-    std::unordered_map<std::string, RtpSender::Ptr> _rtp_sender;
+    std::unordered_map<std::string, std::shared_ptr<RtpSender> > _rtp_sender;
 #endif //ENABLE_RTPPROXY
-
+    // 转协议
 #if defined(ENABLE_MP4)
-    FMP4MediaSourceMuxer::Ptr _fmp4;
+    std::shared_ptr<FMP4MediaSourceMuxer> _fmp4;
 #endif
-    RtmpMediaSourceMuxer::Ptr _rtmp;
-    RtspMediaSourceMuxer::Ptr _rtsp;
-    TSMediaSourceMuxer::Ptr _ts;
-    MediaSinkInterface::Ptr _mp4;
-    HlsRecorder::Ptr _hls;
+    std::shared_ptr<RtmpMediaSourceMuxer> _rtmp;
+    std::shared_ptr<RtspMediaSourceMuxer> _rtsp;
+    std::shared_ptr<TSMediaSourceMuxer> _ts;
+    std::shared_ptr<MediaSinkInterface> _mp4;
+    std::shared_ptr<HlsRecorder> _hls;
 
     //对象个数统计
     toolkit::ObjectStatistic<MultiMediaSourceMuxer> _statistic;

@@ -15,9 +15,7 @@
 #include <string>
 #include <cstdlib>
 #include "Util/util.h"
-#include "Util/logger.h"
 #include "Network/Buffer.h"
-#include "Network/sockutil.h"
 #include "amf.h"
 #include "Extension/Track.h"
 
@@ -178,6 +176,7 @@ public:
     friend class RtmpProtocol;
     using Ptr = std::shared_ptr<RtmpPacket>;
     bool is_abs_stamp;
+    // MSG_*
     uint8_t type_id;
     uint32_t time_stamp;
     uint32_t ts_field;
@@ -210,17 +209,22 @@ public:
 
     bool isCfgFrame() const {
         switch (type_id){
-            case MSG_VIDEO : return buffer[1] == 0;
+            case MSG_VIDEO : 
+                return buffer[1] == 0;
             case MSG_AUDIO : {
                 switch (getMediaType()){
-                    case FLV_CODEC_AAC : return buffer[1] == 0;
-                    default : return false;
+                    case FLV_CODEC_AAC : 
+                        return buffer[1] == 0;
+                    default : 
+                        return false;
                 }
             }
-            default : return false;
+            default : 
+                return false;
         }
     }
 
+    // Rtmp包的首字节包含好多音视频信息 : 编码，采样率，还有通道数等
     int getMediaType() const {
         switch (type_id) {
             case MSG_VIDEO : return (uint8_t) buffer[0] & 0x0F;
@@ -242,18 +246,14 @@ public:
         if (type_id != MSG_AUDIO) {
             return 0;
         }
-        int flvSampleBit = ((uint8_t) buffer[0] & 0x02) >> 1;
-        const static int sampleBit[] = { 8, 16 };
-        return sampleBit[flvSampleBit];
+        return  buffer[0] & 0x02 ? 16 : 8;
     }
 
     int getAudioChannel() const {
         if (type_id != MSG_AUDIO) {
             return 0;
         }
-        int flvStereoOrMono = (uint8_t) buffer[0] & 0x01;
-        const static int channel[] = { 1, 2 };
-        return channel[flvStereoOrMono];
+        return buffer[0] & 0x01 ? 2 : 1;
     }
 
 private:

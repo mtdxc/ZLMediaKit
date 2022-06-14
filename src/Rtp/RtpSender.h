@@ -10,10 +10,12 @@
 
 #ifndef ZLMEDIAKIT_RTPSENDER_H
 #define ZLMEDIAKIT_RTPSENDER_H
-#if defined(ENABLE_RTPPROXY)
-#include "PSEncoder.h"
-#include "Extension/CommonRtp.h"
 
+#if defined(ENABLE_RTPPROXY)
+#include "Extension/CommonRtp.h"
+#include "Common/MediaSource.h"
+#include "Common/MediaSink.h"
+#include "Network/Socket.h"
 namespace mediakit{
 
 //rtp发送客户端，支持发送GB28181协议

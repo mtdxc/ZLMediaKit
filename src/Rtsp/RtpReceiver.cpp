@@ -72,12 +72,14 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
         //ssrc错误
         if (_ssrc_alive.elapsedTime() < 3 * 1000) {
             //接受正确ssrc的rtp在10秒内，那么我们认为存在多路rtp,忽略掉ssrc不匹配的rtp
-            WarnL << "ssrc mismatch, rtp dropped:" << ssrc << " != " << _ssrc;
+            WarnL << "ssrc dismatch " << ssrc << " != " << _ssrc << ",drop rtp " << ntohs(header->seq);
             return nullptr;
         }
-        InfoL << "rtp ssrc changed:" << _ssrc << " -> " << ssrc;
-        _ssrc = ssrc;
-        _ssrc_alive.resetTime();
+        else {
+            InfoL << "rtpstream change ssrc:" << _ssrc << " -> " << ssrc;
+            _ssrc = ssrc;
+            _ssrc_alive.resetTime();
+        }
     }
 
     auto rtp = RtpPacket::create();
@@ -93,16 +95,18 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
     data[1] = 2 * type;
     data[2] = (len >> 8) & 0xFF;
     data[3] = len & 0xFF;
-    //拷贝rtp
+    //拷贝rtp包体
     memcpy(&data[4], ptr, len);
+
     if (_disable_ntp) {
-        //不支持ntp时间戳，例如国标推流，那么直接使用rtp时间戳
+        // 不支持ntp时间戳，例如国标推流，那么直接使用rtp时间戳
         rtp->ntp_stamp = rtp->getStamp() * uint64_t(1000) / sample_rate;
     } else {
         //设置ntp时间戳
         rtp->ntp_stamp = _ntp_stamp.getNtpStamp(rtp->getStamp(), sample_rate);
     }
     onBeforeRtpSorted(rtp);
+    // 根据系列号排序
     sortPacket(rtp->getSeq(), rtp);
     return rtp;
 }
