@@ -182,10 +182,7 @@ public:
             packet_pool.setSize(1024);
         });
         auto ret = packet_pool.obtain2();
-        ret->_buffer.clear();
-        ret->_prefix_size = 0;
-        ret->_dts = 0;
-        ret->_pts = 0;
+        ret->clear();
         return ret;
 #else
         return std::shared_ptr<C>(new C());
@@ -201,6 +198,12 @@ public:
     bool keyFrame() const override { return false; }
     bool configFrame() const override { return false; }
 
+    void clear() {
+        _buffer.clear();
+        _prefix_size = 0;
+        _dts = _pts = 0;
+        // _codec_id = CodecInvalid;
+    }
 public:
     CodecId _codec_id = CodecInvalid;
     uint64_t _dts = 0;
@@ -229,6 +232,8 @@ public:
     typedef std::shared_ptr<FrameInternal> Ptr;
     FrameInternal(const Frame::Ptr &parent_frame, char *ptr, size_t size, size_t prefix_size)
         : Parent(ptr, size, parent_frame->dts(), parent_frame->pts(), prefix_size) {
+        // auto copy parent frame codec_type..
+        this->_codec_id = parent_frame->getCodecId();
         _parent_frame = parent_frame;
     }
     bool cacheAble() const override { return _parent_frame->cacheAble(); }
@@ -279,7 +284,7 @@ public:
 };
 
 /**
- * 支持代理转发的帧环形缓存
+ * 帧一对多分发类..
  */
 class FrameDispatcher : public FrameWriterInterface {
 public:
@@ -339,6 +344,8 @@ private:
 
 /**
  * 通过Frame接口包装指针，方便使用者把自己的数据快速接入ZLMediaKit
+ * cacheAble返回false，只能用于函数调用，不可缓存，
+ * 需要时，可通过 Frame::getCacheAbleFrame 转成可缓存帧.
  */
 class FrameFromPtr : public Frame {
 public:
@@ -507,7 +514,9 @@ private:
 };
 
 /**
- * 合并一些时间戳相同的frame
+ * @brief 合并一些时间戳相同的Frame, 并输出Buffer对象
+ * @note 本类不进行丢帧和乱序判断，得保证inputFrame顺序正确且没出现丢包
+ * 不进行丢帧和乱序判断，得保证inputFrame顺序正确且没丢包
  */
 class FrameMerger {
 public:
@@ -515,8 +524,8 @@ public:
     using Ptr = std::shared_ptr<FrameMerger>;
     enum {
         none = 0,
-        h264_prefix,
-        mp4_nal_size,
+        h264_prefix, // 00 00 00 01
+        mp4_nal_size,// 4 byte size
     };
 
     FrameMerger(int type);

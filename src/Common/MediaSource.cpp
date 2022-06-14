@@ -194,13 +194,13 @@ std::weak_ptr<MediaSourceEvent> MediaSource::getListener(bool next) const{
 
     auto listener = dynamic_pointer_cast<MediaSourceEventInterceptor>(_listener.lock());
     if (!listener) {
-        //不是MediaSourceEventInterceptor对象或者对象已经销毁
         return _listener;
     }
-    //获取被拦截的对象
-    auto next_obj = listener->getDelegate();
-    //有则返回之
-    return next_obj ? next_obj : _listener;
+    else{
+        //获取被拦截前的对象
+        auto next_obj = listener->getDelegate();
+        return next_obj ? next_obj : _listener;
+    }
 }
 
 int MediaSource::totalReaderCount(){
@@ -354,19 +354,12 @@ static void for_each_media_l(const MAP &map, LIST &list, const First &first, con
         for (auto &pr : map) {
             for_each_media_l(pr.second, list, keys...);
         }
-        return;
     }
-    auto it = map.find(first);
-    if (it != map.end()) {
-        for_each_media_l(it->second, list, keys...);
-    }
-}
-
-template<typename LIST, typename Ptr>
-static void emplace_back(LIST &list, const Ptr &ptr) {
-    auto src = ptr.lock();
-    if (src) {
-        list.emplace_back(std::move(src));
+    else {
+        auto it = map.find(first);
+        if (it != map.end()) {
+            for_each_media_l(it->second, list, keys...);
+        }
     }
 }
 
@@ -374,13 +367,16 @@ template<typename MAP, typename LIST, typename First>
 static void for_each_media_l(const MAP &map, LIST &list, const First &first) {
     if (first.empty()) {
         for (auto &pr : map) {
-            emplace_back(list, pr.second);
+            if(auto ptr = pr.second.lock())
+                list.emplace_back(std::move(ptr));
         }
-        return;
     }
-    auto it = map.find(first);
-    if (it != map.end()) {
-        emplace_back(list, it->second);
+    else{
+        auto it = map.find(first);
+        if (it != map.end()) {
+            if(auto ptr = it->second.lock())
+                list.emplace_back(std::move(ptr));
+        }
     }
 }
 
@@ -659,13 +655,14 @@ void MediaSourceEvent::onReaderChanged(MediaSource &sender, int size){
         _async_close_timer = nullptr;
         return;
     }
-    //没有任何人观看该视频源，表明该源可以关闭了
+
+    // 没人观看该视频源，表明该源可以关闭了
     GET_CONFIG(string, record_app, Record::kAppName);
     GET_CONFIG(int, stream_none_reader_delay, General::kStreamNoneReaderDelayMS);
     //如果mp4点播, 无人观看时我们强制关闭点播
     bool is_mp4_vod = sender.getApp() == record_app;
-    weak_ptr<MediaSource> weak_sender = sender.shared_from_this();
 
+    weak_ptr<MediaSource> weak_sender = sender.shared_from_this();
     _async_close_timer = std::make_shared<Timer>(stream_none_reader_delay / 1000.0f, [weak_sender, is_mp4_vod]() {
         auto strong_sender = weak_sender.lock();
         if (!strong_sender) {
@@ -703,15 +700,12 @@ MediaOriginType MediaSourceEventInterceptor::getOriginType(MediaSource &sender) 
 }
 
 string MediaSourceEventInterceptor::getOriginUrl(MediaSource &sender) const {
-    auto listener = _listener.lock();
-    if (!listener) {
-        return MediaSourceEvent::getOriginUrl(sender);
-    }
-    auto ret = listener->getOriginUrl(sender);
-    if (!ret.empty()) {
-        return ret;
-    }
-    return MediaSourceEvent::getOriginUrl(sender);
+    std::string ret;
+    if (auto listener = _listener.lock())
+        ret = listener->getOriginUrl(sender);
+    if (ret.empty())
+        ret = MediaSourceEvent::getOriginUrl(sender);
+    return ret;
 }
 
 std::shared_ptr<SockInfo> MediaSourceEventInterceptor::getOriginSock(MediaSource &sender) const {

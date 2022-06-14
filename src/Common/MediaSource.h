@@ -72,7 +72,12 @@ public:
     virtual bool close(MediaSource &sender) { return false; }
     // 获取观看总人数，此函数一般强制重载
     virtual int totalReaderCount(MediaSource &sender) { throw NotImplemented(toolkit::demangle(typeid(*this).name()) + "::totalReaderCount not implemented"); }
-    // 通知观看人数变化
+    /* 
+    通知观看人数变化
+    当sender没人观看时则启动延时检查，如果继续没人观看，则
+    - mp4录制源，则直接关闭
+    - 否则发送kBroadcastStreamNoneReader通知，由应用层来决定是否要关闭
+    */
     virtual void onReaderChanged(MediaSource &sender, int size);
     //流注册或注销事件
     virtual void onRegist(MediaSource &sender, bool regist) {}

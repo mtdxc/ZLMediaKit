@@ -70,8 +70,12 @@ uint8_t getAudioRtmpFlags(const Track::Ptr &track){
 
             uint8_t flvAudioType ;
             switch (track->getCodecId()){
-                case CodecG711A : flvAudioType = FLV_CODEC_G711A; break;
-                case CodecG711U : flvAudioType = FLV_CODEC_G711U; break;
+                case CodecG711A : 
+                    flvAudioType = FLV_CODEC_G711A; 
+                    break;
+                case CodecG711U : 
+                    flvAudioType = FLV_CODEC_G711U; 
+                    break;
                 case CodecOpus : {
                     flvAudioType = FLV_CODEC_OPUS;
                     //opus不通过flags获取音频相关信息
@@ -88,7 +92,9 @@ uint8_t getAudioRtmpFlags(const Track::Ptr &track){
                     iChannel = 2;
                     break;
                 }
-                default: WarnL << "该编码格式不支持转换为RTMP: " << track->getCodecName(); return 0;
+                default: 
+                    WarnL << "该编码格式不支持转换为RTMP: " << track->getCodecName(); 
+                    return 0;
             }
 
             uint8_t flvSampleRate;
@@ -117,7 +123,8 @@ uint8_t getAudioRtmpFlags(const Track::Ptr &track){
             return (flvAudioType << 4) | (flvSampleRate << 2) | (flvSampleBit << 1) | flvStereoOrMono;
         }
 
-        default : return 0;
+        default : 
+            return 0;
     }
 }
 
@@ -125,13 +132,11 @@ uint8_t getAudioRtmpFlags(const Track::Ptr &track){
 void Metadata::addTrack(AMFValue &metadata, const Track::Ptr &track) {
     Metadata::Ptr new_metadata;
     switch (track->getTrackType()) {
-        case TrackVideo: {
+        case TrackVideo:
             new_metadata = std::make_shared<VideoMeta>(std::dynamic_pointer_cast<VideoTrack>(track));
-        }
             break;
-        case TrackAudio: {
+        case TrackAudio:
             new_metadata = std::make_shared<AudioMeta>(std::dynamic_pointer_cast<AudioTrack>(track));
-        }
             break;
         default:
             return;

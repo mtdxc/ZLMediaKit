@@ -158,6 +158,7 @@ public:
     friend class RtmpProtocol;
     using Ptr = std::shared_ptr<RtmpPacket>;
     bool is_abs_stamp;
+    // MSG_*
     uint8_t type_id;
     uint32_t time_stamp;
     uint32_t ts_field;

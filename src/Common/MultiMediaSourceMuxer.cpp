@@ -40,9 +40,8 @@ static string getTrackInfoStr(const TrackSource *track_src){
     _StrPrinter codec_info;
     auto tracks = track_src->getTracks(true);
     for (auto &track : tracks) {
-        auto codec_type = track->getTrackType();
         codec_info << track->getCodecName();
-        switch (codec_type) {
+        switch (track->getTrackType()) {
             case TrackAudio : {
                 auto audio_track = dynamic_pointer_cast<AudioTrack>(track);
                 codec_info << "["
@@ -150,21 +149,20 @@ void MultiMediaSourceMuxer::setTrackListener(const std::weak_ptr<Listener> &list
 }
 
 int MultiMediaSourceMuxer::totalReaderCount() const {
-    auto hls = _hls;
-    auto ret = (_rtsp ? _rtsp->readerCount() : 0) +
-               (_rtmp ? _rtmp->readerCount() : 0) +
-               (_ts ? _ts->readerCount() : 0) +
-               #if defined(ENABLE_MP4)
-               (_fmp4 ? _fmp4->readerCount() : 0) +
-               #endif
-               (_mp4 ? _option.mp4_as_player : 0) +
-               (hls ? hls->readerCount() : 0);
+    int ret = 0;
+    if(_rtsp) ret += _rtsp->readerCount();
+    if(_rtmp) ret += _rtmp->readerCount();
+    if(_ts) ret += _ts->readerCount();
+#if defined(ENABLE_MP4)
+    if(_fmp4) ret += _fmp4->readerCount();
+#endif
+    if(_mp4) ret += _option.mp4_as_player;
+    if(_hls) ret += _hls->readerCount();
 
 #if defined(ENABLE_RTPPROXY)
-    return ret + (int)_rtp_sender.size();
-#else
-    return ret;
+    ret += (int)_rtp_sender.size();
 #endif
+    return ret;
 }
 
 void MultiMediaSourceMuxer::setTimeStamp(uint32_t stamp) {
@@ -233,12 +231,12 @@ bool MultiMediaSourceMuxer::setupRecord(MediaSource &sender, Recorder::type type
 //此函数可能跨线程调用
 bool MultiMediaSourceMuxer::isRecording(MediaSource &sender, Recorder::type type) {
     switch (type){
-        case Recorder::type_hls :
-            return !!_hls;
-        case Recorder::type_mp4 :
-            return !!_mp4;
-        default:
-            return false;
+    case Recorder::type_hls:
+        return nullptr != _hls;
+    case Recorder::type_mp4:
+        return nullptr != _mp4;
+    default:
+        return false;
     }
 }
 
@@ -253,6 +251,7 @@ void MultiMediaSourceMuxer::startSendRtp(MediaSource &sender, const MediaSourceE
         if (!strong_self || ex) {
             return;
         }
+        // add track for rtp sender
         for (auto &track : strong_self->getTracks(false)) {
             rtp_sender->addTrack(track);
         }
@@ -320,30 +319,25 @@ EventPoller::Ptr MultiMediaSourceMuxer::getOwnerPoller(MediaSource &sender) {
 bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
 
     bool ret = false;
-    if (_rtmp) {
-        ret = _rtmp->addTrack(track) ? true : ret;
-    }
-    if (_rtsp) {
-        ret = _rtsp->addTrack(track) ? true : ret;
-    }
-    if (_ts) {
-        ret = _ts->addTrack(track) ? true : ret;
-    }
+    if (_rtmp && _rtmp->addTrack(track))
+        ret = true;
+    if (_rtsp && _rtsp->addTrack(track))
+        ret = true;
+    if (_ts && _ts->addTrack(track))
+        ret = true;
 #if defined(ENABLE_MP4)
-    if (_fmp4) {
-        ret = _fmp4->addTrack(track) ? true : ret;
-    }
+    if (_fmp4 && _fmp4->addTrack(track))
+        ret =  true;
 #endif
 
     //拷贝智能指针，目的是为了防止跨线程调用设置录像相关api导致的线程竞争问题
     auto hls = _hls;
-    if (hls) {
-        ret = hls->addTrack(track) ? true : ret;
-    }
+    if (hls && hls->addTrack(track))
+        ret =  true;
+
     auto mp4 = _mp4;
-    if (mp4) {
-        ret = mp4->addTrack(track) ? true : ret;
-    }
+    if (mp4 && mp4->addTrack(track))
+        ret = true;
     return ret;
 }
 
@@ -362,8 +356,7 @@ void MultiMediaSourceMuxer::onAllTrackReady() {
         _fmp4->onAllTrackReady();
     }
 #endif
-    auto listener = _track_listener.lock();
-    if (listener) {
+    if (auto listener = _track_listener.lock()) {
         listener->onAllTrackReady();
     }
     InfoL << "stream: " << shortUrl() << " , codec info: " << getTrackInfoStr(this);
@@ -413,36 +406,32 @@ bool MultiMediaSourceMuxer::onTrackFrame(const Frame::Ptr &frame_in) {
     }
 
     bool ret = false;
-    if (_rtmp) {
-        ret = _rtmp->inputFrame(frame) ? true : ret;
-    }
-    if (_rtsp) {
-        ret = _rtsp->inputFrame(frame) ? true : ret;
-    }
-    if (_ts) {
-        ret = _ts->inputFrame(frame) ? true : ret;
-    }
+    if (_rtmp && _rtmp->inputFrame(frame))
+        ret =  true;
+    if (_rtsp && _rtsp->inputFrame(frame))
+        ret =  true;
+    if (_ts && _ts->inputFrame(frame))
+        ret = true;
 
     //拷贝智能指针，目的是为了防止跨线程调用设置录像相关api导致的线程竞争问题
     //此处使用智能指针拷贝来确保线程安全，比互斥锁性能更优
     auto hls = _hls;
-    if (hls) {
-        ret = hls->inputFrame(frame) ? true : ret;
-    }
+    if (hls && hls->inputFrame(frame))
+        ret =  true;
+
     auto mp4 = _mp4;
-    if (mp4) {
-        ret = mp4->inputFrame(frame) ? true : ret;
-    }
+    if (mp4 && mp4->inputFrame(frame))
+        ret = true;
 
 #if defined(ENABLE_MP4)
-    if (_fmp4) {
-        ret = _fmp4->inputFrame(frame) ? true : ret;
-    }
+    if (_fmp4 && _fmp4->inputFrame(frame))
+        ret = true;
 #endif
 
 #if defined(ENABLE_RTPPROXY)
     for (auto &pr : _rtp_sender) {
-        ret = pr.second->inputFrame(frame) ? true : ret;
+        if(pr.second->inputFrame(frame))
+            ret = true;
     }
 #endif //ENABLE_RTPPROXY
     return ret;
@@ -454,19 +443,19 @@ bool MultiMediaSourceMuxer::isEnabled(){
         //无人观看时，每次检查是否真的无人观看
         //有人观看时，则延迟一定时间检查一遍是否无人观看了(节省性能)
         auto hls = _hls;
-        auto flag = (_rtmp ? _rtmp->isEnabled() : false) ||
-                    (_rtsp ? _rtsp->isEnabled() : false) ||
-                    (_ts ? _ts->isEnabled() : false) ||
+        auto flag = (_rtmp && _rtmp->isEnabled()) ||
+                    (_rtsp && _rtsp->isEnabled()) ||
+                    (_ts && _ts->isEnabled()) ||
                     #if defined(ENABLE_MP4)
-                    (_fmp4 ? _fmp4->isEnabled() : false) ||
+                    (_fmp4 && _fmp4->isEnabled()) ||
                     #endif
-                    (hls ? hls->isEnabled() : false) || _mp4;
+                    (hls && hls->isEnabled()) || _mp4;
 
 #if defined(ENABLE_RTPPROXY)
-        _is_enable = flag || _rtp_sender.size();
-#else
-        _is_enable = flag;
+        if (_rtp_sender.size())
+            flag = true;
 #endif //ENABLE_RTPPROXY
+        _is_enable = flag;
         if (_is_enable) {
             //无人观看时，不刷新计时器,因为无人观看时每次都会检查一遍，所以刷新计数器无意义且浪费cpu
             _last_check.resetTime();
