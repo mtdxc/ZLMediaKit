@@ -38,11 +38,10 @@ public:
     }
 
 protected:
+    // 每个nalu回调一次
     void onGetH264(const char *data, size_t len, uint32_t dts, uint32_t pts);
-    H264Frame::Ptr obtainFrame();
 
 protected:
-    H264Frame::Ptr _h264frame;
     std::string _sps;
     std::string _pps;
 };
@@ -50,7 +49,7 @@ protected:
 /**
  * 264 Rtmp打包类
  */
-class H264RtmpEncoder : public H264RtmpDecoder{
+class H264RtmpEncoder : public RtmpCodec {
 public:
     typedef std::shared_ptr<H264RtmpEncoder> Ptr;
 
@@ -79,10 +78,13 @@ public:
      */
     void makeConfigPacket() override;
 
+    CodecId getCodecId() const override {
+        return CodecH264;
+    }
 private:
     void makeVideoConfigPkt();
-
-private:
+    std::string _sps;
+    std::string _pps;
     bool _got_config_frame = false;
     H264Track::Ptr _track;
     RtmpPacket::Ptr _rtmp_packet;

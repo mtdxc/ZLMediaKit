@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include "Frame.h"
+// for Sdp
 #include "Rtsp/Rtsp.h"
 
 namespace mediakit{
@@ -24,8 +25,8 @@ namespace mediakit{
 class Track : public FrameDispatcher , public CodecInfo{
 public:
     typedef std::shared_ptr<Track> Ptr;
-    Track(){}
 
+    Track(){}
     virtual ~Track(){}
 
     /**
@@ -42,7 +43,7 @@ public:
 
     /**
      * 生成sdp
-     * @return  sdp对象
+     * @return sdp对象
      */
     virtual Sdp::Ptr getSdp() = 0;
 
@@ -127,7 +128,7 @@ public:
      * @param channels 通道数
      * @param sample_bit 采样位数，一般为16
      */
-    AudioTrackImp(CodecId codecId,int sample_rate, int channels, int sample_bit){
+    AudioTrackImp(CodecId codecId, int sample_rate, int channels, int sample_bit){
         _codecid = codecId;
         _sample_rate = sample_rate;
         _channels = channels;
@@ -168,6 +169,18 @@ public:
     int getAudioChannel() const override{
         return _channels;
     }
+
+    Sdp::Ptr getSdp() override {
+        if (!ready()) {
+            WarnL << getCodecName() << " Track未准备好";
+            return nullptr;
+        }
+        return std::make_shared<AudioSdp>(this);
+    }
+
+    Track::Ptr clone() override {
+        return std::make_shared<AudioTrackImp>(*this);
+    }
 private:
     CodecId _codecid;
     int _sample_rate;
@@ -175,19 +188,20 @@ private:
     int _sample_bit;
 };
 
+// Track容器类
 class TrackSource{
 public:
     TrackSource(){}
     virtual ~TrackSource(){}
 
     /**
-     * 获取全部的Track
-     * @param trackReady 是否获取全部已经准备好的Track
+     * 获取全部Track列表
+     * @param trackReady 是否获取全部ready的Track
      */
     virtual std::vector<Track::Ptr> getTracks(bool trackReady = true) const = 0;
 
     /**
-     * 获取特定Track
+     * 获取特定类型的Track列表
      * @param type track类型
      * @param trackReady 是否获取全部已经准备好的Track
      */

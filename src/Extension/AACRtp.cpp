@@ -12,16 +12,9 @@
 
 namespace mediakit{
 
-AACRtpEncoder::AACRtpEncoder(uint32_t ui32Ssrc,
-                             uint32_t ui32MtuSize,
-                             uint32_t ui32SampleRate,
-                             uint8_t ui8PayloadType,
-                             uint8_t ui8Interleaved) :
-        RtpInfo(ui32Ssrc,
-                ui32MtuSize,
-                ui32SampleRate,
-                ui8PayloadType,
-                ui8Interleaved){
+AACRtpEncoder::AACRtpEncoder(uint32_t ssrc, uint32_t mtu, uint32_t sampleRate,
+                             uint8_t payloadType, uint8_t interleaved) :
+        RtpInfo(ssrc, mtu, sampleRate, payloadType, interleaved){
 }
 
 bool AACRtpEncoder::inputFrame(const Frame::Ptr &frame) {
@@ -35,20 +28,24 @@ bool AACRtpEncoder::inputFrame(const Frame::Ptr &frame) {
         if (remain_size <= max_size) {
             _section_buf[0] = 0;
             _section_buf[1] = 16;
+            // AU-size 13bit, AU-index 3bit = 0
             _section_buf[2] = (len >> 5) & 0xFF;
             _section_buf[3] = ((len & 0x1F) << 3) & 0xFF;
             memcpy(_section_buf + 4, ptr, remain_size);
             makeAACRtp(_section_buf, remain_size + 4, true, stamp);
             break;
         }
-        _section_buf[0] = 0;
-        _section_buf[1] = 16;
-        _section_buf[2] = ((len) >> 5) & 0xFF;
-        _section_buf[3] = ((len & 0x1F) << 3) & 0xFF;
-        memcpy(_section_buf + 4, ptr, max_size);
-        makeAACRtp(_section_buf, max_size + 4, false, stamp);
-        ptr += max_size;
-        remain_size -= max_size;
+        else {
+            _section_buf[0] = 0;
+            _section_buf[1] = 16;
+            // AU-size 13:3
+            _section_buf[2] = ((len) >> 5) & 0xFF;
+            _section_buf[3] = ((len & 0x1F) << 3) & 0xFF;
+            memcpy(_section_buf + 4, ptr, max_size);
+            makeAACRtp(_section_buf, max_size + 4, false, stamp);
+            ptr += max_size;
+            remain_size -= max_size;
+        }
     }
     return len > 0;
 }
@@ -91,7 +88,8 @@ bool AACRtpDecoder::inputRtp(const RtpPacket::Ptr &rtp, bool key_pos) {
     auto ptr = rtp->getPayload();
     //rtp数据末尾
     auto end = ptr + payload_size;
-    //首2字节表示Au-Header的个数，单位bit，所以除以16得到Au-Header个数
+    //首2字节表示Au-Header的个数，单位bit，
+    //除以16得到Au-Header个数，每个au带2个字节头部[len:13, index:3]
     auto au_header_count = ((ptr[0] << 8) | ptr[1]) >> 4;
     if (!au_header_count) {
         //问题issue: https://github.com/ZLMediaKit/ZLMediaKit/issues/1869
@@ -132,6 +130,7 @@ bool AACRtpDecoder::inputRtp(const RtpPacket::Ptr &rtp, bool key_pos) {
             _frame->_buffer.assign((char *) ptr, size);
             //设置当前audio unit时间戳
             _frame->_dts = _last_dts + i * dts_inc;
+            //advance ptr
             ptr += size;
             au_header_ptr += 2;
             flushData();

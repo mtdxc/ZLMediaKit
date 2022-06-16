@@ -14,18 +14,17 @@
 #include "Frame.h"
 #include "Track.h"
 
-namespace mediakit{
+namespace mediakit {
 
 /**
  * L16音频通道
  */
-class L16Track : public AudioTrackImp{
+class L16Track : public AudioTrackImp {
 public:
     using Ptr = std::shared_ptr<L16Track>;
     L16Track(int sample_rate, int channels) : AudioTrackImp(CodecL16,sample_rate,channels,16){}
 
 private:
-    Sdp::Ptr getSdp() override;
     Track::Ptr clone() override;
 };
 

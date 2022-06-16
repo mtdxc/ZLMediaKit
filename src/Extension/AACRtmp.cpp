@@ -11,13 +11,12 @@
 #include "AACRtmp.h"
 #include "Rtmp/Rtmp.h"
 
-using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
 
-static string getAacCfg(const RtmpPacket &thiz) {
-    string ret;
+static std::string getAacCfg(const RtmpPacket &thiz) {
+    std::string ret;
     if (thiz.getMediaType() != FLV_CODEC_AAC) {
         return ret;
     }
@@ -38,10 +37,8 @@ void AACRtmpDecoder::inputRtmp(const RtmpPacket::Ptr &pkt) {
         if (!_aac_cfg.empty()) {
             onGetAAC(nullptr, 0, 0);
         }
-        return;
     }
-
-    if (!_aac_cfg.empty()) {
+    else if (!_aac_cfg.empty()) {
         onGetAAC(pkt->buffer.data() + 2, pkt->buffer.size() - 2, pkt->time_stamp);
     }
 }
@@ -67,7 +64,7 @@ void AACRtmpDecoder::onGetAAC(const char* data, size_t len, uint32_t stamp) {
         frame->_dts = stamp;
     }
 
-    if(size > 0 || len > 0){
+    if (frame->_buffer.size()) {
         //有adts头或者实际aac负载
         RtmpCodec::inputFrame(frame);
     }
@@ -76,7 +73,7 @@ void AACRtmpDecoder::onGetAAC(const char* data, size_t len, uint32_t stamp) {
 /////////////////////////////////////////////////////////////////////////////////////
 
 AACRtmpEncoder::AACRtmpEncoder(const Track::Ptr &track) {
-    _track = dynamic_pointer_cast<AACTrack>(track);
+    _track = std::dynamic_pointer_cast<AACTrack>(track);
 }
 
 void AACRtmpEncoder::makeConfigPacket() {
@@ -105,9 +102,8 @@ bool AACRtmpEncoder::inputFrame(const Frame::Ptr &frame) {
 
     auto rtmpPkt = RtmpPacket::create();
     //header
-    uint8_t is_config = false;
     rtmpPkt->buffer.push_back(_audio_flv_flags);
-    rtmpPkt->buffer.push_back(!is_config);
+    rtmpPkt->buffer.push_back(1);
 
     //aac data
     rtmpPkt->buffer.append(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
@@ -126,9 +122,8 @@ void AACRtmpEncoder::makeAudioConfigPkt() {
     auto rtmpPkt = RtmpPacket::create();
 
     //header
-    uint8_t is_config = true;
     rtmpPkt->buffer.push_back(_audio_flv_flags);
-    rtmpPkt->buffer.push_back(!is_config);
+    rtmpPkt->buffer.push_back(0);
     //aac config
     rtmpPkt->buffer.append(_aac_cfg);
 

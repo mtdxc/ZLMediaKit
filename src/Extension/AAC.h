@@ -16,10 +16,13 @@
 #define ADTS_HEADER_LEN 7
 
 namespace mediakit{
-
+// adts头部转audioSpecificConfig(2字节)
 std::string makeAacConfig(const uint8_t *hex, size_t length);
+// 从adts头部中获取长度
 int getAacFrameLength(const uint8_t *hex, size_t length);
+// 利用audioSpecificConfig和长度，生成ads头部
 int dumpAacConfig(const std::string &config, size_t length, uint8_t *out, size_t out_size);
+// 解析audioSpecificConfig获取采样率和通道
 bool parseAacConfig(const std::string &config, int &samplerate, int &channels);
 
 /**
@@ -44,13 +47,15 @@ public:
     /**
      * 获取aac 配置信息
      */
-    const std::string &getAacCfg() const;
+    const std::string &getAacCfg() const { return _cfg; }
 
-    bool ready() override;
-    CodecId getCodecId() const override;
-    int getAudioChannel() const override;
-    int getAudioSampleRate() const override;
-    int getAudioSampleBit() const override;
+    bool ready() override { return !_cfg.empty(); }
+
+    CodecId getCodecId() const override { return CodecAAC; }
+    int getAudioChannel() const override { return _channel; }
+    int getAudioSampleRate() const override { return _sampleRate; }
+    int getAudioSampleBit() const override { return _sampleBit; }
+
     bool inputFrame(const Frame::Ptr &frame) override;
 
 private:
