@@ -14,31 +14,22 @@ namespace mediakit{
 
 CommonRtmpDecoder::CommonRtmpDecoder(CodecId codec) {
     _codec = codec;
-    obtainFrame();
-}
-
-CodecId CommonRtmpDecoder::getCodecId() const {
-    return _codec;
-}
-
-void CommonRtmpDecoder::obtainFrame() {
-    _frame = FrameImp::create();
-    _frame->_codec_id = _codec;
 }
 
 void CommonRtmpDecoder::inputRtmp(const RtmpPacket::Ptr &rtmp) {
+    auto frame = FrameImp::create();
+    frame->_codec_id = _codec;
     //拷贝负载
-    _frame->_buffer.assign(rtmp->buffer.data() + 1, rtmp->buffer.size() - 1);
-    _frame->_dts = rtmp->time_stamp;
+    frame->_buffer.assign(rtmp->buffer.data() + 1, rtmp->buffer.size() - 1);
+    frame->_dts = rtmp->time_stamp;
     //写入环形缓存
-    RtmpCodec::inputFrame(_frame);
-    //创建下一帧
-    obtainFrame();
+    RtmpCodec::inputFrame(frame);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-CommonRtmpEncoder::CommonRtmpEncoder(const Track::Ptr &track) : CommonRtmpDecoder(track->getCodecId()) {
+CommonRtmpEncoder::CommonRtmpEncoder(const Track::Ptr &track) {
+    _codec = track->getCodecId();
     _audio_flv_flags = getAudioRtmpFlags(track);
 }
 
@@ -52,10 +43,10 @@ bool CommonRtmpEncoder::inputFrame(const Frame::Ptr &frame) {
     //data
     rtmp->buffer.append(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
     rtmp->body_size = rtmp->buffer.size();
+    rtmp->type_id = MSG_AUDIO;
     rtmp->chunk_id = CHUNK_AUDIO;
     rtmp->stream_index = STREAM_MEDIA;
     rtmp->time_stamp = frame->dts();
-    rtmp->type_id = MSG_AUDIO;
     RtmpCodec::inputRtmp(rtmp);
     return true;
 }

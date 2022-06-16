@@ -52,22 +52,20 @@ private:
 /**
  * aac adts转rtp类
  */
-class AACRtpEncoder : public AACRtpDecoder , public RtpInfo {
+class AACRtpEncoder : public RtpCodec, public RtpInfo {
 public:
     typedef std::shared_ptr<AACRtpEncoder> Ptr;
+    CodecId getCodecId() const override {
+        return CodecAAC;
+    }
 
-    /**
-     * @param ui32Ssrc ssrc
-     * @param ui32MtuSize mtu 大小
-     * @param ui32SampleRate 采样率
-     * @param ui8PayloadType pt类型
-     * @param ui8Interleaved rtsp interleaved 值
-     */
-    AACRtpEncoder(uint32_t ui32Ssrc,
-                  uint32_t ui32MtuSize,
-                  uint32_t ui32SampleRate,
-                  uint8_t ui8PayloadType = 97,
-                  uint8_t ui8Interleaved = TrackAudio * 2);
+    AACRtpEncoder(uint32_t ssrc,
+                  uint32_t mtuSize,
+                  uint32_t sampleRate,                  ///< 采样率
+                  uint8_t payloadType = 97,             ///< pt类型
+                  uint8_t interleaved = TrackAudio * 2  ///< rtsp interleaved 值
+                  );
+                  
     ~AACRtpEncoder() {}
 
     /**

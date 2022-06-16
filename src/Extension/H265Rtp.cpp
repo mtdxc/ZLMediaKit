@@ -36,13 +36,13 @@ H265Frame::Ptr H265RtpDecoder::obtainFrame() {
     return frame;
 }
 
-#define AV_RB16(x)                           \
-    ((((const uint8_t*)(x))[0] << 8) |          \
-      ((const uint8_t*)(x))[1])
+#define AV_RB16(x) ((((const uint8_t*)(x))[0] << 8) | ((const uint8_t*)(x))[1])
 
 #define CHECK_SIZE(total, size, ret) \
-        if (total < size) {     \
-            WarnL << "invalid rtp data size:" << total << " < " << size << ",rtp:\r\n" << rtp->dumpString(); _gop_dropped = true;  return ret; \
+        if (total < size) {          \
+            WarnL << "invalid rtp data size:" << total << " < " << size << ",rtp:\r\n" << rtp->dumpString(); \
+            _gop_dropped = true;     \
+            return ret;              \
         }
 
 // 4.4.2. Aggregation Packets (APs) (p25)
@@ -246,16 +246,9 @@ void H265RtpDecoder::outputFrame(const RtpPacket::Ptr &rtp, const H265Frame::Ptr
 
 ////////////////////////////////////////////////////////////////////////
 
-H265RtpEncoder::H265RtpEncoder(uint32_t ui32Ssrc,
-                               uint32_t ui32MtuSize,
-                               uint32_t ui32SampleRate,
-                               uint8_t ui8PayloadType,
-                               uint8_t ui8Interleaved) :
-        RtpInfo(ui32Ssrc,
-                ui32MtuSize,
-                ui32SampleRate,
-                ui8PayloadType,
-                ui8Interleaved) {
+H265RtpEncoder::H265RtpEncoder(uint32_t ssrc, uint32_t mtuSize, uint32_t sampleRate,
+                               uint8_t payloadType, uint8_t interleaved) :
+        RtpInfo(ssrc, mtuSize, sampleRate, payloadType, interleaved) {
 }
 
 bool H265RtpEncoder::inputFrame(const Frame::Ptr &frame) {

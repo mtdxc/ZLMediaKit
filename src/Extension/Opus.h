@@ -19,18 +19,14 @@ namespace mediakit{
 /**
  * Opus帧音频通道
  */
-class OpusTrack : public AudioTrackImp{
+class OpusTrack : public AudioTrackImp {
 public:
     typedef std::shared_ptr<OpusTrack> Ptr;
-    OpusTrack() : AudioTrackImp(CodecOpus,48000,2,16){}
+    OpusTrack() : AudioTrackImp(CodecOpus, 48000, 2, 16){}
 
 private:
     //克隆该Track
-    Track::Ptr clone() override {
-        return std::make_shared<std::remove_reference<decltype(*this)>::type >(*this);
-    }
-    //生成sdp
-    Sdp::Ptr getSdp() override ;
+    Track::Ptr clone() override;
 };
 
 }//namespace mediakit
