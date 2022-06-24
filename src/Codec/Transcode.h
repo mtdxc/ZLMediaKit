@@ -69,7 +69,7 @@ public:
     ~FFmpegAudioFifo();
 
     bool Write(const AVFrame *frame);
-    bool Read(AVFrame *frame, int sample_size);
+    FFmpegFrame::Ptr Read(int sample_size);
     int size() const;
 
 private:
@@ -175,14 +175,14 @@ public:
 private:
     bool inputFrame_l(FFmpegFrame::Ptr frame);
     bool encodeFrame(AVFrame *frame);
-    void onEncode(AVPacket *packet);
-    bool openVideoCodec(int width, int height, int bitrate, AVCodec *codec);
-    bool openAudioCodec(int samplerate, int channel, int bitrate, AVCodec *codec);
+    void onEncode(std::shared_ptr<AVPacket> packet);
+    bool openVideoCodec(int width, int height, int bitrate, const AVCodec *codec);
+    bool openAudioCodec(int samplerate, int channel, int bitrate, const AVCodec *codec);
 
 private:
     onEnc _cb;
     CodecId _codecId;
-    AVCodec *_codec = nullptr;
+    const AVCodec *_codec = nullptr;
     AVDictionary *_dict = nullptr;
     std::shared_ptr<AVCodecContext> _context;
 
