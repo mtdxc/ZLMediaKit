@@ -25,8 +25,6 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "Util/util.h"
 #include "logger.h"
 
-#include <srtp2/srtp.h>
-
 #include <cstring> // std::memset(), std::memcpy()
 #include <vector>
 

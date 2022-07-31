@@ -22,18 +22,19 @@
 #
 
 # 查找 srtp 是否安装
-find_package(SRTP QUIET)
-if(NOT SRTP_FOUND OR NOT ENABLE_OPENSSL)
+#find_package(SRTP QUIET)
+#if(NOT SRTP_FOUND OR NOT ENABLE_OPENSSL)
+if(NOT ENABLE_OPENSSL)
   set(ENABLE_WEBRTC OFF)
   message(WARNING "srtp 未找到, WebRTC 相关功能打开失败")
   return()
 endif()
 
 
-message(STATUS "found library: ${SRTP_LIBRARIES}")
-include_directories(SYSTEM ${SRTP_INCLUDE_DIRS})
+#message(STATUS "found library: ${SRTP_LIBRARIES}")
+#include_directories(SYSTEM ${SRTP_INCLUDE_DIRS})
 
-set(LINK_LIBRARIES ${SRTP_LIBRARIES})
+set(LINK_LIBRARIES srtp2) #${SRTP_LIBRARIES})
 
 set(COMPILE_DEFINITIONS)
 set(INCLUDE_DIRECTORIES)
