@@ -9,7 +9,6 @@
  */
 
 #include <iostream>
-#include <srtp2/srtp.h>
 #include "Common/config.h"
 #include "RtpExt.h"
 #include "Rtcp/Rtcp.h"

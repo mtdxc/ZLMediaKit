@@ -22,8 +22,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "Utils.hpp"
 
 #include <memory>
-
-typedef struct srtp_ctx_t_ *srtp_t;
+#include <srtp.h>
+//typedef struct srtp_ctx_t_ *srtp_t;
 
 namespace RTC {
 

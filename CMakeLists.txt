@@ -36,12 +36,12 @@ option(ENABLE_API_STATIC_LIB "Enable mk_api static lib" OFF)
 option(ENABLE_ASAN "Enable Address Sanitize" OFF)
 option(ENABLE_CXX_API "Enable C++ API SDK" OFF)
 option(ENABLE_FAAC "Enable FAAC" OFF)
-option(ENABLE_FFMPEG "Enable FFmpeg" OFF)
+option(ENABLE_FFMPEG "Enable FFmpeg" ON)
 option(ENABLE_HLS "Enable HLS" ON)
 option(ENABLE_JEMALLOC_STATIC "Enable static linking to the jemalloc library" OFF)
 option(ENABLE_MEM_DEBUG "Enable Memory Debug" OFF)
 option(ENABLE_MP4 "Enable MP4" ON)
-option(ENABLE_MSVC_MT "Enable MSVC Mt/Mtd lib" ON)
+option(ENABLE_MSVC_MT "Enable MSVC Mt/Mtd lib" OFF)
 option(ENABLE_MYSQL "Enable MySQL" OFF)
 option(ENABLE_OPENSSL "Enable OpenSSL" ON)
 option(ENABLE_PLAYER "Enable Player" ON)
@@ -173,6 +173,13 @@ if(CCACHE_FOUND)
 endif()
 
 if(UNIX)
+  # 每个cmake都要加
+  # add_compile_options(-fPIC)
+  
+  # 只须加一次，子cmake不需要改
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+
   # UNIX/Linux/Darwin
   set(COMPILE_OPTIONS_DEFAULT
     "-fPIC"
@@ -188,7 +195,7 @@ elseif(WIN32)
             "/EHsc")
     # disable Windows logo
     list(APPEND COMPILE_OPTIONS_DEFAULT "/nologo")
-    list(APPEND CMAKE_STATIC_LINKER_FLAGS "/nologo")
+    #list(APPEND CMAKE_STATIC_LINKER_FLAGS "/nologo")
   endif()
 endif()
 
@@ -355,6 +362,12 @@ if(OPENSSL_FOUND AND ENABLE_OPENSSL)
   if(CMAKE_SYSTEM_NAME MATCHES "Linux" AND OPENSSL_USE_STATIC_LIBS)
     update_cached_list(MK_LINK_LIBRARIES ${CMAKE_DL_LIBS})
   endif()
+
+  # 添加srtp
+  set(TEST_APPS OFF CACHE INTERNAL "")
+  add_subdirectory(3rdpart/libsrtp)
+  unset(TEST_APPS)
+
 else()
   set(ENABLE_OPENSSL OFF)
   set(ENABLE_WEBRTC OFF)
