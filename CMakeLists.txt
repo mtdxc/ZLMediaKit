@@ -41,7 +41,7 @@ option(ENABLE_HLS "Enable HLS" ON)
 option(ENABLE_JEMALLOC_STATIC "Enable static linking to the jemalloc library" OFF)
 option(ENABLE_MEM_DEBUG "Enable Memory Debug" OFF)
 option(ENABLE_MP4 "Enable MP4" ON)
-option(ENABLE_MSVC_MT "Enable MSVC Mt/Mtd lib" ON)
+option(ENABLE_MSVC_MT "Enable MSVC Mt/Mtd lib" OFF)
 option(ENABLE_MYSQL "Enable MySQL" OFF)
 option(ENABLE_OPENSSL "Enable OpenSSL" ON)
 option(ENABLE_PLAYER "Enable Player" ON)
@@ -173,6 +173,13 @@ if(CCACHE_FOUND)
 endif()
 
 if(UNIX)
+  # 每个cmake都要加
+  # add_compile_options(-fPIC)
+  
+  # 只须加一次，子cmake不需要改
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+
   # UNIX/Linux/Darwin
   set(COMPILE_OPTIONS_DEFAULT
     "-fPIC"
@@ -181,6 +188,7 @@ if(UNIX)
     "-Wno-error=extra;-Wno-error=missing-field-initializers;-Wno-error=type-limits")
 elseif(WIN32)
   if (MSVC)
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     set(COMPILE_OPTIONS_DEFAULT
             # TODO: /wd4819 应该是不会生效
             "/wd4566;/wd4819"
@@ -188,7 +196,6 @@ elseif(WIN32)
             "/EHsc")
     # disable Windows logo
     list(APPEND COMPILE_OPTIONS_DEFAULT "/nologo")
-    list(APPEND CMAKE_STATIC_LINKER_FLAGS "/nologo")
   endif()
 endif()
 
@@ -355,9 +362,18 @@ if(OPENSSL_FOUND AND ENABLE_OPENSSL)
   if(CMAKE_SYSTEM_NAME MATCHES "Linux" AND OPENSSL_USE_STATIC_LIBS)
     update_cached_list(MK_LINK_LIBRARIES ${CMAKE_DL_LIBS})
   endif()
+
+  # 添加srtp
+  set(TEST_APPS OFF CACHE INTERNAL "")
+  add_subdirectory(3rdpart/libsrtp)
+  include_directories(3rdpart/libsrtp/include)
+  unset(TEST_APPS)
+
+  set(WITH_OPENSSL ON)
 else()
   set(ENABLE_OPENSSL OFF)
   set(ENABLE_WEBRTC OFF)
+  set(WITH_OPENSSL OFF)
   message(WARNING "openssl 未找到, rtmp 将不支持 flash 播放器, https/wss/rtsps/rtmps/webrtc 也将失效")
 endif()
 
@@ -425,10 +441,16 @@ endif()
 # for version.h
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-# for assert.h
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdpart)
+# add_subdirectory(3rdpart)
+add_subdirectory(3rdpart/libhv)
+include_directories(3rdpart/libhv/include/hv 3rdpart/libhv)
+update_cached_list(MK_LINK_LIBRARIES hv_static)
 
-add_subdirectory(3rdpart)
+include_directories(3rdpart/Bento4/Source/C++/Core)
+set(BUILD_APPS OFF CACHE INTERNAL "")
+add_subdirectory(3rdpart/Bento4)
+update_cached_list(MK_LINK_LIBRARIES ap4)
+unset(BUILD_APPS)
 
 if(ENABLE_SRT)
   add_subdirectory(srt)

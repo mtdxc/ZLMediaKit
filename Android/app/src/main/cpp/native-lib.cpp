@@ -11,7 +11,7 @@
 #include <jni.h>
 #include <string>
 #include "Util/logger.h"
-#include "Thread/semaphore.h"
+#include "Util/semaphore.h"
 #include "Common/config.h"
 #include "Player/MediaPlayer.h"
 #include "Extension/Frame.h"
@@ -144,8 +144,10 @@ void doInJavaThread(FUN &&fun){
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     //设置日志
     s_jvm = vm;
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
+    //Logger::Instance().add(std::make_shared<ConsoleChannel>());
+    //Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
     InfoL;
     return JNI_VERSION_1_6;
 }

@@ -28,8 +28,10 @@ include_directories(${ZLMediaKit_Root}/srt)
 include_directories(${ZLMediaKit_Root}/webrtc)
 include_directories(${ZLMediaKit_Root}/server)
 include_directories(${ZLMediaKit_Root}/3rdpart)
-include_directories(${ZLMediaKit_Root}/3rdpart/media-server)
-include_directories(${ZLMediaKit_Root}/3rdpart/ZLToolKit/src)
+include_directories(${ZLMediaKit_Root}/3rdpart/Bento4)
+include_directories(${ZLMediaKit_Root}/3rdpart/libhv)
+include_directories(${ZLMediaKit_Root}/3rdpart/libhv/include/hv)
+include_directories(${ZLMediaKit_Root}/3rdpart/libsrtp/include)
 
 #收集源代码添加动态库
 file(GLOB JNI_src_list ${JNI_Root}/*.cpp ${JNI_Root}/*.h)

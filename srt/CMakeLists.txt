@@ -27,8 +27,7 @@ add_library(srt STATIC ${SRT_SRC_LIST})
 add_library(ZLMediaKit::SRT ALIAS srt)
 target_link_libraries(srt
   PUBLIC
-    ZLMediaKit::MediaKit
-    ZLMediaKit::ToolKit)
+    ZLMediaKit::MediaKit)
 target_compile_options(srt
   PRIVATE ${COMPILE_OPTIONS_DEFAULT})
 target_include_directories(srt

@@ -1,9 +1,9 @@
-[submodule "ZLToolKit"]
-	path = 3rdpart/ZLToolKit
-	url = https://github.com/ZLMediaKit/ZLToolKit
-[submodule "3rdpart/media-server"]
-	path = 3rdpart/media-server
-	url = https://github.com/ireader/media-server
-[submodule "3rdpart/jsoncpp"]
-    path = 3rdpart/jsoncpp
-    url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "3rdpart/Bento4"]
+	path = 3rdpart/Bento4
+	url = https://github.com/mtdxc/Bento4.git
+[submodule "3rdpart/libhv"]
+	path = 3rdpart/libhv
+	url = https://github.com/mtdxc/libhv.git
+[submodule "3rdpart/libsrtp"]
+	path = 3rdpart/libsrtp
+	url = https://github.com/cisco/libsrtp.git
