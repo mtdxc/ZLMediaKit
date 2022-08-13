@@ -12,7 +12,6 @@
 #define SRC_SHELL_SHELLSESSION_H_
 
 #include <functional>
-#include "Common/config.h"
 #include "Util/TimeTicker.h"
 #include "Session.h"
 
@@ -20,10 +19,10 @@ namespace mediakit {
 
 class ShellSession: public toolkit::Session {
 public:
-    ShellSession(const toolkit::SocketPtr &_sock);
+    ShellSession(hio_t* io);
     virtual ~ShellSession();
 
-    void onRecv(const toolkit::Buffer::Ptr &) override;
+    void onRecv(const char* buf, int size);
     void onError(const toolkit::SockException &err) override;
     void onManager() override;
 

@@ -27,7 +27,7 @@ public:
                     return;
                 }
 
-                toolkit::EventPollerPool::Instance().getPoller()->async([ini, media, stream]() {
+                hv::EventLoopThreadPool::Instance()->loop()->async([ini, media, stream]() {
                     if (ini.find("kick") != ini.end()) {
                         //踢出源
                         do {

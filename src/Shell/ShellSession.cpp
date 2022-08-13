@@ -19,12 +19,12 @@ using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
-
+class ExitException : public std::exception {};
 static onceToken s_token([]() {
     REGIST_CMD(media);
 }, nullptr);
 
-ShellSession::ShellSession(const Socket::Ptr &_sock) : Session(_sock) {
+ShellSession::ShellSession(hio_t* io) : Session(io) {
     DebugP(this);
     pleaseInputUser();
 }
@@ -33,17 +33,17 @@ ShellSession::~ShellSession() {
     DebugP(this);
 }
 
-void ShellSession::onRecv(const Buffer::Ptr&buf) {
+void ShellSession::onRecv(const char* buf, int size) {
     //DebugL << hexdump(buf->data(), buf->size());
     GET_CONFIG(uint32_t,maxReqSize,Shell::kMaxReqSize);
-    if (_strRecvBuf.size() + buf->size() >= maxReqSize) {
+    if (_strRecvBuf.size() + size >= maxReqSize) {
         shutdown(SockException(Err_other,"recv buffer overflow"));
         return;
     }
     _beatTicker.resetTime();
-    _strRecvBuf.append(buf->data(), buf->size());
+    _strRecvBuf.append(buf, size);
     if (_strRecvBuf.find("\xff\xf4\xff\0xfd\x06") != std::string::npos) {
-        SockSender::send("\033[0m\r\n	Bye bye!\r\n");
+        write("\033[0m\r\n	Bye bye!\r\n");
         shutdown(SockException(Err_other,"received Ctrl+C"));
         return;
     }
@@ -79,21 +79,21 @@ inline bool ShellSession::onCommandLine(const string& line) {
     }
     try {
         std::shared_ptr<stringstream> ss(new stringstream);
-        CMDRegister::Instance()(line,ss);
-        SockSender::send(ss->str());
+        //CMDRegister::Instance()(line,ss);
+        write(ss->str());
     }catch(ExitException &){
         return false;
     }catch(std::exception &ex){
-        SockSender::send(ex.what());
-        SockSender::send("\r\n");
+        write(ex.what());
+        write("\r\n");
     }
     printShellPrefix();
     return true;
 }
 
 inline void ShellSession::pleaseInputUser() {
-    SockSender::send("\033[0m");
-    SockSender::send(StrPrinter << kServerName << " login: " << endl);
+    write("\033[0m");
+    write(StrPrinter << kServerName << " login: " << endl);
     _loginInterceptor = [this](const string &user_name) {
         _strUserName=user_name;
         pleaseInputPasswd();
@@ -101,12 +101,12 @@ inline void ShellSession::pleaseInputUser() {
     };
 }
 inline void ShellSession::pleaseInputPasswd() {
-    SockSender::send("Password: \033[8m");
+    write("Password: \033[8m");
     _loginInterceptor = [this](const string &passwd) {
         auto onAuth = [this](const string &errMessage){
             if(!errMessage.empty()){
                 //鉴权失败
-                SockSender::send(StrPrinter
+                write(StrPrinter
                                  << "\033[0mAuth failed("
                                  << errMessage
                                  << "), please try again.\r\n"
@@ -115,15 +115,15 @@ inline void ShellSession::pleaseInputPasswd() {
                                  << endl);
                 return;
             }
-            SockSender::send("\033[0m");
-            SockSender::send("-----------------------------------------\r\n");
-            SockSender::send(StrPrinter<<"欢迎来到"<<kServerName<<", 你可输入\"help\"查看帮助.\r\n"<<endl);
-            SockSender::send("-----------------------------------------\r\n");
+            write("\033[0m");
+            write("-----------------------------------------\r\n");
+            write(StrPrinter<<"欢迎来到"<<kServerName<<", 你可输入\"help\"查看帮助.\r\n"<<endl);
+            write("-----------------------------------------\r\n");
             printShellPrefix();
             _loginInterceptor=nullptr;
         };
 
-        weak_ptr<ShellSession> weakSelf = dynamic_pointer_cast<ShellSession>(shared_from_this());
+        std::weak_ptr<ShellSession> weakSelf = std::dynamic_pointer_cast<ShellSession>(shared_from_this());
         Broadcast::AuthInvoker invoker = [weakSelf,onAuth](const string &errMessage){
             auto strongSelf =  weakSelf.lock();
             if(!strongSelf){
@@ -147,8 +147,8 @@ inline void ShellSession::pleaseInputPasswd() {
     };
 }
 
-inline void ShellSession::printShellPrefix() {
-    SockSender::send(StrPrinter << _strUserName << "@" << kServerName << "# " << endl);
+void ShellSession::printShellPrefix() {
+    write(StrPrinter << _strUserName << "@" << kServerName << "# " << endl);
 }
 
 }/* namespace mediakit */
