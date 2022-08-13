@@ -3,26 +3,24 @@
 #include "SrtTransportImp.hpp"
 
 #include "Common/config.h"
+using namespace mediakit;
+using namespace toolkit;
 
 namespace SRT {
-using namespace mediakit;
 
-SrtSession::SrtSession(const Socket::Ptr &sock)
-    : Session(sock) {
+
+SrtSession::SrtSession(hio_t* io) : Session(io) {
     socklen_t addr_len = sizeof(_peer_addr);
     memset(&_peer_addr, 0, addr_len);
-    // TraceL<<"before addr len "<<addr_len;
-    getpeername(sock->rawFD(), (struct sockaddr *)&_peer_addr, &addr_len);
-    // TraceL<<"after addr len "<<addr_len<<" family "<<_peer_addr.ss_family;
+    _peer_addr = (sockaddr_storage*)hio_peeraddr(io);
+    so_rcvbuf(fd(), 1024 * 1024);
 }
 
 SrtSession::~SrtSession() {
     InfoP(this);
 }
 
-EventPoller::Ptr SrtSession::queryPoller(const Buffer::Ptr &buffer) {
-    uint8_t *data = (uint8_t *)buffer->data();
-    size_t size = buffer->size();
+EventPoller::Ptr SrtSession::queryPoller(uint8_t *data, size_t size) {
 
     if (DataPacket::isDataPacket(data, size)) {
         uint32_t socket_id = DataPacket::getSocketID(data, size);
@@ -51,14 +49,7 @@ EventPoller::Ptr SrtSession::queryPoller(const Buffer::Ptr &buffer) {
     return nullptr;
 }
 
-void SrtSession::attachServer(const toolkit::Server &server) {
-    SockUtil::setRecvBuf(getSock()->rawFD(), 1024 * 1024);
-}
-
-void SrtSession::onRecv(const Buffer::Ptr &buffer) {
-    uint8_t *data = (uint8_t *)buffer->data();
-    size_t size = buffer->size();
-
+void SrtSession::onRecv(uint8_t *data, size_t size) {
     if (_find_transport) {
         //只允许寻找一次transport
         _find_transport = false;
@@ -109,7 +100,7 @@ void SrtSession::onRecv(const Buffer::Ptr &buffer) {
     _ticker.resetTime();
 
     if (_transport) {
-        _transport->inputSockData(data, size, &_peer_addr);
+        _transport->inputSockData(data, size, _peer_addr);
     } else {
         // WarnL<< "ingore  data";
     }

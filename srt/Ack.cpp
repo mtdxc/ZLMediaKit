@@ -7,12 +7,11 @@ bool ACKPacket::loadFromData(uint8_t *buf, size_t len) {
     if (len < ACK_CIF_SIZE + ControlPacket::HEADER_SIZE) {
         return false;
     }
-
-    _data = BufferRaw::create();
-    _data->assign((char *)(buf), len);
-    ControlPacket::loadHeader();
+    if (!ControlPacket::loadFromData(buf, len))
+        return false;
     ack_number = loadUint32(type_specific_info);
-    uint8_t *ptr = (uint8_t *)_data->data() + ControlPacket::HEADER_SIZE;
+
+    uint8_t *ptr = payloadData();
 
     last_ack_pkt_seq_number = loadUint32(ptr);
     ptr += 4;
@@ -39,16 +38,10 @@ bool ACKPacket::loadFromData(uint8_t *buf, size_t len) {
 }
 
 bool ACKPacket::storeToData() {
-    _data = BufferRaw::create();
-    _data->setCapacity(HEADER_SIZE + ACK_CIF_SIZE);
-    _data->setSize(HEADER_SIZE + ACK_CIF_SIZE);
-    control_type = ControlPacket::ACK;
-    sub_type = 0;
-
     storeUint32(type_specific_info, ack_number);
-    storeToHeader();
+    ControlPacket::storeHeader(ACK, 0, ACK_CIF_SIZE);
 
-    uint8_t *ptr = (uint8_t *)_data->data() + ControlPacket::HEADER_SIZE;
+    uint8_t* ptr = payloadData();
 
     storeUint32(ptr, last_ack_pkt_seq_number);
     ptr += 4;
@@ -75,7 +68,7 @@ bool ACKPacket::storeToData() {
 }
 
 std::string ACKPacket::dump() {
-    _StrPrinter printer;
+    toolkit::_StrPrinter printer;
     printer << "last_ack_pkt_seq_number=" << last_ack_pkt_seq_number << " rtt=" << rtt
             << " rtt_variance=" << rtt_variance << " pkt_recv_rate=" << pkt_recv_rate
             << " available_buf_size=" << available_buf_size << " estimated_link_capacity=" << estimated_link_capacity

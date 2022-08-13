@@ -6,8 +6,7 @@
 #include "Common.hpp"
 
 namespace SRT {
-using namespace toolkit;
-class HSExt : public Buffer {
+class HSExt : public toolkit::Buffer {
 public:
     HSExt() = default;
     virtual ~HSExt() = default;
@@ -28,9 +27,11 @@ public:
     using Ptr = std::shared_ptr<HSExt>;
     uint16_t extension_type;
     uint16_t extension_length;
+
     virtual bool loadFromData(uint8_t *buf, size_t len) = 0;
     virtual bool storeToData() = 0;
     virtual std::string dump() = 0;
+
     ///////Buffer override///////
     char *data() const override {
         if (_data) {
@@ -55,13 +56,13 @@ protected:
     }
     void storeHeader() {
         uint8_t *ptr = (uint8_t *)_data->data();
-        SRT::storeUint16(ptr, extension_type);
+        storeUint16(ptr, extension_type);
         ptr += 2;
         storeUint16(ptr, extension_length);
     }
 
 protected:
-    BufferRaw::Ptr _data;
+    toolkit::BufferRaw::Ptr _data;
 };
 
 /*

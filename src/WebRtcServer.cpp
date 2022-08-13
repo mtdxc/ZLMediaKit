@@ -201,6 +201,9 @@ void WebRtcServer::start(const char* cfgPath)
     if (port)
         _tcpRtc = newRtcTcpServer(port);
 
+    port = mINI::Instance()["srt.port"];
+    if (port)
+        _udpSrt = newSrtServer(port);
 
     port = mINI::Instance()[::Rtmp::kPort];
     if (port)
@@ -218,6 +221,7 @@ void WebRtcServer::stop()
     websocket_server_stop(&_http);
     _udpRtc = nullptr;
     _tcpRtc = nullptr;
+    _udpSrt = nullptr;
 
 #if defined(ENABLE_RTPPROXY)
     {
@@ -1516,6 +1520,40 @@ std::shared_ptr<WebRtcServer::RtcTcpServer> WebRtcServer::newRtcTcpServer(int po
     rtc->setLoadBalance(LB_LeastConnections);
     rtc->start();
     return rtc;
+}
+
+std::shared_ptr<WebRtcServer::SrtServer> WebRtcServer::newSrtServer(int port)
+{
+#ifdef ENABLE_SRT    
+    auto srt = std::make_shared<SrtServer>();
+    int listenfd = srt->createsocket(port);
+    if (listenfd < 0) {
+        return nullptr;
+    }
+    LOGI("listen srt on %d, listenfd=%d ...\n", port, listenfd);
+
+    srt->onNewClient = [srt](hio_t* io, hv::Buffer* data) {
+        // @todo select loop with data or peerAddr
+        auto new_poller = SRT::SrtSession::queryPoller((uint8_t*)data->data(), data->size());
+        srt->accept(io, new_poller);
+    };
+    srt->onMessage = [](const std::shared_ptr<SRT::SrtSession>& session, hv::Buffer* data) {
+        try {
+            session->onRecv((uint8_t*)data->data(), data->size());
+        }
+        catch (SockException& ex) {
+            session->shutdown(ex);
+        }
+        catch (exception& ex) {
+            session->shutdown(SockException(Err_shutdown, ex.what()));
+        }
+    };
+    srt->setLoadBalance(LB_LeastConnections);
+    srt->start();
+    return srt;
+#else 
+    return nullptr;
+#endif    
 }
 
 std::shared_ptr<WebRtcServer::RtmpServer> WebRtcServer::newRtmpServer(int port)

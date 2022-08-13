@@ -15,6 +15,7 @@
 #include "UdpServer2.h"
 #include "TcpServer.h"
 #include "../webrtc/WebRtcSession.h"
+#include "../srt/SrtSession.hpp"
 #include "Rtmp/RtmpSession.h"
 #include "Rtsp/RtspSession.h"
 #include "Shell/ShellSession.h"
@@ -56,17 +57,21 @@ public:
 
     using RtcServer = hv::UdpServerEventLoopTmpl2<WebRtcSession>;
     using RtcTcpServer = hv::TcpServerEventLoopTmpl<WebRtcSession>;
+    using SrtServer = hv::UdpServerEventLoopTmpl2<SRT::SrtSession>;
     using RtmpServer = hv::TcpServerEventLoopTmpl<RtmpSession>;
     using RtspServer = hv::TcpServerEventLoopTmpl<RtspSession>;
     using ShellServer = hv::TcpServerEventLoopTmpl<ShellSession>;
+
     std::shared_ptr<RtcServer> newRtcServer(int port);
     std::shared_ptr<RtcTcpServer> newRtcTcpServer(int port);
+    std::shared_ptr<SrtServer> newSrtServer(int port);
     std::shared_ptr<RtmpServer> newRtmpServer(int port);
     std::shared_ptr<RtspServer> newRtspServer(int port);
     std::shared_ptr<ShellServer> newShellServer(int port);
 private:
     std::shared_ptr<RtcServer> _udpRtc;
     std::shared_ptr<RtcTcpServer> _tcpRtc;
+    std::shared_ptr<SrtServer> _udpSrt;
     std::shared_ptr<RtmpServer> _rtmp;
     std::shared_ptr<RtspServer> _rtsp;
 

@@ -1,18 +1,20 @@
-﻿#include "PacketSendQueue.hpp"
+﻿#include "Util/logger.h"
+#include "PacketSendQueue.hpp"
 
 namespace SRT {
 
 PacketSendQueue::PacketSendQueue(uint32_t max_size, uint32_t latency,uint32_t flag)
-    : _srt_flag(flag)
-    , _pkt_cap(max_size)
-    , _pkt_latency(latency) {}
+    : _pkt_cap(max_size)
+    , _pkt_latency(latency)
+    , _srt_flag(flag) {}
 
 bool PacketSendQueue::drop(uint32_t num) {
-    decltype(_pkt_cache.begin()) it;
-    for (it = _pkt_cache.begin(); it != _pkt_cache.end(); ++it) {
+    auto it = _pkt_cache.begin();
+    while (it != _pkt_cache.end()) {
         if ((*it)->packet_seq_number == num) {
             break;
         }
+        it++;
     }
     if (it != _pkt_cache.end()) {
         _pkt_cache.erase(_pkt_cache.begin(), it);
@@ -37,11 +39,12 @@ bool PacketSendQueue::TLPKTDrop(){
 
 std::list<DataPacket::Ptr> PacketSendQueue::findPacketBySeq(uint32_t start, uint32_t end) {
     std::list<DataPacket::Ptr> re;
-    decltype(_pkt_cache.begin()) it;
-    for (it = _pkt_cache.begin(); it != _pkt_cache.end(); ++it) {
+    auto it = _pkt_cache.begin();
+    while (it != _pkt_cache.end()) {
         if ((*it)->packet_seq_number == start) {
             break;
         }
+        it++;
     }
 
     if (start == end) {
@@ -51,11 +54,12 @@ std::list<DataPacket::Ptr> PacketSendQueue::findPacketBySeq(uint32_t start, uint
         return re;
     }
 
-    for (; it != _pkt_cache.end(); ++it) {
+    while (it != _pkt_cache.end()) {
         re.push_back(*it);
         if ((*it)->packet_seq_number == end) {
             break;
         }
+        it++;
     }
     return re;
 }

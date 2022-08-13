@@ -1,5 +1,5 @@
 ﻿#include "HSExt.hpp"
-
+using namespace toolkit;
 namespace SRT {
 
 bool HSExtMessage::loadFromData(uint8_t *buf, size_t len) {

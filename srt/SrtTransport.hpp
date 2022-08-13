@@ -7,8 +7,7 @@
 #include <mutex>
 
 #include "Session.h"
-
-
+#include "Util/TimeTicker.h"
 #include "Common.hpp"
 #include "NackContext.hpp"
 #include "Packet.hpp"
@@ -16,8 +15,6 @@
 #include "PacketSendQueue.hpp"
 #include "Statistic.hpp"
 namespace SRT {
-
-using namespace toolkit;
 
 extern const std::string kPort;
 extern const std::string kTimeOutSec;
@@ -29,11 +26,12 @@ public:
     friend class SrtSession;
     using Ptr = std::shared_ptr<SrtTransport>;
 
-    SrtTransport(const EventPoller::Ptr &poller);
+    SrtTransport(const toolkit::EventPollerPtr &poller);
     virtual ~SrtTransport();
-    const EventPoller::Ptr &getPoller() const;
-    void setSession(Session::Ptr session);
-    const Session::Ptr &getSession() const;
+
+    const toolkit::EventPollerPtr &getPoller() const;
+    void setSession(toolkit::SessionPtr session);
+    const toolkit::SessionPtr &getSession() const;
 
     /**
      * socket收到udp数据
@@ -42,7 +40,7 @@ public:
      * @param addr 数据来源地址
      */
     virtual void inputSockData(uint8_t *buf, int len, struct sockaddr_storage *addr);
-    virtual void onSendTSData(const Buffer::Ptr &buffer, bool flush);
+    virtual void onSendTSData(const toolkit::Buffer::Ptr &buffer, bool flush);
 
     std::string getIdentifier();
     void unregisterSelf();
@@ -51,11 +49,11 @@ public:
 protected:
     virtual bool isPusher() { return true; };
     virtual void onSRTData(DataPacket::Ptr pkt) {};
-    virtual void onShutdown(const SockException &ex);
+    virtual void onShutdown(const toolkit::SockException &ex);
     virtual void onHandShakeFinished(std::string &streamid, struct sockaddr_storage *addr) {
         _is_handleshake_finished = true;
     };
-    virtual void sendPacket(Buffer::Ptr pkt, bool flush = true);
+    virtual void sendPacket(toolkit::Buffer::Ptr pkt, bool flush = true);
     virtual int getLatencyMul() { return 4; };
     virtual int getPktBufSize() { return 8192; };
     virtual float getTimeOutSec(){return 5.0;};
@@ -100,11 +98,11 @@ protected:
 
 private:
     // 当前选中的udp链接
-    Session::Ptr _selected_session;
+    toolkit::SessionPtr _selected_session;
     // 链接迁移前后使用过的udp链接
-    std::unordered_map<Session *, std::weak_ptr<Session>> _history_sessions;
+    std::unordered_map<toolkit::Session *, std::weak_ptr<toolkit::Session>> _history_sessions;
 
-    EventPoller::Ptr _poller;
+    toolkit::EventPollerPtr _poller;
 
     uint32_t _peer_socket_id;
     uint32_t _socket_id = 0;
@@ -138,24 +136,24 @@ private:
     uint32_t _last_pkt_seq = 0;
     UTicker _ack_ticker;
     std::map<uint32_t, TimePoint> _ack_send_timestamp;
-
+    
     std::shared_ptr<PacketRecvRateContext> _pkt_recv_rate_context;
     std::shared_ptr<EstimatedLinkCapacityContext> _estimated_link_capacity_context;
     //std::shared_ptr<RecvRateContext> _recv_rate_context;
 
     UTicker _nak_ticker;
 
-    // 保持发送的握手消息，防止丢失重发
+    //保存发送的握手消息，防止丢失重发
     HandshakePacket::Ptr _handleshake_res;
 
-    Timer::Ptr _handleshake_timer;
+    std::shared_ptr<toolkit::Timer> _handleshake_timer;
 
     //ResourcePool<BufferRaw> _packet_pool;
 
     //检测超时的定时器
-    Timer::Ptr _timer;
+    std::shared_ptr<toolkit::Timer> _timer;
     //刷新计时器
-    Ticker _alive_ticker;
+    toolkit::Ticker _alive_ticker;
 
     bool _is_handleshake_finished = false;
 };

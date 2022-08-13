@@ -1,4 +1,5 @@
-﻿#include "NackContext.hpp"
+﻿#include "Util/logger.h"
+#include "NackContext.hpp"
 
 namespace SRT {
 void NackContext::update(TimePoint now, std::list<PacketQueue::LostPair> &lostlist) {

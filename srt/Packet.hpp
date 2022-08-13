@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <vector>
-
+#include <list>
 #include "Buffer.hpp"
 #include "Util/logger.h"
 
@@ -12,7 +12,6 @@
 
 namespace SRT {
 
-using namespace toolkit;
 
 static const size_t HDR_SIZE = 16; // packet header size = SRT_PH_E_SIZE * sizeof(uint32_t)
 
@@ -43,10 +42,12 @@ static const size_t SRT_MAX_PAYLOAD_SIZE = ETH_MAX_MTU_SIZE - SRT_DATA_HDR_SIZE;
 +                              Data                             +
 |                                                               |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            Figure 3: Data packet structure
-            reference https://haivision.github.io/srt-rfc/draft-sharabayko-srt.html#name-packet-structure
+    Figure 3: Data packet structure
+    reference https://haivision.github.io/srt-rfc/draft-sharabayko-srt.html#name-packet-structure
 */
-class DataPacket : public Buffer {
+
+#define SRT_HEADER_SIZE 16
+class DataPacket : public toolkit::Buffer {
 public:
     using Ptr = std::shared_ptr<DataPacket>;
     DataPacket() = default;
@@ -77,7 +78,7 @@ public:
     uint32_t dst_socket_id;
 
 private:
-    BufferRaw::Ptr _data;
+    toolkit::BufferRaw::Ptr _data;
 };
 /*
  0                   1                   2                   3
@@ -95,10 +96,10 @@ private:
 +                   Control Information Field                   +
 |                                                               |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            Figure 4: Control packet structure
-             reference https://haivision.github.io/srt-rfc/draft-sharabayko-srt.html#name-control-packets
+    Figure 4: Control packet structure
+    reference https://haivision.github.io/srt-rfc/draft-sharabayko-srt.html#name-control-packets
 */
-class ControlPacket : public Buffer {
+class ControlPacket : public toolkit::Buffer {
 public:
     using Ptr = std::shared_ptr<ControlPacket>;
     static const size_t HEADER_SIZE = 16;
@@ -108,15 +109,28 @@ public:
 
     ControlPacket() = default;
     virtual ~ControlPacket() = default;
-    virtual bool loadFromData(uint8_t *buf, size_t len) = 0;
+    virtual bool loadFromData(uint8_t *buf, size_t len);
     virtual bool storeToData() = 0;
 
     bool loadHeader();
     bool storeToHeader();
-
+    bool storeHeader(uint16_t type, uint16_t subType = 0, int payload_size = 0);
     ///////Buffer override///////
     char *data() const override;
     size_t size() const override;
+
+    uint8_t *payloadData() {
+        if (!_data)
+            return nullptr;
+        return (uint8_t*)_data->data() + HEADER_SIZE;
+    }
+
+    size_t payloadSize() const {
+        if (!_data) {
+            return 0;
+        }
+        return _data->size() - HEADER_SIZE;
+    }
 
     enum {
         HANDSHAKE = 0x0000,
@@ -131,15 +145,15 @@ public:
         USERDEFINEDTYPE = 0x7FFF
     };
 
-    uint16_t sub_type;
-    uint16_t control_type;
     uint8_t f;
+    uint16_t control_type;
+    uint16_t sub_type;
     uint8_t type_specific_info[4];
     uint32_t timestamp;
     uint32_t dst_socket_id;
 
 protected:
-    BufferRaw::Ptr _data;
+    toolkit::BufferRaw::Ptr _data;
 };
 
 /**
@@ -183,6 +197,7 @@ class HandshakePacket : public ControlPacket {
 public:
     using Ptr = std::shared_ptr<HandshakePacket>;
     enum { NO_ENCRYPTION = 0, AES_128 = 1, AES_196 = 2, AES_256 = 3 };
+    // 不带Extension的payload长度
     static const size_t HS_CONTENT_MIN_SIZE = 48;
     enum {
         HS_TYPE_DONE = 0xFFFFFFFD,
@@ -207,6 +222,19 @@ public:
     ///////ControlPacket override///////
     bool loadFromData(uint8_t *buf, size_t len) override;
     bool storeToData() override;
+
+    uint8_t *extenseData() {
+        if (!_data)
+            return nullptr;
+        return (uint8_t*)_data->data() + HEADER_SIZE + HS_CONTENT_MIN_SIZE;
+    }
+
+    size_t extenseSize() const {
+        if (!_data) {
+            return 0;
+        }
+        return _data->size() - HEADER_SIZE - HS_CONTENT_MIN_SIZE;
+    }
 
     uint32_t version;
     uint16_t encryption_field;
@@ -247,8 +275,9 @@ public:
     KeepLivePacket() = default;
     ~KeepLivePacket() = default;
     ///////ControlPacket override///////
-    bool loadFromData(uint8_t *buf, size_t len) override;
-    bool storeToData() override;
+    bool storeToData() override {
+        return storeHeader(KEEPALIVE);
+    }
 };
 
 /*
@@ -346,23 +375,8 @@ public:
     ~ShutDownPacket() = default;
 
     ///////ControlPacket override///////
-    bool loadFromData(uint8_t *buf, size_t len) override {
-        if (len < HEADER_SIZE) {
-            WarnL << "data size" << len << " less " << HEADER_SIZE;
-            return false;
-        }
-        _data = BufferRaw::create();
-        _data->assign((char *)buf, len);
-
-        return loadHeader();
-    }
     bool storeToData() override {
-        control_type = ControlPacket::SHUTDOWN;
-        sub_type = 0;
-        _data = BufferRaw::create();
-        _data->setCapacity(HEADER_SIZE);
-        _data->setSize(HEADER_SIZE);
-        return storeToHeader();
+        return storeHeader(SHUTDOWN);
     }
 };
 

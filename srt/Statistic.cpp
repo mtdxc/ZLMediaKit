@@ -1,7 +1,7 @@
 ﻿#include <algorithm>
 #include <math.h>
 #include "Statistic.hpp"
-
+#include <sstream>
 namespace SRT {
 
 PacketRecvRateContext::PacketRecvRateContext(TimePoint start)
@@ -76,7 +76,7 @@ uint32_t PacketRecvRateContext::getPacketRecvRate(uint32_t &bytesps) {
 }
 
 std::string PacketRecvRateContext::dump(){
-    _StrPrinter printer;
+    std::ostringstream printer;
     printer <<"dur array : ";
     for (size_t i = 0; i < SIZE; i++)
     {
@@ -91,7 +91,7 @@ std::string PacketRecvRateContext::dump(){
     }
     printer <<"\r\n";
 
-    return std::move(printer);
+    return printer.str();
 }
 EstimatedLinkCapacityContext::EstimatedLinkCapacityContext(TimePoint start) : _start(start) {
     for (size_t i = 0; i < SIZE; i++) {

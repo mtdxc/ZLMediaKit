@@ -1,48 +1,46 @@
 ﻿#ifndef ZLMEDIAKIT_SRT_TRANSPORT_IMP_H
 #define ZLMEDIAKIT_SRT_TRANSPORT_IMP_H
-
+#include "Common/Stamp.h"
 #include "Common/MultiMediaSourceMuxer.h"
-#include "Rtp/Decoder.h"
+#include "TS/Decoder.h"
 #include "SrtTransport.hpp"
 #include "TS/TSMediaSource.h"
+#include <deque>
 #include <mutex>
 
 namespace SRT {
-
-using namespace std;
-using namespace toolkit;
 using namespace mediakit;
 class SrtTransportImp
     : public SrtTransport
-    , public toolkit::SockInfo
+    //, public toolkit::SockInfo
     , public MediaSinkInterface
-    , public mediakit::MediaSourceEvent {
+    , public MediaSourceEvent {
 public:
-    SrtTransportImp(const EventPoller::Ptr &poller);
+    SrtTransportImp(const toolkit::EventPollerPtr &poller);
     ~SrtTransportImp();
 
     void inputSockData(uint8_t *buf, int len, struct sockaddr_storage *addr) override {
         SrtTransport::inputSockData(buf, len, addr);
         _total_bytes += len;
     }
-    void onSendTSData(const Buffer::Ptr &buffer, bool flush) override { SrtTransport::onSendTSData(buffer, flush); }
-    /// SockInfo override
+    void onSendTSData(const toolkit::Buffer::Ptr &buffer, bool flush) override { SrtTransport::onSendTSData(buffer, flush); }
+    /* SockInfo override
     std::string get_local_ip() override;
     uint16_t get_local_port() override;
     std::string get_peer_ip() override;
     uint16_t get_peer_port() override;
-    std::string getIdentifier() const override;
-
+    */
+    std::string getIdentifier() const;
 protected:
     ///////SrtTransport override///////
     int getLatencyMul() override;
     int getPktBufSize() override;
     float getTimeOutSec() override;
     void onSRTData(DataPacket::Ptr pkt) override;
-    void onShutdown(const SockException &ex) override;
+    void onShutdown(const toolkit::SockException &ex) override;
     void onHandShakeFinished(std::string &streamid, struct sockaddr_storage *addr) override;
 
-    void sendPacket(Buffer::Ptr pkt, bool flush = true) override {
+    void sendPacket(toolkit::Buffer::Ptr pkt, bool flush = true) override {
         _total_bytes += pkt->size();
         SrtTransport::sendPacket(pkt, flush);
     }
@@ -51,13 +49,13 @@ protected:
 
     ///////MediaSourceEvent override///////
     // 关闭
-    bool close(mediakit::MediaSource &sender) override;
+    bool close(MediaSource &sender) override;
     // 获取媒体源类型
-    mediakit::MediaOriginType getOriginType(mediakit::MediaSource &sender) const override;
+    MediaOriginType getOriginType(MediaSource &sender) const override;
     // 获取媒体源url或者文件路径
-    std::string getOriginUrl(mediakit::MediaSource &sender) const override;
+    std::string getOriginUrl(MediaSource &sender) const override;
     // 获取媒体源客户端相关信息
-    std::shared_ptr<SockInfo> getOriginSock(mediakit::MediaSource &sender) const override;
+    std::shared_ptr<toolkit::SockInfo> getOriginSock(MediaSource &sender) const override;
 
     ///////MediaSinkInterface override///////
     void resetTracks() override {};
@@ -77,7 +75,7 @@ private:
     bool _is_pusher = true;
     MediaInfo _media_info;
     uint64_t _total_bytes = 0;
-    Ticker _alive_ticker;
+    toolkit::Ticker _alive_ticker;
     std::unique_ptr<sockaddr_storage> _addr;
     // for player
     TSMediaSource::RingType::RingReader::Ptr _ts_reader;
