@@ -13,8 +13,8 @@
 
 #include <stdint.h>
 #include <map>
+#include <string>
 #include <functional>
-#include "Util/TimeTicker.h"
 
 namespace mediakit {
 

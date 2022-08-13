@@ -50,7 +50,7 @@ option(ENABLE_SERVER "Enable Server" OFF)
 option(ENABLE_SERVER_LIB "Enable server as android static library" OFF)
 option(ENABLE_SRT "Enable SRT" OFF)
 option(ENABLE_TESTS "Enable Tests" OFF)
-option(ENABLE_WEBRTC "Enable WebRTC" OFF)
+option(ENABLE_WEBRTC "Enable WebRTC" ON)
 option(ENABLE_X264 "Enable x264" OFF)
 option(ENABLE_WEPOLL "Enable wepoll" ON)
 

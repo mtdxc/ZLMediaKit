@@ -18,10 +18,11 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #define MS_CLASS "RTC::IceServer"
 // #define MS_LOG_DEV_LEVEL 3
-
+#include "Util/logger.h"
 #include <utility>
 #include "IceServer.hpp"
-
+#include "StunPacket.hpp"
+#include "hplatform.h"
 namespace RTC
 {
 	/* Static. */

@@ -19,21 +19,23 @@ class WebRtcEchoTest : public WebRtcTransportImp {
 public:
     using Ptr = std::shared_ptr<WebRtcEchoTest>;
     ~WebRtcEchoTest() override = default;
-    static Ptr create(const EventPoller::Ptr &poller);
+    static Ptr create(const toolkit::EventPollerPtr &poller);
 
 protected:
     ///////WebRtcTransportImp override///////
     void onRtcConfigure(RtcConfigure &configure) const override;
     void onCheckSdp(SdpType type, RtcSession &sdp) override;
+    // loopback data in raw receive
     void onRtp(const char *buf, size_t len, uint64_t stamp_ms) override;
     void onRtcp(const char *buf, size_t len) override;
 
     void onRecvRtp(MediaTrack &track, const std::string &rid, RtpPacket::Ptr rtp) override {};
+    // rewrite this to fixed ctx nullptr
     void onBeforeEncryptRtp(const char *buf, int &len, void *ctx) override {};
     void onBeforeEncryptRtcp(const char *buf, int &len, void *ctx) override {};
 
 private:
-    WebRtcEchoTest(const EventPoller::Ptr &poller);
+    WebRtcEchoTest(const toolkit::EventPollerPtr &poller);
 };
 
 }// namespace mediakit

@@ -9,8 +9,10 @@
  */
 
 #include "WebRtcSession.h"
-#include "Util/util.h"
-#include "Network/TcpServer.h"
+#include "WebRtcServer.h"
+#include "StunPacket.hpp"
+#include "Common/config.h"
+#include "WebRtcTransport.h"
 #include "IceServer.hpp"
 #include "WebRtcTransport.h"
 
@@ -18,7 +20,7 @@ using namespace toolkit;
 
 namespace mediakit {
 
-static std::string getUserName(const char *buf, size_t len) {
+std::string WebRtcSession::getUserName(void* buf, int len) {
     if (!RTC::StunPacket::IsStun((const uint8_t *) buf, len)) {
         return "";
     }
@@ -31,73 +33,56 @@ static std::string getUserName(const char *buf, size_t len) {
         return "";
     }
     //收到binding request请求
-    auto vec = split(packet->GetUsername(), ":");
+    auto vec = hv::split(packet->GetUsername(), ':');
     return vec[0];
 }
 
-EventPoller::Ptr WebRtcSession::queryPoller(const Buffer::Ptr &buffer) {
-    auto user_name = getUserName(buffer->data(), buffer->size());
-    if (user_name.empty()) {
-        return nullptr;
-    }
-    auto ret = WebRtcTransportManager::Instance().getItem(user_name);
-    return ret ? ret->getPoller() : nullptr;
+WebRtcSession::WebRtcSession(hio_t* io) : Session(io)
+{
+    auto addr = hio_peeraddr(io);
+    memcpy(&_peer_addr, addr, SOCKADDR_LEN(addr));
+    _over_tcp = hio_type(io) == HIO_TYPE_TCP;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-
-WebRtcSession::WebRtcSession(const Socket::Ptr &sock) : Session(sock) {
-    socklen_t addr_len = sizeof(_peer_addr);
-    getpeername(sock->rawFD(), (struct sockaddr *)&_peer_addr, &addr_len);
-    _over_tcp = sock->sockType() == SockNum::Sock_TCP;
-}
 
 WebRtcSession::~WebRtcSession() {
     InfoP(this);
 }
-
-void WebRtcSession::attachServer(const Server &server) {
-    _server = std::dynamic_pointer_cast<toolkit::TcpServer>(const_cast<Server &>(server).shared_from_this());
-}
-
 void WebRtcSession::onRecv_l(const char *data, size_t len) {
     if (_find_transport) {
-        // 只允许寻找一次transport
-        _find_transport = false;
-        auto user_name = getUserName(data, len);
-        auto transport = WebRtcTransportManager::Instance().getItem(user_name);
+        auto user_name = getUserName((void*)data, len);
+        _identifier = std::to_string(fd()) + '-' + user_name;
+        auto transport = WebRtcServer::Instance().getItem(user_name);
         CHECK(transport);
-
-        //WebRtcTransport在其他poller线程上，需要切换poller线程并重新创建WebRtcSession对象
-        if (!transport->getPoller()->isCurrentThread()) {
-            auto sock = Socket::createSocket(transport->getPoller());
-            sock->cloneFromPeerSocket(*(getSock()));
-            auto server = _server;
+        if (!transport->getPoller()->isInLoopThread()) {
+            hio_del(io_);
+            hio_detach(io_);
+            InfoP(this) << "transfer to loop " << transport->getPoller()->tid();
             std::string str(data, len);
-            sock->getPoller()->async([sock, server, str](){
-                auto strong_server = server.lock();
-                if (strong_server) {
-                    auto session = std::static_pointer_cast<WebRtcSession>(strong_server->createSession(sock));
-                    session->onRecv_l(str.data(), str.size());
-                }
+            transport->getPoller()->async([this, str]() {
+                hio_attach(hv::tlsEventLoop()->loop(), io_);
+                this->startRead();
+                this->onRecv_l(str.data(), str.size());
             });
-            throw std::runtime_error("webrtc over tcp change poller: " + getPoller()->getThreadName() + " -> " + sock->getPoller()->getThreadName());
+            return ;
         }
-
         transport->setSession(shared_from_this());
         _transport = std::move(transport);
-        InfoP(this);
+        // 只允许寻找一次transport
+        _find_transport = false;
+        //InfoP(this);
     }
     _ticker.resetTime();
     CHECK(_transport);
-    _transport->inputSockData((char *)data, len, (struct sockaddr *)&_peer_addr);
+    _transport->inputSockData((char *)data, len, (struct sockaddr*)&_peer_addr);
 }
 
-void WebRtcSession::onRecv(const Buffer::Ptr &buffer) {
+void WebRtcSession::onRecv(hv::Buffer* buffer) {
+    const char* data = (const char*)buffer->data();
     if (_over_tcp) {
-        input(buffer->data(), buffer->size());
+        input(data, buffer->size());
     } else {
-        onRecv_l(buffer->data(), buffer->size());
+        onRecv_l(data, buffer->size());
     }
 }
 

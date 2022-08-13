@@ -13,8 +13,8 @@
 #define ZLMEDIAKIT_WEBRTCSESSION_H
 
 #include "Session.h"
-#include "Http/HttpRequestSplitter.h"
-using namespace toolkit;
+#include "Util/TimeTicker.h"
+#include "Util/HttpRequestSplitter.h"
 
 namespace toolkit {
     class TcpServer;
@@ -22,31 +22,33 @@ namespace toolkit {
 
 namespace mediakit {
 class WebRtcTransportImp;
-class WebRtcSession : public Session, public HttpRequestSplitter {
+class WebRtcSession : public toolkit::Session, public HttpRequestSplitter {
 public:
-    WebRtcSession(const Socket::Ptr &sock);
+    WebRtcSession(hio_t* io);
     ~WebRtcSession() override;
 
-    void attachServer(const Server &server) override;
-    void onRecv(const Buffer::Ptr &) override;
-    void onError(const SockException &err) override;
-    void onManager() override;
-    static EventPoller::Ptr queryPoller(const Buffer::Ptr &buffer);
-
+    //void attachServer(const Server &server) override;
+    void onRecv(hv::Buffer* buf);
+    void onError(const toolkit::SockException &err);
+    void onManager();
+    std::string getIdentifier() const {
+        return _identifier;
+    }
+    static std::string getUserName(void* buf, int len);
 private:
     //// HttpRequestSplitter override ////
     ssize_t onRecvHeader(const char *data, size_t len) override;
     const char *onSearchPacketTail(const char *data, size_t len) override;
 
     void onRecv_l(const char *data, size_t len);
-
 private:
     bool _over_tcp = false;
     bool _find_transport = true;
-    Ticker _ticker;
+    toolkit::Ticker _ticker;
     struct sockaddr_storage _peer_addr;
     std::weak_ptr<toolkit::TcpServer> _server;
     std::shared_ptr<WebRtcTransportImp> _transport;
+    std::string _identifier;
 };
 
 }// namespace mediakit

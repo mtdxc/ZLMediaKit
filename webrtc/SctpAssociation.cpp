@@ -8,12 +8,11 @@
 #include <stdarg.h>
 #include <cstdlib> // std::malloc(), std::free()
 #include <cstring> // std::memset(), std::memcpy()
+#include <stdarg.h>
 #include <string>
 #include <memory>
 #include <Util/util.h>
-
-using namespace std;
-using namespace toolkit;
+#include "Utils.hpp"
 
 /* Static. */
 static constexpr size_t SctpMtu{ 1200 };
@@ -36,20 +35,18 @@ static constexpr uint16_t EventTypes[] =
 /* clang-format on */
 /* Static methods for usrsctp callbacks. */
 inline static int onRecvSctpData(
-  struct socket* /*sock*/,
-  union sctp_sockstore /*addr*/,
-  void* data,
-  size_t len,
-  struct sctp_rcvinfo rcv,
-  int flags,
-  void* ulpInfo)
+	struct socket* /*sock*/,
+	union sctp_sockstore /*addr*/,
+	void* data,
+	size_t len,
+	struct sctp_rcvinfo rcv,
+	int flags,
+	void* ulpInfo)
 {
 	auto* sctpAssociation = static_cast<RTC::SctpAssociation*>(ulpInfo);
-
 	if (sctpAssociation == nullptr)
 	{
 		std::free(data);
-
 		return 0;
 	}
 
@@ -64,104 +61,94 @@ inline static int onRecvSctpData(
 		uint32_t ppid     = ntohl(rcv.rcv_ppid);
 		uint16_t ssn      = rcv.rcv_ssn;
 
-		MS_DEBUG_TAG(
-		  sctp,
-		  "data chunk received [length:%zu, streamId:%" PRIu16 ", SSN:%" PRIu16 ", TSN:%" PRIu32
-		  ", PPID:%" PRIu32 ", context:%" PRIu32 ", flags:%d]",
-		  len,
-		  rcv.rcv_sid,
-		  rcv.rcv_ssn,
-		  rcv.rcv_tsn,
-		  ntohl(rcv.rcv_ppid),
-		  rcv.rcv_context,
-		  flags);
+		MS_DEBUG_TAG(sctp,
+			"data chunk received [length:%zu, streamId:%" PRIu16 ", SSN:%" PRIu16 ", TSN:%" PRIu32
+			", PPID:%" PRIu32 ", context:%" PRIu32 ", flags:%d]",
+			len,
+			rcv.rcv_sid,
+			rcv.rcv_ssn,
+			rcv.rcv_tsn,
+			ntohl(rcv.rcv_ppid),
+			rcv.rcv_context,
+			flags);
 
 		sctpAssociation->OnUsrSctpReceiveSctpData(
-		  streamId, ssn, ppid, flags, static_cast<uint8_t*>(data), len);
+			streamId, ssn, ppid, flags, static_cast<uint8_t*>(data), len);
 	}
 
 	std::free(data);
-
 	return 1;
 }
 
 /* Static methods for usrsctp global callbacks. */
 inline static int onSendSctpData(void *addr, void *data, size_t len, uint8_t /*tos*/, uint8_t /*setDf*/) {
-    auto* sctpAssociation = static_cast<RTC::SctpAssociation*>(addr);
+	auto* sctpAssociation = static_cast<RTC::SctpAssociation*>(addr);
+	if (sctpAssociation == nullptr)
+		return -1;
 
-    if (sctpAssociation == nullptr)
-        return -1;
-
-    sctpAssociation->OnUsrSctpSendSctpData(data, len);
-
-    // NOTE: Must not free data, usrsctp lib does it.
-
-    return 0;
+	sctpAssociation->OnUsrSctpSendSctpData(data, len);
+	// NOTE: Must not free data, usrsctp lib does it.
+	return 0;
 }
 
 // Static method for printing usrsctp debug.
 inline static void sctpDebug(const char *format, ...) {
-    va_list ap;
-    va_start(ap, format);
-    LoggerWrapper::printLogV(getLogger(), LTrace, __FILE__, __FUNCTION__, __LINE__, format, ap);
-    va_end(ap);
+	va_list ap;
+	va_start(ap, format);
+	//toolkit::LoggerWrapper::printLogV(toolkit::getLogger(), toolkit::LTrace, __FILE__, __FUNCTION__, __LINE__, format, ap);
+	va_end(ap);
 }
 
 namespace RTC
 {
-    class SctpEnv : public enable_shared_from_this<SctpEnv> {
-    public:
-        ~SctpEnv();
-        static SctpEnv &Instance();
+	class SctpEnv : public std::enable_shared_from_this<SctpEnv> {
+	public:
+		~SctpEnv();
+		static SctpEnv &Instance();
 
-    private:
-        SctpEnv();
-    };
+	private:
+		SctpEnv();
+	};
 
-    INSTANCE_IMP(SctpEnv)
+	INSTANCE_IMP(SctpEnv)
 
-    SctpEnv::SctpEnv() {
-        usrsctp_init(0, onSendSctpData, sctpDebug);
-        // Disable explicit congestion notifications (ecn).
-        usrsctp_sysctl_set_sctp_ecn_enable(0);
+	SctpEnv::SctpEnv() {
+		usrsctp_init(0, onSendSctpData, sctpDebug);
+		// Disable explicit congestion notifications (ecn).
+		usrsctp_sysctl_set_sctp_ecn_enable(0);
 
-    #ifdef SCTP_DEBUG
-        usrsctp_sysctl_set_sctp_debug_on(SCTP_DEBUG_ALL);
-    #endif
-    }
+	#ifdef SCTP_DEBUG
+		usrsctp_sysctl_set_sctp_debug_on(SCTP_DEBUG_ALL);
+	#endif
+	}
 
-    SctpEnv::~SctpEnv() {
-        usrsctp_finish();
-    }
+	SctpEnv::~SctpEnv() {
+		usrsctp_finish();
+	}
 
-    ////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////
 
 	/* Instance methods. */
 
 	SctpAssociation::SctpAssociation(
-	  Listener* listener, uint16_t os, uint16_t mis, size_t maxSctpMessageSize, bool isDataChannel)
-	  : listener(listener), os(os), mis(mis), maxSctpMessageSize(maxSctpMessageSize),
-	    isDataChannel(isDataChannel)
+		Listener* listener, uint16_t os, uint16_t mis, size_t maxSize, bool isDataChannel)
+		: listener(listener), os(os), mis(mis), maxSctpMessageSize(maxSize), isDataChannel(isDataChannel)
 	{
 		MS_TRACE();
-        _env = SctpEnv::Instance().shared_from_this();
+		_env = SctpEnv::Instance().shared_from_this();
 
 		// Register ourselves in usrsctp.
 		usrsctp_register_address(static_cast<void*>(this));
 
-		int ret;
-
-		this->socket = usrsctp_socket(
-		  AF_CONN, SOCK_STREAM, IPPROTO_SCTP, onRecvSctpData, nullptr, 0, static_cast<void*>(this));
-
+		this->socket = usrsctp_socket(AF_CONN, SOCK_STREAM, IPPROTO_SCTP, 
+			onRecvSctpData, nullptr, 0, static_cast<void*>(this));
 		if (this->socket == nullptr)
 			MS_THROW_ERROR("usrsctp_socket() failed: %s", std::strerror(errno));
 
 		usrsctp_set_ulpinfo(this->socket, static_cast<void*>(this));
 
 		// Make the socket non-blocking.
-		ret = usrsctp_set_non_blocking(this->socket, 1);
-
+		int ret = usrsctp_set_non_blocking(this->socket, 1);
 		if (ret < 0)
 			MS_THROW_ERROR("usrsctp_set_non_blocking() failed: %s", std::strerror(errno));
 
@@ -170,23 +157,16 @@ namespace RTC
 		// prevents usrsctp from calling the global send callback with references to
 		// this class as the address.
 		struct linger lingerOpt; // NOLINT(cppcoreguidelines-pro-type-member-init)
-
 		lingerOpt.l_onoff  = 1;
 		lingerOpt.l_linger = 0;
-
 		ret = usrsctp_setsockopt(this->socket, SOL_SOCKET, SO_LINGER, &lingerOpt, sizeof(lingerOpt));
-
 		if (ret < 0)
 			MS_THROW_ERROR("usrsctp_setsockopt(SO_LINGER) failed: %s", std::strerror(errno));
 
 		// Set SCTP_ENABLE_STREAM_RESET.
 		struct sctp_assoc_value av; // NOLINT(cppcoreguidelines-pro-type-member-init)
-
-		av.assoc_value =
-		  SCTP_ENABLE_RESET_STREAM_REQ | SCTP_ENABLE_RESET_ASSOC_REQ | SCTP_ENABLE_CHANGE_ASSOC_REQ;
-
+		av.assoc_value = SCTP_ENABLE_RESET_STREAM_REQ | SCTP_ENABLE_RESET_ASSOC_REQ | SCTP_ENABLE_CHANGE_ASSOC_REQ;
 		ret = usrsctp_setsockopt(this->socket, IPPROTO_SCTP, SCTP_ENABLE_STREAM_RESET, &av, sizeof(av));
-
 		if (ret < 0)
 		{
 			MS_THROW_ERROR("usrsctp_setsockopt(SCTP_ENABLE_STREAM_RESET) failed: %s", std::strerror(errno));
@@ -194,15 +174,12 @@ namespace RTC
 
 		// Set SCTP_NODELAY.
 		uint32_t noDelay = 1;
-
 		ret = usrsctp_setsockopt(this->socket, IPPROTO_SCTP, SCTP_NODELAY, &noDelay, sizeof(noDelay));
-
 		if (ret < 0)
 			MS_THROW_ERROR("usrsctp_setsockopt(SCTP_NODELAY) failed: %s", std::strerror(errno));
 
 		// Enable events.
 		struct sctp_event event; // NOLINT(cppcoreguidelines-pro-type-member-init)
-
 		std::memset(&event, 0, sizeof(event));
 		event.se_on = 1;
 
@@ -211,36 +188,31 @@ namespace RTC
 			event.se_type = EventTypes[i];
 
 			ret = usrsctp_setsockopt(this->socket, IPPROTO_SCTP, SCTP_EVENT, &event, sizeof(event));
-
 			if (ret < 0)
 				MS_THROW_ERROR("usrsctp_setsockopt(SCTP_EVENT) failed: %s", std::strerror(errno));
 		}
 
 		// Init message.
 		struct sctp_initmsg initmsg; // NOLINT(cppcoreguidelines-pro-type-member-init)
-
 		std::memset(&initmsg, 0, sizeof(initmsg));
 		initmsg.sinit_num_ostreams  = this->os;
 		initmsg.sinit_max_instreams = this->mis;
-
 		ret = usrsctp_setsockopt(this->socket, IPPROTO_SCTP, SCTP_INITMSG, &initmsg, sizeof(initmsg));
-
 		if (ret < 0)
 			MS_THROW_ERROR("usrsctp_setsockopt(SCTP_INITMSG) failed: %s", std::strerror(errno));
 
 		// Server side.
 		struct sockaddr_conn sconn; // NOLINT(cppcoreguidelines-pro-type-member-init)
-
 		std::memset(&sconn, 0, sizeof(sconn));
 		sconn.sconn_family = AF_CONN;
+		// always use port 5000
 		sconn.sconn_port   = htons(5000);
 		sconn.sconn_addr   = static_cast<void*>(this);
 #ifdef HAVE_SCONN_LEN
-        sconn.sconn_len = sizeof(sconn);
+		sconn.sconn_len = sizeof(sconn);
 #endif
 
 		ret = usrsctp_bind(this->socket, reinterpret_cast<struct sockaddr*>(&sconn), sizeof(sconn));
-
 		if (ret < 0)
 			MS_THROW_ERROR("usrsctp_bind() failed: %s", std::strerror(errno));
 	}
@@ -268,9 +240,7 @@ namespace RTC
 
 		try
 		{
-			int ret;
 			struct sockaddr_conn rconn; // NOLINT(cppcoreguidelines-pro-type-member-init)
-
 			std::memset(&rconn, 0, sizeof(rconn));
 			rconn.sconn_family = AF_CONN;
 			rconn.sconn_port   = htons(5000);
@@ -279,8 +249,7 @@ namespace RTC
 			rconn.sconn_len = sizeof(rconn);
 #endif
 
-			ret = usrsctp_connect(this->socket, reinterpret_cast<struct sockaddr*>(&rconn), sizeof(rconn));
-
+			int ret = usrsctp_connect(this->socket, reinterpret_cast<struct sockaddr*>(&rconn), sizeof(rconn));
 			if (ret < 0 && errno != EINPROGRESS)
 				MS_THROW_ERROR("usrsctp_connect() failed: %s", std::strerror(errno));
 
@@ -297,7 +266,6 @@ namespace RTC
 
 			ret = usrsctp_setsockopt(
 			  this->socket, IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS, &peerAddrParams, sizeof(peerAddrParams));
-
 			if (ret < 0)
 				MS_THROW_ERROR("usrsctp_setsockopt(SCTP_PEER_ADDR_PARAMS) failed: %s", std::strerror(errno));
 
@@ -309,7 +277,7 @@ namespace RTC
 		{
 			this->state = SctpState::FAILED;
 			this->listener->OnSctpAssociationFailed(this);
-            throw;
+			throw;
 		}
 	}
 
@@ -325,16 +293,14 @@ namespace RTC
 	}
 
 	void SctpAssociation::SendSctpMessage(
-        const RTC::SctpStreamParameters &parameters, uint32_t ppid, const uint8_t* msg, size_t len)
+		const RTC::SctpStreamParameters &parameters, uint32_t ppid, const uint8_t* msg, size_t len)
 	{
 		MS_TRACE();
 
 		// This must be controlled by the DataConsumer.
-		MS_ASSERT(
-		  len <= this->maxSctpMessageSize,
-		  "given message exceeds max allowed message size [message size:%zu, max message size:%zu]",
-		  len,
-		  this->maxSctpMessageSize);
+		MS_ASSERT(len <= this->maxSctpMessageSize,
+			"given message exceeds max allowed message size [message size:%zu, max message size:%zu]",
+			len, this->maxSctpMessageSize);
 
 		// Fill stcp_sendv_spa.
 		struct sctp_sendv_spa spa; // NOLINT(cppcoreguidelines-pro-type-member-init)
@@ -369,8 +335,8 @@ namespace RTC
 			}
 		}
 
-		int ret = usrsctp_sendv(
-		  this->socket, msg, len, nullptr, 0, &spa, static_cast<socklen_t>(sizeof(spa)), SCTP_SENDV_SPA, 0);
+		int ret = usrsctp_sendv(this->socket, msg, len, nullptr, 0, 
+			&spa, static_cast<socklen_t>(sizeof(spa)), SCTP_SENDV_SPA, 0);
 
 		if (ret < 0)
 		{
@@ -427,21 +393,18 @@ namespace RTC
 		if (direction == StreamDirection::OUTGOING && streamId > this->os - 1)
 			return;
 
-		int ret;
 		struct sctp_assoc_value av; // NOLINT(cppcoreguidelines-pro-type-member-init)
 		socklen_t len = sizeof(av);
 
 #ifndef SCTP_RECONFIG_SUPPORTED
 #define SCTP_RECONFIG_SUPPORTED         0x00000029
 #endif
-		ret = usrsctp_getsockopt(this->socket, IPPROTO_SCTP, SCTP_RECONFIG_SUPPORTED, &av, &len);
-
+		int ret = usrsctp_getsockopt(this->socket, IPPROTO_SCTP, SCTP_RECONFIG_SUPPORTED, &av, &len);
 		if (ret == 0)
 		{
 			if (av.assoc_value != 1)
 			{
 				MS_DEBUG_TAG(sctp, "stream reconfiguration not negotiated");
-
 				return;
 			}
 		}
@@ -475,7 +438,6 @@ namespace RTC
 		srs->srs_stream_list[0] = streamId; // No need for htonl().
 
 		ret = usrsctp_setsockopt(this->socket, IPPROTO_SCTP, SCTP_RESET_STREAMS, srs, len);
-
 		if (ret == 0)
 		{
 			MS_DEBUG_TAG(sctp, "SCTP_RESET_STREAMS sent [streamId:%" PRIu16 "]", streamId);
@@ -502,7 +464,6 @@ namespace RTC
 		if (additionalOs == 0)
 		{
 			MS_WARN_TAG(sctp, "cannot add more outgoing streams [OS:%" PRIu16 "]", this->os);
-
 			return;
 		}
 
@@ -519,7 +480,6 @@ namespace RTC
 		if (this->state != SctpState::CONNECTED)
 		{
 			MS_DEBUG_TAG(sctp, "SCTP not connected, deferring OS increase");
-
 			return;
 		}
 
@@ -533,7 +493,6 @@ namespace RTC
 
 		int ret = usrsctp_setsockopt(
 		  this->socket, IPPROTO_SCTP, SCTP_ADD_STREAMS, &sas, static_cast<socklen_t>(sizeof(sas)));
-
 		if (ret < 0)
 			MS_WARN_TAG(sctp, "usrsctp_setsockopt(SCTP_ADD_STREAMS) failed: %s", std::strerror(errno));
 	}
@@ -541,13 +500,10 @@ namespace RTC
 	void SctpAssociation::OnUsrSctpSendSctpData(void* buffer, size_t len)
 	{
 		MS_TRACE();
-
 		const uint8_t* data = static_cast<uint8_t*>(buffer);
-
 #if MS_LOG_DEV_LEVEL == 3
 		MS_DUMP_DATA(data, len);
 #endif
-
 		this->listener->OnSctpAssociationSendData(this, data, len);
 	}
 
@@ -558,7 +514,6 @@ namespace RTC
 		if (ppid == 50)
 		{
 			MS_WARN_TAG(sctp, "ignoring SCTP data with ppid:50 (WebRTC DataChannel Control)");
-
 			return;
 		}
 
@@ -597,7 +552,6 @@ namespace RTC
 		if (eor && this->messageBufferLen == 0)
 		{
 			MS_DEBUG_DEV("directly notifying listener [eor:1, buffer len:0]");
-
 			this->listener->OnSctpAssociationMessageReceived(this, streamId, ppid, data, len);
 		}
 		// If end of message and there is buffered data, append data and notify buffer.
@@ -859,7 +813,7 @@ namespace RTC
 				if (notification->sn_strreset_event.strreset_flags & SCTP_STREAM_RESET_OUTGOING_SSN)
 					outgoing = true;
 
-                //todo 打印sctp调试信息
+				//todo 打印sctp调试信息
 				if (false /*MS_HAS_DEBUG_TAG(sctp)*/)
 				{
 					std::string streamIds;
@@ -872,7 +826,6 @@ namespace RTC
 						if (i > 4)
 						{
 							streamIds.append("...");
-
 							break;
 						}
 
@@ -955,52 +908,51 @@ namespace RTC
 		}
 	}
 
-    ////////////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////
 
-    void SctpAssociationImp::OnUsrSctpSendSctpData(void* buffer, size_t len) {
-        if (_poller->isCurrentThread()) {
-            SctpAssociation::OnUsrSctpSendSctpData(buffer, len);
-        } else {
-            weak_ptr<SctpAssociationImp> weak_self = shared_from_this();
-            string copy((const char *)buffer, len);
-            _poller->async([weak_self, copy]() {
-                auto strong_self = weak_self.lock();
-                if (strong_self) {
-                    strong_self->SctpAssociation::OnUsrSctpSendSctpData((void *)copy.data(), copy.size());
-                }
-            });
-        }
-    }
+	void SctpAssociationImp::OnUsrSctpSendSctpData(void* buffer, size_t len) {
+		if (_poller->isInLoopThread()) {
+			SctpAssociation::OnUsrSctpSendSctpData(buffer, len);
+		} else {
+			std::weak_ptr<SctpAssociationImp> weak_self = shared_from_this();
+			std::string copy((const char *)buffer, len);
+			_poller->async([weak_self, copy]() {
+				if (auto strong_self = weak_self.lock()) {
+					strong_self->SctpAssociation::OnUsrSctpSendSctpData((void *)copy.data(), copy.size());
+				}
+			});
+		}
+	}
 
-    void SctpAssociationImp::OnUsrSctpReceiveSctpData(uint16_t streamId, uint16_t ssn, uint32_t ppid, int flags, const uint8_t* data, size_t len) {
-        if (_poller->isCurrentThread()) {
-            SctpAssociation::OnUsrSctpReceiveSctpData(streamId, ssn, ppid, flags, data, len);
-        } else {
-            weak_ptr<SctpAssociationImp> weak_self = shared_from_this();
-            string copy((const char *)data, len);
-            _poller->async([weak_self, copy, streamId, ssn, ppid, flags]() {
-                auto strong_self = weak_self.lock();
-                if (strong_self) {
-                    strong_self->SctpAssociation::OnUsrSctpReceiveSctpData(streamId, ssn, ppid, flags, (const uint8_t* )copy.data(), copy.size());
-                }
-            });
-        }
-    }
+	void SctpAssociationImp::OnUsrSctpReceiveSctpData(uint16_t streamId, uint16_t ssn, uint32_t ppid, int flags, const uint8_t* data, size_t len) {
+		if (_poller->isInLoopThread()) {
+			SctpAssociation::OnUsrSctpReceiveSctpData(streamId, ssn, ppid, flags, data, len);
+		} else {
+			std::weak_ptr<SctpAssociationImp> weak_self = shared_from_this();
+			std::string copy((const char *)data, len);
+			_poller->async([weak_self, copy, streamId, ssn, ppid, flags]() {
+				auto strong_self = weak_self.lock();
+				if (strong_self) {
+					strong_self->SctpAssociation::OnUsrSctpReceiveSctpData(streamId, ssn, ppid, flags, (const uint8_t* )copy.data(), copy.size());
+				}
+			});
+		}
+	}
 
-    void SctpAssociationImp::OnUsrSctpReceiveSctpNotification(union sctp_notification* notification, size_t len) {
-        if (_poller->isCurrentThread()) {
-            SctpAssociation::OnUsrSctpReceiveSctpNotification(notification, len);
-        } else {
-            weak_ptr<SctpAssociationImp> weak_self = shared_from_this();
-            string copy((const char *)notification, len);
-            _poller->async([weak_self, copy]() {
-                auto strong_self = weak_self.lock();
-                if (strong_self) {
-                    strong_self->SctpAssociation::OnUsrSctpReceiveSctpNotification((union sctp_notification *)copy.data(), copy.size());
-                }
-            });
-        }
-    }
+	void SctpAssociationImp::OnUsrSctpReceiveSctpNotification(union sctp_notification* notification, size_t len) {
+		if (_poller->isInLoopThread()) {
+			SctpAssociation::OnUsrSctpReceiveSctpNotification(notification, len);
+		} else {
+			std::weak_ptr<SctpAssociationImp> weak_self = shared_from_this();
+			std::string copy((const char *)notification, len);
+			_poller->async([weak_self, copy]() {
+				auto strong_self = weak_self.lock();
+				if (strong_self) {
+					strong_self->SctpAssociation::OnUsrSctpReceiveSctpNotification((union sctp_notification *)copy.data(), copy.size());
+				}
+			});
+		}
+	}
 
 } // namespace RTC
 

@@ -2,8 +2,7 @@
 #include "Common/config.h"
 #include "Codec/Transcode.h"
 #include "Extension/AAC.h"
-#include "Extension/Opus.h"
-#include "Extension/G711.h"
+#include "Extension/AudioTrack.h"
 // for RTC configure
 #include "WebRtcTransport.h"
 namespace mediakit {

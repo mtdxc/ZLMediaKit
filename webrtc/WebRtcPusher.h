@@ -12,6 +12,7 @@
 #define ZLMEDIAKIT_WEBRTCPUSHER_H
 
 #include "WebRtcTransport.h"
+#include "Rtsp/RtspMediaSourceImp.h"
 
 namespace mediakit {
 
@@ -43,14 +44,14 @@ protected:
     // 获取媒体源url或者文件路径
     std::string getOriginUrl(MediaSource &sender) const override;
     // 获取媒体源客户端相关信息
-    std::shared_ptr<SockInfo> getOriginSock(MediaSource &sender) const override;
+    std::shared_ptr<toolkit::SockInfo> getOriginSock(MediaSource &sender) const override;
     // 由于支持断连续推，存在OwnerPoller变更的可能
     toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
     // 获取丢包率
     float getLossRate(MediaSource &sender,TrackType type) override;
 
 private:
-    WebRtcPusher(const EventPoller::Ptr &poller, const RtspMediaSourceImp::Ptr &src,
+    WebRtcPusher(const toolkit::EventPollerPtr &poller, const RtspMediaSourceImp::Ptr &src,
                  const std::shared_ptr<void> &ownership, const MediaInfo &info, const ProtocolOption &option);
 
 private:

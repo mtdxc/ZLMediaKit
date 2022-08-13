@@ -10,7 +10,7 @@
 
 #include "TwccContext.h"
 #include "Rtcp/RtcpFCI.h"
-
+#include "Util/logger.h"
 namespace mediakit {
 
 enum class ExtSeqStatus : int {
@@ -48,6 +48,7 @@ bool TwccContext::needSendTwcc() const {
     if (_rtp_recv_status.empty()) {
         return false;
     }
+    // 20个rtp包，或超过256ms
     return (_rtp_recv_status.size() >= kMaxSeqSize) || (_max_stamp - _min_stamp >= kMaxTimeDelta);
 }
 

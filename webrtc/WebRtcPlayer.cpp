@@ -9,8 +9,8 @@
  */
 
 #include "WebRtcPlayer.h"
-
 using namespace std;
+using namespace toolkit;
 
 namespace mediakit {
 
@@ -48,22 +48,20 @@ void WebRtcPlayer::onStartWebRTC() {
                 return;
             }
             size_t i = 0;
-            pkt->for_each([&](const RtpPacket::Ptr &rtp) {
-                //TraceL<<"send track type:"<<rtp->type<<" ts:"<<rtp->getStamp()<<" ntp:"<<rtp->ntp_stamp<<" size:"<<rtp->getPayloadSize()<<" i:"<<i;
+            for (auto& rtp : *pkt) {
+                // TraceL << getIdentifier() << " send " << rtp->dump() << " i:" << i;
                 strong_self->onSendRtp(rtp, ++i == pkt->size());
-            });
+            }
         });
         _reader->setDetachCB([weak_self]() {
-            auto strong_self = weak_self.lock();
-            if (!strong_self) {
-                return;
-            }
-            strong_self->onShutdown(SockException(Err_shutdown, "rtsp ring buffer detached"));
+            if (auto strong_self = weak_self.lock())
+                strong_self->onShutdown(SockException(Err_shutdown, "rtsp ring buffer detached"));
         });
     }
     //使用完毕后，释放强引用，这样确保推流器断开后能及时注销媒体
     _play_src = nullptr;
 }
+
 void WebRtcPlayer::onDestory() {
     WebRtcTransportImp::onDestory();
 

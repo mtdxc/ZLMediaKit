@@ -26,12 +26,12 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <map>
 #include <string>
 #include <vector>
-
-using namespace toolkit;
+#include "Session.h"
+using toolkit::EventPoller;
 
 namespace RTC
 {
-    class DtlsTransport : public std::enable_shared_from_this<DtlsTransport>
+	class DtlsTransport : public std::enable_shared_from_this<DtlsTransport>
 	{
 	public:
 		enum class DtlsState
@@ -77,26 +77,26 @@ namespace RTC
 			const char* name;
 		};
 
-        class DtlsEnvironment : public std::enable_shared_from_this<DtlsEnvironment>
-        {
-        public:
-            using Ptr = std::shared_ptr<DtlsEnvironment>;
-            ~DtlsEnvironment();
-            static DtlsEnvironment& Instance();
+		class DtlsEnvironment : public std::enable_shared_from_this<DtlsEnvironment>
+		{
+		public:
+			using Ptr = std::shared_ptr<DtlsEnvironment>;
+			~DtlsEnvironment();
+			static DtlsEnvironment& Instance();
 
-        private:
-            DtlsEnvironment();
-            void GenerateCertificateAndPrivateKey();
-            void ReadCertificateAndPrivateKeyFromFiles();
-            void CreateSslCtx();
-            void GenerateFingerprints();
+		private:
+			DtlsEnvironment();
+			void GenerateCertificateAndPrivateKey();
+			void ReadCertificateAndPrivateKeyFromFiles();
+			void CreateSslCtx();
+			void GenerateFingerprints();
 
-        public:
-            X509* certificate{ nullptr };
-            EVP_PKEY* privateKey{ nullptr };
-            SSL_CTX* sslCtx{ nullptr };
-            std::vector<Fingerprint> localFingerprints;
-        };
+		public:
+			X509* certificate{ nullptr };
+			EVP_PKEY* privateKey{ nullptr };
+			SSL_CTX* sslCtx{ nullptr };
+			std::vector<Fingerprint> localFingerprints;
+		};
 
 	public:
 		class Listener
@@ -134,7 +134,6 @@ namespace RTC
 		static Role StringToRole(const std::string& role)
 		{
 			auto it = DtlsTransport::string2Role.find(role);
-
 			if (it != DtlsTransport::string2Role.end())
 				return it->second;
 			else
@@ -143,7 +142,6 @@ namespace RTC
 		static FingerprintAlgorithm GetFingerprintAlgorithm(const std::string& fingerprint)
 		{
 			auto it = DtlsTransport::string2FingerprintAlgorithm.find(fingerprint);
-
 			if (it != DtlsTransport::string2FingerprintAlgorithm.end())
 				return it->second;
 			else
@@ -223,20 +221,20 @@ namespace RTC
 		void ExtractSrtpKeys(RTC::SrtpSession::CryptoSuite srtpCryptoSuite);
 		RTC::SrtpSession::CryptoSuite GetNegotiatedSrtpCryptoSuite();
 
-    private:
-	    void OnSslInfo(int where, int ret);
+	private:
+		void OnSslInfo(int where, int ret);
 		void OnTimer();
 
 	private:
-        DtlsEnvironment::Ptr env;
-        EventPoller::Ptr poller;
-        // Passed by argument.
+		DtlsEnvironment::Ptr env;
+		EventPoller::Ptr poller;
+		// Passed by argument.
 		Listener* listener{ nullptr };
 		// Allocated by this.
 		SSL* ssl{ nullptr };
 		BIO* sslBioFromNetwork{ nullptr }; // The BIO from which ssl reads.
 		BIO* sslBioToNetwork{ nullptr };   // The BIO in which ssl writes.
-		Timer::Ptr timer;
+		std::shared_ptr<toolkit::Timer> timer;
 		// Others.
 		DtlsState state{ DtlsState::NEW };
 		Role localRole{ Role::NONE };
@@ -246,8 +244,8 @@ namespace RTC
 		std::string remoteCert;
 		//最大不超过mtu
 		static constexpr int SslReadBufferSize{ 2000 };
-        uint8_t sslReadBuffer[SslReadBufferSize];
-};
+		uint8_t sslReadBuffer[SslReadBufferSize];
+	};
 } // namespace RTC
 
 #endif
