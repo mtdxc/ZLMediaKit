@@ -21,8 +21,8 @@
 #include "Util/util.h"
 #include "Util/logger.h"
 #include "Util/TimeTicker.h"
-#include "Network/Socket.h"
-#include "Network/TcpClient.h"
+#include "Session.h"
+#include "TcpClient.h"
 
 namespace mediakit {
 
@@ -30,7 +30,7 @@ namespace mediakit {
 class RtmpPlayer : public PlayerBase, public toolkit::TcpClient, public RtmpProtocol {
 public:
     typedef std::shared_ptr<RtmpPlayer> Ptr;
-    RtmpPlayer(const toolkit::EventPoller::Ptr &poller);
+    RtmpPlayer(const toolkit::EventPollerPtr &poller);
     ~RtmpPlayer() override;
 
     void play(const std::string &strUrl) override;

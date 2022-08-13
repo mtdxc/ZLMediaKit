@@ -74,7 +74,7 @@ std::shared_ptr<SockInfo> WebRtcPusher::getOriginSock(MediaSource &sender) const
     return static_pointer_cast<SockInfo>(getSession());
 }
 
-toolkit::EventPoller::Ptr WebRtcPusher::getOwnerPoller(MediaSource &sender) {
+toolkit::EventPollerPtr WebRtcPusher::getOwnerPoller(MediaSource &sender) {
     return getPoller();
 }
 

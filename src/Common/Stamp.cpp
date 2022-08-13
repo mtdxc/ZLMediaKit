@@ -9,6 +9,8 @@
  */
 
 #include "Stamp.h"
+#include "Util/util.h"
+#include "Util/logger.h"
 
 //时间戳最大允许跳变3秒，主要是防止网络抖动导致的跳变
 #define MAX_DELTA_STAMP (3 * 1000)
@@ -177,7 +179,7 @@ bool DtsGenerator::getDts_l(uint64_t pts, uint64_t &dts){
     if(!_sorter_max_size){
         //尚未计算出pts排序列队长度(也就是P帧间B帧个数)
         if(pts > _last_max_pts){
-            //pts时间戳增加了，那么说明这帧画面不是B帧(说明是P帧或关键帧)
+            //pts时间戳增加了，那么说明这帧画面不是B帧(P帧或关键帧)
             if(_frames_since_last_max_pts && _count_sorter_max_size++ > 0){
                 //已经出现多次非B帧的情况，那么我们就能知道P帧间B帧的个数
                 _sorter_max_size = _frames_since_last_max_pts;

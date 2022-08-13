@@ -21,10 +21,25 @@
 # SOFTWARE.
 #
 
-file(GLOB MediaKit_SRC_LIST
-  ${CMAKE_CURRENT_SOURCE_DIR}/*/*.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/*/*.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/*/*.h)
+# file(GLOB MediaKit_SRC_LIST
+#   ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+#   ${CMAKE_CURRENT_SOURCE_DIR}/*.h
+#   ${CMAKE_CURRENT_SOURCE_DIR}/*/*.c
+#   ${CMAKE_CURRENT_SOURCE_DIR}/*/*.cpp
+#   ${CMAKE_CURRENT_SOURCE_DIR}/*/*.h)
+
+aux_source_directory(. MediaKit_SRC_LIST)
+aux_source_directory(Util MediaKit_SRC_LIST)
+aux_source_directory(Common MediaKit_SRC_LIST)
+# aux_source_directory(Extension MediaKit_SRC_LIST)
+# aux_source_directory(Rtcp MediaKit_SRC_LIST)
+# aux_source_directory(Rtmp MediaKit_SRC_LIST)
+# aux_source_directory(Rtsp MediaKit_SRC_LIST)
+# aux_source_directory(Player MediaKit_SRC_LIST)
+# aux_source_directory(Pusher MediaKit_SRC_LIST)
+# aux_source_directory(Rtp MediaKit_SRC_LIST)
+# aux_source_directory(Record MediaKit_SRC_LIST)
+# aux_source_directory(Hls MediaKit_SRC_LIST)
 
 if(USE_SOLUTION_FOLDERS AND (NOT GROUP_BY_EXPLORER))
   # 在 IDE 中对文件进行分组, 源文件和头文件分开

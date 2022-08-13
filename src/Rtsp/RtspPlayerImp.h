@@ -17,7 +17,7 @@
 #include "Common/config.h"
 #include "RtspPlayer.h"
 #include "RtspDemuxer.h"
-#include "Poller/Timer.h"
+
 #include "Util/TimeTicker.h"
 
 namespace mediakit {
@@ -27,7 +27,7 @@ public:
     using Ptr = std::shared_ptr<RtspPlayerImp>;
     using Super = PlayerImp<RtspPlayer, PlayerBase>;
 
-    RtspPlayerImp(const toolkit::EventPoller::Ptr &poller) : Super(poller) {}
+    RtspPlayerImp(const toolkit::EventPollerPtr &poller) : Super(poller) {}
 
     ~RtspPlayerImp() override {
         DebugL << std::endl;

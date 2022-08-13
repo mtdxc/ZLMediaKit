@@ -13,7 +13,7 @@
 
 #include "RtmpProtocol.h"
 #include "RtmpMediaSource.h"
-#include "Network/TcpClient.h"
+#include "TcpClient.h"
 #include "Pusher/PusherBase.h"
 
 namespace mediakit {
@@ -21,7 +21,7 @@ namespace mediakit {
 class RtmpPusher : public RtmpProtocol, public toolkit::TcpClient, public PusherBase {
 public:
     typedef std::shared_ptr<RtmpPusher> Ptr;
-    RtmpPusher(const toolkit::EventPoller::Ptr &poller,const RtmpMediaSource::Ptr &src);
+    RtmpPusher(const toolkit::EventPollerPtr &poller,const RtmpMediaSource::Ptr &src);
     ~RtmpPusher() override;
 
     void publish(const std::string &url) override ;

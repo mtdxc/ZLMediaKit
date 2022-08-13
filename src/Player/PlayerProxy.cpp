@@ -11,7 +11,7 @@
 #include "Common/config.h"
 #include "PlayerProxy.h"
 #include "Util/mini.h"
-#include "Util/MD5.h"
+#include "md5.h"
 #include "Util/logger.h"
 #include "Extension/AAC.h"
 #include "Rtmp/RtmpMediaSource.h"

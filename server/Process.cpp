@@ -25,7 +25,6 @@
 #include "Util/util.h"
 #include "Util/logger.h"
 #include "Util/uv_errno.h"
-#include "Poller/EventPoller.h"
 
 #define STACK_SIZE (8192 * 1024)
 

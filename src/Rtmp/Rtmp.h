@@ -15,9 +15,7 @@
 #include <string>
 #include <cstdlib>
 #include "Util/util.h"
-#include "Util/logger.h"
-#include "Network/Buffer.h"
-#include "Network/sockutil.h"
+#include "Buffer.hpp"
 #include "amf.h"
 #include "Extension/Track.h"
 
@@ -86,30 +84,13 @@ namespace mediakit {
 
 class RtmpHandshake {
 public:
-    RtmpHandshake(uint32_t _time, uint8_t *_random = nullptr) {
-        _time = htonl(_time);
-        memcpy(time_stamp, &_time, 4);
-        if (!_random) {
-            random_generate((char *) random, sizeof(random));
-        } else {
-            memcpy(random, _random, sizeof(random));
-        }
-    }
+    RtmpHandshake(uint32_t _time, uint8_t *_random = nullptr);
 
     uint8_t time_stamp[4];
     uint8_t zero[4] = {0};
     uint8_t random[RANDOM_LEN];
 
-    void random_generate(char *bytes, int size) {
-        static char cdata[] = {0x73, 0x69, 0x6d, 0x70, 0x6c, 0x65, 0x2d, 0x72,
-                               0x74, 0x6d, 0x70, 0x2d, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
-                               0x2d, 0x77, 0x69, 0x6e, 0x6c, 0x69, 0x6e, 0x2d, 0x77, 0x69,
-                               0x6e, 0x74, 0x65, 0x72, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
-                               0x40, 0x31, 0x32, 0x36, 0x2e, 0x63, 0x6f, 0x6d};
-        for (int i = 0; i < size; i++) {
-            bytes[i] = cdata[rand() % (sizeof(cdata) - 1)];
-        }
-    }
+    void random_generate(char *bytes, int size);
 
     void create_complex_c0c1();
 
@@ -257,7 +238,7 @@ public:
     }
 
 private:
-    friend class toolkit::ResourcePool_l<RtmpPacket>;
+    //friend class toolkit::ResourcePool_l<RtmpPacket>;
     RtmpPacket(){
         clear();
     }

@@ -13,8 +13,8 @@
 #include "Common/config.h"
 #include "UDPServer.h"
 #include "RtspSession.h"
-#include "Util/MD5.h"
-#include "Util/base64.h"
+#include "md5.h"
+#include "base64.h"
 
 using namespace std;
 using namespace toolkit;
@@ -1154,7 +1154,7 @@ std::shared_ptr<SockInfo> RtspSession::getOriginSock(MediaSource &sender) const 
     return const_cast<RtspSession *>(this)->shared_from_this();
 }
 
-toolkit::EventPoller::Ptr RtspSession::getOwnerPoller(MediaSource &sender) {
+toolkit::EventPollerPtr RtspSession::getOwnerPoller(MediaSource &sender) {
     return getPoller();
 }
 

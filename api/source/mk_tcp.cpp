@@ -13,7 +13,7 @@
 #include "mk_tcp_private.h"
 #include "Http/WebSocketClient.h"
 #include "Http/WebSocketSession.h"
-#include "Network/Buffer.h"
+#include "Buffer.hpp"
 
 using namespace toolkit;
 using namespace mediakit;

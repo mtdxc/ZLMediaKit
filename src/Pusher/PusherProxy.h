@@ -22,7 +22,7 @@ public:
 
     // 如果retry_count<0,则一直重试播放；否则重试retry_count次数
     // 默认一直重试，创建此对象时候，需要外部保证MediaSource存在
-    PusherProxy(const MediaSource::Ptr &src, int retry_count = -1, const toolkit::EventPoller::Ptr &poller = nullptr);
+    PusherProxy(const MediaSource::Ptr &src, int retry_count = -1, const toolkit::EventPollerPtr &poller = nullptr);
     ~PusherProxy() override;
 
     /**

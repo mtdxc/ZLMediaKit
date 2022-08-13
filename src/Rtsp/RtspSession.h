@@ -18,7 +18,7 @@
 #include "Util/util.h"
 #include "Util/logger.h"
 #include "Common/config.h"
-#include "Network/Session.h"
+#include "Session.h"
 #include "Player/PlayerBase.h"
 #include "RtpMultiCaster.h"
 #include "RtspMediaSource.h"
@@ -60,7 +60,7 @@ public:
     //在请求明文密码时如果提供md5密码者则会导致认证失败
     using onAuth = std::function<void(bool encrypted, const std::string &pwd_or_md5)>;
 
-    RtspSession(const toolkit::Socket::Ptr &sock);
+    RtspSession(const toolkit::SocketPtr &sock);
     virtual ~RtspSession();
     ////Session override////
     void onRecv(const toolkit::Buffer::Ptr &buf) override;
@@ -92,7 +92,7 @@ protected:
     // 获取媒体源客户端相关信息
     std::shared_ptr<SockInfo> getOriginSock(MediaSource &sender) const override;
     // 由于支持断连续推，存在OwnerPoller变更的可能
-    toolkit::EventPoller::Ptr getOwnerPoller(MediaSource &sender) override;
+    toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
 
     /////Session override////
     ssize_t send(toolkit::Buffer::Ptr pkt) override;
@@ -202,9 +202,9 @@ private:
 
     ////////RTP over udp////////
     //RTP端口,trackid idx 为数组下标
-    toolkit::Socket::Ptr _rtp_socks[2];
+    toolkit::SocketPtr _rtp_socks[2];
     //RTCP端口,trackid idx 为数组下标
-    toolkit::Socket::Ptr _rtcp_socks[2];
+    toolkit::SocketPtr _rtcp_socks[2];
     //标记是否收到播放的udp打洞包,收到播放的udp打洞包后才能知道其外网udp端口号
     std::unordered_set<int> _udp_connected_flags;
     ////////RTP over udp_multicast////////

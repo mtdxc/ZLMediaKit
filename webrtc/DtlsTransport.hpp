@@ -26,8 +26,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <map>
 #include <string>
 #include <vector>
-#include "Poller/Timer.h"
-#include "Poller/EventPoller.h"
+
 using namespace toolkit;
 
 namespace RTC

@@ -16,9 +16,9 @@
 #include "RtspMediaSource.h"
 #include "Util/util.h"
 #include "Util/logger.h"
-#include "Poller/Timer.h"
-#include "Network/Socket.h"
-#include "Network/TcpClient.h"
+
+#include "Session.h"
+#include "TcpClient.h"
 #include "RtspSplitter.h"
 #include "Pusher/PusherBase.h"
 #include "Rtcp/RtcpContext.h"
@@ -28,7 +28,7 @@ namespace mediakit {
 class RtspPusher : public toolkit::TcpClient, public RtspSplitter, public PusherBase {
 public:
     typedef std::shared_ptr<RtspPusher> Ptr;
-    RtspPusher(const toolkit::EventPoller::Ptr &poller,const RtspMediaSource::Ptr &src);
+    RtspPusher(const toolkit::EventPollerPtr &poller,const RtspMediaSource::Ptr &src);
     ~RtspPusher() override;
     void publish(const std::string &url) override;
     void teardown() override;
@@ -82,9 +82,9 @@ private:
     SdpParser _sdp_parser;
     std::vector<SdpTrack::Ptr> _track_vec;
     //RTP端口,trackid idx 为数组下标
-    toolkit::Socket::Ptr _rtp_sock[2];
+    toolkit::SocketPtr _rtp_sock[2];
     //RTCP端口,trackid idx 为数组下标
-    toolkit::Socket::Ptr _rtcp_sock[2];
+    toolkit::SocketPtr _rtcp_sock[2];
     //超时功能实现
     std::shared_ptr<toolkit::Timer> _publish_timer;
     //心跳定时器

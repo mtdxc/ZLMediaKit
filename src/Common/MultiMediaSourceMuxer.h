@@ -11,9 +11,8 @@
 #ifndef ZLMEDIAKIT_MULTIMEDIASOURCEMUXER_H
 #define ZLMEDIAKIT_MULTIMEDIASOURCEMUXER_H
 
-#include "Common/Stamp.h"
 #include "Common/MediaSource.h"
-#include "Rtp/RtpSender.h"
+#include "Common/MediaSink.h"
 
 namespace mediakit {
 class RtmpMediaSourceMuxer;
@@ -22,7 +21,7 @@ class TSMediaSourceMuxer;
 class MediaSinkInterface;
 class FMP4MediaSourceMuxer;
 class HlsRecorder;
-
+class RtpSender;
 class MultiMediaSourceMuxer : public MediaSourceEventInterceptor, public MediaSink, public std::enable_shared_from_this<MultiMediaSourceMuxer>{
 public:
     typedef std::shared_ptr<MultiMediaSourceMuxer> Ptr;
@@ -35,7 +34,7 @@ public:
     };
 
     MultiMediaSourceMuxer(const std::string &vhost, const std::string &app, const std::string &stream, float dur_sec = 0.0,const ProtocolOption &option = ProtocolOption());
-    ~MultiMediaSourceMuxer() override = default;
+    ~MultiMediaSourceMuxer() override;;
 
     /**
      * 设置事件监听器
@@ -121,7 +120,7 @@ public:
     /**
      * 获取所属线程
      */
-    toolkit::EventPoller::Ptr getOwnerPoller(MediaSource &sender) override;
+    toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
 
     const std::string& getVhost() const;
     const std::string& getApp() const;
@@ -157,12 +156,12 @@ private:
     std::string _stream_id;
     ProtocolOption _option;
     toolkit::Ticker _last_check;
-    Stamp _stamp[2];
+    Stamp* _stamp;
     std::weak_ptr<Listener> _track_listener;
 #if defined(ENABLE_RTPPROXY)
-    std::unordered_map<std::string, RtpSender::Ptr> _rtp_sender;
+    std::unordered_map<std::string, std::shared_ptr<RtpSender>> _rtp_sender;
 #endif //ENABLE_RTPPROXY
-
+    // 转协议
 #if defined(ENABLE_MP4)
     std::shared_ptr<FMP4MediaSourceMuxer> _fmp4;
 #endif
@@ -172,7 +171,7 @@ private:
     std::shared_ptr<TSMediaSourceMuxer> _ts;
     std::shared_ptr<MediaSinkInterface> _mp4;
     std::shared_ptr<HlsRecorder> _hls;
-    toolkit::EventPoller::Ptr _poller;
+    toolkit::EventPollerPtr _poller;
 
     //对象个数统计
     toolkit::ObjectStatistic<MultiMediaSourceMuxer> _statistic;

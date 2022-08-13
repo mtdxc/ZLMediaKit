@@ -58,7 +58,7 @@ private:
     bool close(MediaSource &sender) override;
     MediaOriginType getOriginType(MediaSource &sender) const override;
     std::string getOriginUrl(MediaSource &sender) const override;
-    toolkit::EventPoller::Ptr getOwnerPoller(MediaSource &sender) override;
+    toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
 
     bool readSample();
     bool readNextSample();
@@ -79,7 +79,7 @@ private:
     toolkit::Timer::Ptr _timer;
     MP4Demuxer::Ptr _demuxer;
     MultiMediaSourceMuxer::Ptr _muxer;
-    toolkit::EventPoller::Ptr _poller;
+    toolkit::EventPollerPtr _poller;
 };
 
 } /* namespace mediakit */

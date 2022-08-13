@@ -15,7 +15,7 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include "Network/Socket.h"
+#include "Session.h"
 #include "Util/mini.h"
 #include "Common/MediaSource.h"
 
@@ -26,7 +26,7 @@ public:
     using Ptr = std::shared_ptr<PusherBase>;
     using Event = std::function<void(const toolkit::SockException &ex)>;
 
-    static Ptr createPusher(const toolkit::EventPoller::Ptr &poller,
+    static Ptr createPusher(const toolkit::EventPollerPtr &poller,
                             const MediaSource::Ptr &src,
                             const std::string &strUrl);
 

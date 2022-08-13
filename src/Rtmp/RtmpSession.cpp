@@ -590,7 +590,7 @@ std::shared_ptr<SockInfo> RtmpSession::getOriginSock(MediaSource &sender) const 
     return const_cast<RtmpSession *>(this)->shared_from_this();
 }
 
-toolkit::EventPoller::Ptr RtmpSession::getOwnerPoller(MediaSource &sender) {
+toolkit::EventPollerPtr RtmpSession::getOwnerPoller(MediaSource &sender) {
     return getPoller();
 }
 

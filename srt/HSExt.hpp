@@ -1,7 +1,7 @@
 ﻿#ifndef ZLMEDIAKIT_SRT_HS_EXT_H
 #define ZLMEDIAKIT_SRT_HS_EXT_H
 
-#include "Network/Buffer.h"
+#include "Buffer.hpp"
 
 #include "Common.hpp"
 

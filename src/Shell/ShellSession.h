@@ -14,13 +14,13 @@
 #include <functional>
 #include "Common/config.h"
 #include "Util/TimeTicker.h"
-#include "Network/Session.h"
+#include "Session.h"
 
 namespace mediakit {
 
 class ShellSession: public toolkit::Session {
 public:
-    ShellSession(const toolkit::Socket::Ptr &_sock);
+    ShellSession(const toolkit::SocketPtr &_sock);
     virtual ~ShellSession();
 
     void onRecv(const toolkit::Buffer::Ptr &) override;

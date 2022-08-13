@@ -11,7 +11,7 @@
 #if defined(ENABLE_RTPPROXY)
 #include "RtpSession.h"
 #include "RtpSelector.h"
-#include "Network/TcpServer.h"
+#include "TcpServer.h"
 #include "Rtsp/RtpReceiver.h"
 
 using namespace std;

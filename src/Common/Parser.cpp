@@ -11,15 +11,15 @@
 #include <cinttypes>
 #include "Parser.h"
 #include "macros.h"
-#include "Network/sockutil.h"
+#include "Util/util.h"
 
-using namespace std;
+using std::string;
 using namespace toolkit;
 
 namespace mediakit{
 
 string FindField(const char* buf, const char* start, const char *end ,size_t bufSize) {
-    if(bufSize <=0 ){
+    if (bufSize <= 0) {
         bufSize = strlen(buf);
     }
     const char *msg_start = buf, *msg_end = buf + bufSize;
@@ -51,8 +51,18 @@ void Parser::Parse(const char *buf) {
             break;
         }
         if (start == buf) {
+            string strFullUrl;
+#if 0
+            auto vec = split(line, " ");
+            if (vec.size() < 2) continue;
+            _strMethod = vec[0];
+            strFullUrl = vec[1];
+            if (vec.size() > 2) _strTail = vec[2];
+#else
             _strMethod = FindField(line.data(), NULL, " ");
-            auto strFullUrl = FindField(line.data(), " ", " ");
+            strFullUrl = FindField(line.data(), " ", " ");
+            _strTail = FindField(line.data(), (strFullUrl + " ").data(), NULL);
+#endif
             auto args_pos = strFullUrl.find('?');
             if (args_pos != string::npos) {
                 _strUrl = strFullUrl.substr(0, args_pos);
@@ -61,10 +71,10 @@ void Parser::Parse(const char *buf) {
             } else {
                 _strUrl = strFullUrl;
             }
-            _strTail = FindField(line.data(), (strFullUrl + " ").data(), NULL);
         } else {
-            auto field = FindField(line.data(), NULL, ": ");
-            auto value = FindField(line.data(), ": ", NULL);
+            auto pos = line.find(':');
+            auto field = trim(line.substr(0, pos));// FindField(line.data(), NULL, ": ");
+            auto value = trim(line.substr(pos +1));// FindField(line.data(), ": ", NULL);
             if (field.size() != 0) {
                 _mapHeaders.emplace_force(field, value);
             }
@@ -122,12 +132,12 @@ const string &Parser::Params() const {
     return _params;
 }
 
-void Parser::setUrl(string url) {
-    this->_strUrl = std::move(url);
+void Parser::setUrl(const string& url) {
+    this->_strUrl = url;
 }
 
-void Parser::setContent(string content) {
-    this->_strContent = std::move(content);
+void Parser::setContent(const string& content) {
+    this->_strContent = content;
 }
 
 StrCaseMap &Parser::getHeader() const {
@@ -177,7 +187,7 @@ void RtspUrl::parse(const string &strUrl) {
     //包含用户名密码
     auto user_pwd = middle_url.substr(0, pos);
     auto suffix = strUrl.substr(schema.size() + 3 + pos + 1);
-    auto url = StrPrinter << "rtsp://" << suffix << endl;
+    auto url = "rtsp://" + suffix;
     if (user_pwd.find(":") == string::npos) {
         return setup(is_ssl, url, user_pwd, "");
     }
@@ -207,7 +217,7 @@ static void inline checkHost(std::string &host) {
         // ipv6去除方括号
         host.pop_back();
         host.erase(0, 1);
-        CHECK(SockUtil::is_ipv6(host.data()), "not a ipv6 address:", host);
+        //CHECK(SockUtil::is_ipv6(host.data()), "not a ipv6 address:", host);
     }
 }
 
@@ -237,5 +247,23 @@ static onceToken token([](){
     splitUrl("[fe80::604d:4173:76e9:1009]:8880", host, port);
 });
 #endif
+
+bool StrCaseCompare::operator()(const std::string &__x, const std::string &__y) const
+{
+#ifdef WIN32
+    return _stricmp(__x.data(), __y.data()) < 0;
+#else
+    return strcasecmp(__x.data(), __y.data()) < 0;
+#endif
+}
+
+std::string & StrCaseMap::operator[](const std::string &k)
+{
+    auto it = find(k);
+    if (it == end()) {
+        it = Super::emplace(k, "");
+    }
+    return it->second;
+}
 
 }//namespace mediakit

@@ -35,7 +35,7 @@ public:
      * @param dts_out 解析出最新的dts
      * @return 是否解析成功
      */
-    bool inputRtp(bool is_udp, const toolkit::Socket::Ptr &sock, const char *data, size_t len, const struct sockaddr *addr , uint64_t *dts_out = nullptr);
+    bool inputRtp(bool is_udp, const toolkit::SocketPtr &sock, const char *data, size_t len, const struct sockaddr *addr , uint64_t *dts_out = nullptr);
 
     /**
      * 是否超时，用于超时移除对象
@@ -79,7 +79,7 @@ protected:
     MediaOriginType getOriginType(MediaSource &sender) const override;
     std::string getOriginUrl(MediaSource &sender) const override;
     std::shared_ptr<SockInfo> getOriginSock(MediaSource &sender) const override;
-    toolkit::EventPoller::Ptr getOwnerPoller(MediaSource &sender) override;
+    toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
     float getLossRate(MediaSource &sender, TrackType type) override;
 
 private:
@@ -90,7 +90,7 @@ private:
     uint64_t _dts = 0;
     uint64_t _total_bytes = 0;
     std::unique_ptr<sockaddr_storage> _addr;
-    toolkit::Socket::Ptr _sock;
+    toolkit::SocketPtr _sock;
     MediaInfo _media_info;
     toolkit::Ticker _last_frame_time;
     std::function<void()> _on_detach;

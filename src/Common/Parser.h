@@ -13,19 +13,22 @@
 
 #include <map>
 #include <string>
-#include "Util/util.h"
+#include <string.h>
 
 namespace mediakit {
-
+/*
+在buf中查找以start开始到end结束之间的字符串(不包含start和end)
+start和end都可以为空，其中：
+- start 为空则以头部开始
+- end 为空则到尾部结束
+*/
 //从字符串中提取子字符串
 std::string FindField(const char *buf, const char *start, const char *end, size_t bufSize = 0);
 //把url解析为主机地址和端口号,兼容ipv4/ipv6/dns
 void splitUrl(const std::string &url, std::string &host, uint16_t& port);
 
 struct StrCaseCompare {
-    bool operator()(const std::string &__x, const std::string &__y) const {
-        return strcasecmp(__x.data(), __y.data()) < 0;
-    }
+    bool operator()(const std::string &__x, const std::string &__y) const;
 };
 
 class StrCaseMap : public std::multimap<std::string, std::string, StrCaseCompare> {
@@ -34,13 +37,7 @@ public:
     StrCaseMap() = default;
     ~StrCaseMap() = default;
 
-    std::string &operator[](const std::string &k) {
-        auto it = find(k);
-        if (it == end()) {
-            it = Super::emplace(k, "");
-        }
-        return it->second;
-    }
+    std::string &operator[](const std::string &k);
 
     template<typename V>
     void emplace(const std::string &k, V &&v) {
@@ -63,7 +60,7 @@ public:
     Parser() = default;
     ~Parser() = default;
 
-    //解析信令
+    //解析信令头部\r\n\r\n前内容
     void Parse(const char *buf);
 
     //获取命令字
@@ -72,7 +69,7 @@ public:
     //获取中间url，不包含?后面的参数
     const std::string &Url() const;
 
-    //获取中间url，包含?后面的参数
+    //获取中间url，包含?后面的参数(Url + "?" + Params)
     std::string FullUrl() const;
 
     //获取命令协议名
@@ -91,10 +88,10 @@ public:
     const std::string &Params() const;
 
     //重新设置url
-    void setUrl(std::string url);
+    void setUrl(const std::string& url);
 
     //重新设置content
-    void setContent(std::string content);
+    void setContent(const std::string& content);
 
     //获取header列表
     StrCaseMap &getHeader() const;

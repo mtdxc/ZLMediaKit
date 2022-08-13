@@ -20,7 +20,7 @@
 #include "RtmpMediaSourceImp.h"
 #include "Util/util.h"
 #include "Util/TimeTicker.h"
-#include "Network/Session.h"
+#include "Session.h"
 #include "Common/Stamp.h"
 
 namespace mediakit {
@@ -29,7 +29,7 @@ class RtmpSession : public toolkit::Session, public RtmpProtocol, public MediaSo
 public:
     using Ptr = std::shared_ptr<RtmpSession>;
 
-    RtmpSession(const toolkit::Socket::Ptr &sock);
+    RtmpSession(const toolkit::SocketPtr &sock);
     ~RtmpSession() override;
 
     void onRecv(const toolkit::Buffer::Ptr &buf) override;
@@ -81,7 +81,7 @@ private:
     // 获取媒体源客户端相关信息
     std::shared_ptr<SockInfo> getOriginSock(MediaSource &sender) const override;
     // 由于支持断连续推，存在OwnerPoller变更的可能
-    toolkit::EventPoller::Ptr getOwnerPoller(MediaSource &sender) override;
+    toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
 
     void setSocketFlags();
     std::string getStreamId(const std::string &str);

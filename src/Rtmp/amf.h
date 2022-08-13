@@ -18,7 +18,7 @@
 #include <map>
 #include <stdexcept>
 #include <functional>
-#include "Network/Buffer.h"
+#include "Buffer.hpp"
 
 enum AMFType {
     AMF_NUMBER,

@@ -13,7 +13,7 @@
 
 #include "Frame.h"
 #include "Track.h"
-#include "Util/base64.h"
+#include "base64.h"
 #include "H264.h"
 
 #define H265_TYPE(v) (((uint8_t)(v) >> 1) & 0x3f)
@@ -26,7 +26,7 @@ template<typename Parent>
 class H265FrameHelper : public Parent{
 public:
     friend class FrameImp;
-    friend class toolkit::ResourcePool_l<H265FrameHelper>;
+    //friend class toolkit::ResourcePool_l<H265FrameHelper>;
     using Ptr = std::shared_ptr<H265FrameHelper>;
 
     enum {

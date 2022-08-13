@@ -12,7 +12,7 @@
 #ifndef ZLMEDIAKIT_WEBRTCSESSION_H
 #define ZLMEDIAKIT_WEBRTCSESSION_H
 
-#include "Network/Session.h"
+#include "Session.h"
 #include "Http/HttpRequestSplitter.h"
 using namespace toolkit;
 

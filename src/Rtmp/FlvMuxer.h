@@ -13,8 +13,9 @@
 
 #include "Rtmp/Rtmp.h"
 #include "Rtmp/RtmpMediaSource.h"
-#include "Network/Socket.h"
-#include "Common/Stamp.h"
+#include "Util/ResourcePool.h"
+#include "Buffer.hpp"
+#include "Session.h"
 
 namespace mediakit {
 
@@ -27,7 +28,7 @@ public:
     void stop();
 
 protected:
-    void start(const toolkit::EventPoller::Ptr &poller, const RtmpMediaSource::Ptr &media, uint32_t start_pts = 0);
+    void start(const toolkit::EventPollerPtr &poller, const RtmpMediaSource::Ptr &media, uint32_t start_pts = 0);
     virtual void onWrite(const toolkit::Buffer::Ptr &data, bool flush) = 0;
     virtual void onDetach() = 0;
     virtual std::shared_ptr<FlvMuxer> getSharedPtr() = 0;
@@ -51,8 +52,8 @@ public:
     FlvRecorder() = default;
     ~FlvRecorder() override = default;
 
-    void startRecord(const toolkit::EventPoller::Ptr &poller, const RtmpMediaSource::Ptr &media, const std::string &file_path);
-    void startRecord(const toolkit::EventPoller::Ptr &poller, const std::string &vhost, const std::string &app, const std::string &stream, const std::string &file_path);
+    void startRecord(const toolkit::EventPollerPtr &poller, const RtmpMediaSource::Ptr &media, const std::string &file_path);
+    void startRecord(const toolkit::EventPollerPtr &poller, const std::string &vhost, const std::string &app, const std::string &stream, const std::string &file_path);
 
 private:
     virtual void onWrite(const toolkit::Buffer::Ptr &data, bool flush) override ;

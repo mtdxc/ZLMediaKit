@@ -19,9 +19,9 @@
 #include "Util/util.h"
 #include "Util/logger.h"
 #include "Util/TimeTicker.h"
-#include "Poller/Timer.h"
-#include "Network/Socket.h"
-#include "Network/TcpClient.h"
+
+#include "Session.h"
+#include "TcpClient.h"
 #include "RtspSplitter.h"
 #include "RtpReceiver.h"
 #include "Common/Stamp.h"
@@ -34,7 +34,7 @@ class RtspPlayer : public PlayerBase, public toolkit::TcpClient, public RtspSpli
 public:
     using Ptr = std::shared_ptr<RtspPlayer>;
 
-    RtspPlayer(const toolkit::EventPoller::Ptr &poller);
+    RtspPlayer(const toolkit::EventPollerPtr &poller);
     ~RtspPlayer() override;
 
     void play(const std::string &strUrl) override;
@@ -123,9 +123,9 @@ private:
     std::vector<SdpTrack::Ptr> _sdp_track;
     std::function<void(const Parser&)> _on_response;
     //RTP端口,trackid idx 为数组下标
-    toolkit::Socket::Ptr _rtp_sock[2];
+    toolkit::SocketPtr _rtp_sock[2];
     //RTCP端口,trackid idx 为数组下标
-    toolkit::Socket::Ptr _rtcp_sock[2];
+    toolkit::SocketPtr _rtcp_sock[2];
 
     //rtsp鉴权相关
     std::string _md5_nonce;

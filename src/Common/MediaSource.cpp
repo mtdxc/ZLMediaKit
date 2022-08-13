@@ -7,14 +7,15 @@
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
-
+#include <unordered_map>
 #include "Util/util.h"
-#include "Util/NoticeCenter.h"
-#include "Network/sockutil.h"
-#include "Network/Session.h"
+#include "Util/logger.h"
+#include "Session.h"
 #include "MediaSource.h"
 #include "Common/config.h"
 #include "Record/MP4Reader.h"
+#include "Common/Parser.h"
+#include "PacketCache.h"
 
 using namespace std;
 using namespace toolkit;
@@ -131,7 +132,7 @@ MediaSource::MediaSource(const string &schema, const string &vhost, const string
     _app = app;
     _stream_id = stream_id;
     _create_stamp = time(NULL);
-    _default_poller = EventPollerPool::Instance().getPoller();
+    _default_poller = hv::EventLoopThreadPool::Instance()->loop();
 }
 
 MediaSource::~MediaSource() {
@@ -290,8 +291,8 @@ float MediaSource::getLossRate(mediakit::TrackType type) {
     return listener->getLossRate(*this, type);
 }
 
-toolkit::EventPoller::Ptr MediaSource::getOwnerPoller() {
-    toolkit::EventPoller::Ptr ret;
+toolkit::EventPollerPtr MediaSource::getOwnerPoller() {
+    toolkit::EventPollerPtr ret;
     auto listener = _listener.lock();
     if (listener) {
         return listener->getOwnerPoller(*this);
@@ -355,19 +356,12 @@ static void for_each_media_l(const MAP &map, LIST &list, const First &first, con
         for (auto &pr : map) {
             for_each_media_l(pr.second, list, keys...);
         }
-        return;
     }
-    auto it = map.find(first);
-    if (it != map.end()) {
-        for_each_media_l(it->second, list, keys...);
-    }
-}
-
-template<typename LIST, typename Ptr>
-static void emplace_back(LIST &list, const Ptr &ptr) {
-    auto src = ptr.lock();
-    if (src) {
-        list.emplace_back(std::move(src));
+    else {
+        auto it = map.find(first);
+        if (it != map.end()) {
+            for_each_media_l(it->second, list, keys...);
+        }
     }
 }
 
@@ -375,13 +369,16 @@ template<typename MAP, typename LIST, typename First>
 static void for_each_media_l(const MAP &map, LIST &list, const First &first) {
     if (first.empty()) {
         for (auto &pr : map) {
-            emplace_back(list, pr.second);
+            if(auto ptr = pr.second.lock())
+                list.emplace_back(std::move(ptr));
         }
-        return;
     }
-    auto it = map.find(first);
-    if (it != map.end()) {
-        emplace_back(list, it->second);
+    else{
+        auto it = map.find(first);
+        if (it != map.end()) {
+            if(auto ptr = it->second.lock())
+                list.emplace_back(std::move(ptr));
+        }
     }
 }
 
@@ -423,7 +420,7 @@ static MediaSource::Ptr find_l(const string &schema, const string &vhost_in, con
     return ret;
 }
 
-static void findAsync_l(const MediaInfo &info, const std::shared_ptr<Session> &session, bool retry,
+static void findAsync_l(const MediaInfo &info, const std::shared_ptr<hv::SocketChannel> &session, bool retry,
                         const function<void(const MediaSource::Ptr &src)> &cb){
     auto src = find_l(info._schema, info._vhost, info._app, info._streamid, true);
     if (src || !retry) {
@@ -434,10 +431,10 @@ static void findAsync_l(const MediaInfo &info, const std::shared_ptr<Session> &s
     GET_CONFIG(int, maxWaitMS, General::kMaxStreamWaitTimeMS);
     void *listener_tag = session.get();
     auto poller = session->getPoller();
+    // 保证只会回调一次
     std::shared_ptr<atomic_flag> invoked(new atomic_flag{false});
     auto cb_once = [cb, invoked](const MediaSource::Ptr &src) {
         if (invoked->test_and_set()) {
-            //回调已经执行过了
             return;
         }
         cb(src);
@@ -447,17 +444,16 @@ static void findAsync_l(const MediaInfo &info, const std::shared_ptr<Session> &s
         // 最多等待一定时间，如在这个时间内，流还未注册上，则返回空
         NoticeCenter::Instance().delListener(listener_tag, Broadcast::kBroadcastMediaChanged);
         cb_once(nullptr);
-        return 0;
     });
 
-    auto cancel_all = [on_timeout, listener_tag]() {
+    auto cancel_all = [on_timeout, listener_tag, poller]() {
         //取消延时任务，防止多次回调
-        on_timeout->cancel();
+        poller->killTimer(on_timeout);
         //取消媒体注册事件监听
         NoticeCenter::Instance().delListener(listener_tag, Broadcast::kBroadcastMediaChanged);
     };
 
-    weak_ptr<Session> weak_session = session;
+    weak_ptr<hv::SocketChannel> weak_session = session;
     auto on_register = [weak_session, info, cb_once, cancel_all, poller](BroadcastMediaChangedArgs) {
         if (!bRegist ||
             sender.getSchema() != info._schema ||
@@ -493,7 +489,7 @@ static void findAsync_l(const MediaInfo &info, const std::shared_ptr<Session> &s
     NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastNotFoundStream, info, static_cast<SockInfo &>(*session), close_player);
 }
 
-void MediaSource::findAsync(const MediaInfo &info, const std::shared_ptr<Session> &session, const function<void (const Ptr &)> &cb) {
+void MediaSource::findAsync(const MediaInfo &info, const std::shared_ptr<hv::SocketChannel> &session, const function<void (const Ptr &)> &cb) {
     return findAsync_l(info, session, true, cb);
 }
 
@@ -514,9 +510,7 @@ MediaSource::Ptr MediaSource::find(const string &vhost, const string &app, const
 }
 
 void MediaSource::emitEvent(bool regist){
-    auto listener = _listener.lock();
-    if (listener) {
-        //触发回调
+    if (auto listener = _listener.lock()) {
         listener->onRegist(*this, regist);
     }
     //触发广播
@@ -601,7 +595,7 @@ void MediaInfo::parse(const std::string &url_in){
     if (split_vec.size() > 0) {
         splitUrl(split_vec[0], _host, _port);
         _vhost = _host;
-         if (_vhost == "localhost" || isIP(_vhost.data())) {
+         if (_vhost == "localhost" || _vhost.find_first_not_of("0123456789.:[]") == std::string::npos) {
             //如果访问的是localhost或ip，那么则为默认虚拟主机
             _vhost = DEFAULT_VHOST;
         }
@@ -621,9 +615,13 @@ void MediaInfo::parse(const std::string &url_in){
     }
 
     auto params = Parser::parseArgs(_param_strs);
-    if (params.find(VHOST_KEY) != params.end()) {
-        _vhost = params[VHOST_KEY];
+    auto it = params.find(VHOST_KEY);
+    if (it != params.end()) {
+        _vhost = it->second;
     }
+    it = params.find("schema");
+    if (it != params.end())
+        _schema = it->second;
 
     GET_CONFIG(bool, enableVhost, General::kEnableVhost);
     if (!enableVhost || _vhost.empty()) {
@@ -660,13 +658,14 @@ void MediaSourceEvent::onReaderChanged(MediaSource &sender, int size){
         _async_close_timer = nullptr;
         return;
     }
-    //没有任何人观看该视频源，表明该源可以关闭了
+
+    // 没人观看该视频源，表明该源可以关闭了
     GET_CONFIG(string, record_app, Record::kAppName);
     GET_CONFIG(int, stream_none_reader_delay, General::kStreamNoneReaderDelayMS);
     //如果mp4点播, 无人观看时我们强制关闭点播
     bool is_mp4_vod = sender.getApp() == record_app;
-    weak_ptr<MediaSource> weak_sender = sender.shared_from_this();
 
+    weak_ptr<MediaSource> weak_sender = sender.shared_from_this();
     _async_close_timer = std::make_shared<Timer>(stream_none_reader_delay / 1000.0f, [weak_sender, is_mp4_vod]() {
         auto strong_sender = weak_sender.lock();
         if (!strong_sender) {
@@ -704,15 +703,12 @@ MediaOriginType MediaSourceEventInterceptor::getOriginType(MediaSource &sender) 
 }
 
 string MediaSourceEventInterceptor::getOriginUrl(MediaSource &sender) const {
-    auto listener = _listener.lock();
-    if (!listener) {
-        return MediaSourceEvent::getOriginUrl(sender);
-    }
-    auto ret = listener->getOriginUrl(sender);
-    if (!ret.empty()) {
-        return ret;
-    }
-    return MediaSourceEvent::getOriginUrl(sender);
+    std::string ret;
+    if (auto listener = _listener.lock())
+        ret = listener->getOriginUrl(sender);
+    if (ret.empty())
+        ret = MediaSourceEvent::getOriginUrl(sender);
+    return ret;
 }
 
 std::shared_ptr<SockInfo> MediaSourceEventInterceptor::getOriginSock(MediaSource &sender) const {
@@ -787,12 +783,13 @@ float MediaSourceEventInterceptor::getLossRate(MediaSource &sender, TrackType ty
     return -1; //异常返回-1
 }
 
-toolkit::EventPoller::Ptr MediaSourceEventInterceptor::getOwnerPoller(MediaSource &sender) {
+toolkit::EventPollerPtr MediaSourceEventInterceptor::getOwnerPoller(MediaSource &sender) {
     auto listener = _listener.lock();
     if (listener) {
         return listener->getOwnerPoller(sender);
     }
     throw std::runtime_error(toolkit::demangle(typeid(*this).name()) + "::getOwnerPoller failed");
+    return hv::EventLoopThreadPool::Instance()->loop();
 }
 
 bool MediaSourceEventInterceptor::setupRecord(MediaSource &sender, Recorder::type type, bool start, const string &custom_path, size_t max_second) {
@@ -830,10 +827,10 @@ void MediaSourceEventInterceptor::startSendRtp(MediaSource &sender, const MediaS
 
 bool MediaSourceEventInterceptor::stopSendRtp(MediaSource &sender, const string &ssrc){
     auto listener = _listener.lock();
-    if (listener) {
-        return listener->stopSendRtp(sender, ssrc);
+    if (!listener) {
+        return false;
     }
-    return false;
+    return listener->stopSendRtp(sender, ssrc);
 }
 
 void MediaSourceEventInterceptor::setDelegate(const std::weak_ptr<MediaSourceEvent> &listener) {

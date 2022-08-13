@@ -69,7 +69,7 @@ private:
     std::shared_ptr<FILE> _file;
     std::shared_ptr<char> _file_buf;
     HlsMediaSource::Ptr _media_src;
-    toolkit::EventPoller::Ptr _poller;
+    toolkit::EventPollerPtr _poller;
     std::map<uint64_t/*index*/,std::string/*file_path*/> _segment_file_paths;
 };
 

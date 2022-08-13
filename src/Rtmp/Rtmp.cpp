@@ -146,6 +146,30 @@ RtmpPacket::Ptr RtmpPacket::create(){
 #endif
 }
 
+RtmpHandshake::RtmpHandshake(uint32_t _time, uint8_t *_random /*= nullptr*/)
+{
+    _time = htonl(_time);
+    memcpy(time_stamp, &_time, 4);
+    if (!_random) {
+        random_generate((char *)random, sizeof(random));
+    }
+    else {
+        memcpy(random, _random, sizeof(random));
+    }
+}
+
+void RtmpHandshake::random_generate(char *bytes, int size)
+{
+    static char cdata[] = { 0x73, 0x69, 0x6d, 0x70, 0x6c, 0x65, 0x2d, 0x72,
+                           0x74, 0x6d, 0x70, 0x2d, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
+                           0x2d, 0x77, 0x69, 0x6e, 0x6c, 0x69, 0x6e, 0x2d, 0x77, 0x69,
+                           0x6e, 0x74, 0x65, 0x72, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
+                           0x40, 0x31, 0x32, 0x36, 0x2e, 0x63, 0x6f, 0x6d };
+    for (int i = 0; i < size; i++) {
+        bytes[i] = cdata[rand() % (sizeof(cdata) - 1)];
+    }
+}
+
 }//namespace mediakit
 
 namespace toolkit {

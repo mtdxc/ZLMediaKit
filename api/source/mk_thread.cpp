@@ -11,8 +11,8 @@
 #include "mk_thread.h"
 #include "mk_tcp_private.h"
 #include "Util/logger.h"
-#include "Poller/EventPoller.h"
-#include "Thread/WorkThreadPool.h"
+#include "EventLoopThreadPool.h"
+
 using namespace std;
 using namespace toolkit;
 

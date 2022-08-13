@@ -13,7 +13,7 @@
 
 #if defined(ENABLE_RTPPROXY)
 
-#include "Network/Session.h"
+#include "Session.h"
 #include "RtpSplitter.h"
 #include "RtpProcess.h"
 #include "Util/TimeTicker.h"
@@ -25,7 +25,7 @@ public:
     static const std::string kStreamID;
     static const std::string kSSRC;
 
-    RtpSession(const toolkit::Socket::Ptr &sock);
+    RtpSession(const toolkit::SocketPtr &sock);
     ~RtpSession() override;
     void onRecv(const toolkit::Buffer::Ptr &) override;
     void onError(const toolkit::SockException &err) override;

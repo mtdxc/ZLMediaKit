@@ -19,7 +19,7 @@
 #include "Util/util.h"
 #include "Util/logger.h"
 #include "Util/TimeTicker.h"
-#include "Network/Socket.h"
+#include "Session.h"
 #include "Util/ResourcePool.h"
 #include "Http/HttpRequestSplitter.h"
 

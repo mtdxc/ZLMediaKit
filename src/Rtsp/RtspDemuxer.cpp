@@ -11,7 +11,7 @@
 #include <cctype>
 #include <algorithm>
 #include "RtspDemuxer.h"
-#include "Util/base64.h"
+#include "base64.h"
 #include "Extension/Factory.h"
 
 using namespace std;

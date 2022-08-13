@@ -17,7 +17,7 @@
 #include "RtmpPlayer.h"
 #include "RtmpMediaSource.h"
 #include "RtmpDemuxer.h"
-#include "Poller/Timer.h"
+
 #include "Util/TimeTicker.h"
 
 namespace mediakit {
@@ -27,7 +27,7 @@ public:
     using Ptr = std::shared_ptr<RtmpPlayerImp>;
     using Super = PlayerImp<RtmpPlayer,PlayerBase>;
 
-    RtmpPlayerImp(const toolkit::EventPoller::Ptr &poller) : Super(poller) {};
+    RtmpPlayerImp(const toolkit::EventPollerPtr &poller) : Super(poller) {};
 
     ~RtmpPlayerImp() override {
         DebugL << std::endl;

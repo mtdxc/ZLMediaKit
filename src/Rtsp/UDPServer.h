@@ -18,7 +18,7 @@
 #include <unordered_set>
 #include "Util/util.h"
 #include "Util/logger.h"
-#include "Network/Socket.h"
+#include "Session.h"
 
 namespace mediakit {
 
@@ -27,7 +27,7 @@ public:
     using onRecvData = std::function<bool(int intervaled, const toolkit::Buffer::Ptr &buffer, struct sockaddr *peer_addr)> ;
     ~UDPServer();
     static UDPServer &Instance();
-    toolkit::Socket::Ptr getSock(toolkit::SocketHelper &helper, const char *local_ip, int interleaved, uint16_t local_port = 0);
+    toolkit::SocketPtr getSock(toolkit::SocketHelper &helper, const char *local_ip, int interleaved, uint16_t local_port = 0);
     void listenPeer(const char *peer_ip, void *obj, const onRecvData &cb);
     void stopListenPeer(const char *peer_ip, void *obj);
 
@@ -39,7 +39,7 @@ private:
 private:
     std::mutex _mtx_udp_sock;
     std::mutex _mtx_on_recv;
-    std::unordered_map<std::string, toolkit::Socket::Ptr> _udp_sock_map;
+    std::unordered_map<std::string, toolkit::SocketPtr> _udp_sock_map;
     std::unordered_map<std::string, std::unordered_map<void *, onRecvData> > _on_recv_map;
 };
 

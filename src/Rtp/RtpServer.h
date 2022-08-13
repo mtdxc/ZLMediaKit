@@ -13,9 +13,9 @@
 
 #if defined(ENABLE_RTPPROXY)
 #include <memory>
-#include "Network/Socket.h"
-#include "Network/TcpServer.h"
-#include "Network/UdpServer.h"
+#include "Session.h"
+#include "TcpServer.h"
+#include "UdpServer.h"
 #include "RtpSession.h"
 
 namespace mediakit {
@@ -69,7 +69,7 @@ private:
     void onConnect();
 
 protected:
-    toolkit::Socket::Ptr _rtp_socket;
+    toolkit::SocketPtr _rtp_socket;
     toolkit::UdpServer::Ptr _udp_server;
     toolkit::TcpServer::Ptr _tcp_server;
     std::shared_ptr<RtcpHelper> _rtcp_helper;

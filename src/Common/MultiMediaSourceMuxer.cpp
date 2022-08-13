@@ -10,6 +10,9 @@
 
 #include <math.h>
 #include "Common/config.h"
+#include "Common/Stamp.h"
+#include "Util/TimeTicker.h"
+#include "EventLoopThreadPool.h"
 #include "MultiMediaSourceMuxer.h"
 #include "Record/Recorder.h"
 #include "Record/HlsRecorder.h"
@@ -18,6 +21,7 @@
 #include "Rtmp/RtmpMediaSourceMuxer.h"
 #include "TS/TSMediaSourceMuxer.h"
 #include "FMP4/FMP4MediaSourceMuxer.h"
+#include "Rtp/RtpSender.h"
 #ifdef ENABLE_WEBRTC
 #include "webrtc/RtcMediaSource.h"
 #endif
@@ -46,7 +50,7 @@ static string getTrackInfoStr(const TrackSource *track_src){
         codec_info << track->getCodecName();
         switch (codec_type) {
             case TrackAudio : {
-                auto audio_track = dynamic_pointer_cast<AudioTrack>(track);
+                auto audio_track = std::dynamic_pointer_cast<AudioTrack>(track);
                 codec_info << "["
                            << audio_track->getAudioSampleRate() << "/"
                            << audio_track->getAudioChannel() << "/"
@@ -54,7 +58,7 @@ static string getTrackInfoStr(const TrackSource *track_src){
                 break;
             }
             case TrackVideo : {
-                auto video_track = dynamic_pointer_cast<VideoTrack>(track);
+                auto video_track = std::dynamic_pointer_cast<VideoTrack>(track);
                 codec_info << "["
                            << video_track->getVideoWidth() << "/"
                            << video_track->getVideoHeight() << "/"
@@ -89,8 +93,9 @@ std::string MultiMediaSourceMuxer::shortUrl() const {
 }
 
 MultiMediaSourceMuxer::MultiMediaSourceMuxer(const string &vhost, const string &app, const string &stream, float dur_sec, const ProtocolOption &option) {
-    _poller = EventPollerPool::Instance().getPoller();
-    _create_in_poller = _poller->isCurrentThread();
+    _poller = hv::EventLoopThreadPool::Instance()->loop();
+    _stamp = new Stamp[2];
+    _create_in_poller = _poller->isInLoopThread();
     _vhost = vhost;
     _app = app;
     _stream_id = stream;
@@ -108,7 +113,7 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const string &vhost, const string &
     }
 #endif
     if (option.enable_hls) {
-        _hls = dynamic_pointer_cast<HlsRecorder>(Recorder::createRecorder(Recorder::type_hls, vhost, app, stream, option));
+        _hls = std::dynamic_pointer_cast<HlsRecorder>(Recorder::createRecorder(Recorder::type_hls, vhost, app, stream, option));
     }
     if (option.enable_mp4) {
         _mp4 = Recorder::createRecorder(Recorder::type_mp4, vhost, app, stream, option);
@@ -125,6 +130,11 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const string &vhost, const string &
     //音频相关设置
     enableAudio(option.enable_audio);
     enableMuteAudio(option.add_mute_audio);
+}
+
+MultiMediaSourceMuxer::~MultiMediaSourceMuxer()
+{
+    delete[] _stamp;
 }
 
 void MultiMediaSourceMuxer::setMediaListener(const std::weak_ptr<MediaSourceEvent> &listener) {
@@ -172,10 +182,9 @@ int MultiMediaSourceMuxer::totalReaderCount() const {
     if(_hls) ret += _hls->readerCount();
 
 #if defined(ENABLE_RTPPROXY)
-    return ret + (int)_rtp_sender.size();
-#else
-    return ret;
+    ret += (int)_rtp_sender.size();
 #endif
+    return ret;
 }
 
 void MultiMediaSourceMuxer::setTimeStamp(uint32_t stamp) {
@@ -256,13 +265,14 @@ bool MultiMediaSourceMuxer::isRecording(MediaSource &sender, Recorder::type type
 void MultiMediaSourceMuxer::startSendRtp(MediaSource &sender, const MediaSourceEvent::SendRtpArgs &args, const std::function<void(uint16_t, const toolkit::SockException &)> cb) {
 #if defined(ENABLE_RTPPROXY)
     auto rtp_sender = std::make_shared<RtpSender>(getOwnerPoller(sender));
-    weak_ptr<MultiMediaSourceMuxer> weak_self = shared_from_this();
+    std::weak_ptr<MultiMediaSourceMuxer> weak_self = shared_from_this();
     rtp_sender->startSend(args, [args, weak_self, rtp_sender, cb](uint16_t local_port, const SockException &ex) mutable {
         cb(local_port, ex);
         auto strong_self = weak_self.lock();
         if (!strong_self || ex) {
             return;
         }
+        // add track for rtp sender
         for (auto &track : strong_self->getTracks(false)) {
             rtp_sender->addTrack(track);
         }
@@ -305,7 +315,7 @@ bool MultiMediaSourceMuxer::stopSendRtp(MediaSource &sender, const string &ssrc)
 #endif//ENABLE_RTPPROXY
 }
 
-vector<Track::Ptr> MultiMediaSourceMuxer::getMediaTracks(MediaSource &sender, bool trackReady) const {
+std::vector<Track::Ptr> MultiMediaSourceMuxer::getMediaTracks(MediaSource &sender, bool trackReady) const {
     return getTracks(trackReady);
 }
 
@@ -361,7 +371,7 @@ bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
 }
 
 void MultiMediaSourceMuxer::onAllTrackReady() {
-    CHECK(!_create_in_poller || getOwnerPoller(MediaSource::NullMediaSource())->isCurrentThread());
+    CHECK(!_create_in_poller || getOwnerPoller(MediaSource::NullMediaSource())->isInLoopThread());
     setMediaListener(getDelegate());
 
     if (_rtmp) {
@@ -467,7 +477,8 @@ bool MultiMediaSourceMuxer::onTrackFrame(const Frame::Ptr &frame_in) {
 
 #if defined(ENABLE_RTPPROXY)
     for (auto &pr : _rtp_sender) {
-        ret = pr.second->inputFrame(frame) ? true : ret;
+        if(pr.second->inputFrame(frame))
+            ret = true;
     }
 #endif //ENABLE_RTPPROXY
     return ret;
@@ -489,10 +500,10 @@ bool MultiMediaSourceMuxer::isEnabled(){
                     (hls && hls->isEnabled()) || _mp4;
 
 #if defined(ENABLE_RTPPROXY)
-        _is_enable = flag || _rtp_sender.size();
-#else
-        _is_enable = flag;
+        if (_rtp_sender.size())
+            flag = true;
 #endif //ENABLE_RTPPROXY
+        _is_enable = flag;
         if (_is_enable) {
             //无人观看时，不刷新计时器,因为无人观看时每次都会检查一遍，所以刷新计数器无意义且浪费cpu
             _last_check.resetTime();

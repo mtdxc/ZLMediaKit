@@ -11,6 +11,7 @@
 #ifndef ZLMEDIAKIT_HLSMEDIASOURCE_H
 #define ZLMEDIAKIT_HLSMEDIASOURCE_H
 
+#include "Common/PacketCache.h"
 #include "Common/MediaSource.h"
 #include "Util/TimeTicker.h"
 #include <atomic>

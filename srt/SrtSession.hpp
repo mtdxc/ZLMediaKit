@@ -1,7 +1,7 @@
 ﻿#ifndef ZLMEDIAKIT_SRT_SESSION_H
 #define ZLMEDIAKIT_SRT_SESSION_H
 
-#include "Network/Session.h"
+#include "Session.h"
 #include "SrtTransport.hpp"
 
 namespace SRT {

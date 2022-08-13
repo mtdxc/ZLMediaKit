@@ -14,7 +14,8 @@
 #include "Util/File.h"
 #include "Common/config.h"
 #include "MP4Recorder.h"
-#include "Thread/WorkThreadPool.h"
+#include "EventLoopThreadPool.h"
+
 
 using namespace std;
 using namespace toolkit;

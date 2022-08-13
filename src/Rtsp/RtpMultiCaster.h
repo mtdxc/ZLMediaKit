@@ -18,7 +18,7 @@
 #include "Common/config.h"
 #include "RtspMediaSource.h"
 #include "Util/mini.h"
-#include "Network/Socket.h"
+#include "Session.h"
 
 namespace mediakit{
 
@@ -58,7 +58,7 @@ private:
 
 private:
     std::recursive_mutex _mtx;
-    toolkit::Socket::Ptr _udp_sock[2];
+    toolkit::SocketPtr _udp_sock[2];
     std::shared_ptr<uint32_t> _multicast_ip;
     std::unordered_map<void * , onDetach > _detach_map;
     RtspMediaSource::RingType::RingReader::Ptr _rtp_reader;

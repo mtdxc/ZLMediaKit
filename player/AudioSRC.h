@@ -26,7 +26,7 @@ extern "C" {
 #pragma comment(lib,"SDL2.lib")
 #endif //defined(_WIN32)
 
-#include "Network/Buffer.h"
+#include "Buffer.hpp"
 #include "SDLAudioDevice.h"
 
 class AudioSRCDelegate {

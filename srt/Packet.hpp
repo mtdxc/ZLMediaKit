@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include <vector>
 
-#include "Network/Buffer.h"
-#include "Network/sockutil.h"
+#include "Buffer.hpp"
 #include "Util/logger.h"
 
 #include "Common.hpp"

@@ -6,9 +6,8 @@
 #include <memory>
 #include <mutex>
 
-#include "Network/Session.h"
-#include "Poller/EventPoller.h"
-#include "Poller/Timer.h"
+#include "Session.h"
+
 
 #include "Common.hpp"
 #include "NackContext.hpp"
@@ -151,7 +150,7 @@ private:
 
     Timer::Ptr _handleshake_timer;
 
-    ResourcePool<BufferRaw> _packet_pool;
+    //ResourcePool<BufferRaw> _packet_pool;
 
     //检测超时的定时器
     Timer::Ptr _timer;

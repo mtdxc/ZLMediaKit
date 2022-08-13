@@ -9,7 +9,7 @@
  */
 
 #include <cstdlib>
-#include "Util/base64.h"
+#include "base64.h"
 #include "HttpClient.h"
 #include "Common/config.h"
 

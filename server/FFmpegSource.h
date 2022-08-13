@@ -15,8 +15,8 @@
 #include <memory>
 #include <functional>
 #include "Process.h"
+#include "toolkit.h"
 #include "Util/TimeTicker.h"
-#include "Network/Socket.h"
 #include "Common/MediaSource.h"
 
 namespace FFmpeg {
@@ -88,7 +88,7 @@ private:
     bool _enable_mp4 = false;
     Process _process;
     toolkit::Timer::Ptr _timer;
-    toolkit::EventPoller::Ptr _poller;
+    toolkit::EventPollerPtr _poller;
     mediakit::MediaInfo _media_info;
     std::string _src_url;
     std::string _dst_url;

@@ -22,7 +22,7 @@ class RtpSender final : public MediaSinkInterface, public std::enable_shared_fro
 public:
     typedef std::shared_ptr<RtpSender> Ptr;
 
-    RtpSender(toolkit::EventPoller::Ptr poller = nullptr);
+    RtpSender(toolkit::EventPollerPtr poller = nullptr);
     ~RtpSender() override;
 
     /**
@@ -76,9 +76,9 @@ private:
 private:
     bool _is_connect = false;
     MediaSourceEvent::SendRtpArgs _args;
-    toolkit::Socket::Ptr _socket_rtp;
-    toolkit::Socket::Ptr _socket_rtcp;
-    toolkit::EventPoller::Ptr _poller;
+    toolkit::SocketPtr _socket_rtp;
+    toolkit::SocketPtr _socket_rtcp;
+    toolkit::EventPollerPtr _poller;
     MediaSinkInterface::Ptr _interface;
     std::shared_ptr<RtcpContext> _rtcp_context;
     toolkit::Ticker _rtcp_send_ticker;

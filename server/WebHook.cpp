@@ -15,7 +15,7 @@
 #include "Common/config.h"
 #include "Common/MediaSource.h"
 #include "Http/HttpRequester.h"
-#include "Network/Session.h"
+#include "Session.h"
 #include "Rtsp/RtspSession.h"
 #include "Http/HttpSession.h"
 #include "WebHook.h"

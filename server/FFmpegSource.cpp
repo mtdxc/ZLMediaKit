@@ -13,8 +13,7 @@
 #include "Common/MediaSource.h"
 #include "Util/File.h"
 #include "System.h"
-#include "Thread/WorkThreadPool.h"
-#include "Network/sockutil.h"
+#include "EventLoopThreadPool.h"
 
 using namespace std;
 using namespace toolkit;

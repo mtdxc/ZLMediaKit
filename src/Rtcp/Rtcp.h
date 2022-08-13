@@ -12,7 +12,7 @@
 #define ZLMEDIAKIT_RTCP_H
 
 #include "Common/macros.h"
-#include "Network/Buffer.h"
+#include "Buffer.hpp"
 #include "Util/util.h"
 #include <stdint.h>
 #include <vector>

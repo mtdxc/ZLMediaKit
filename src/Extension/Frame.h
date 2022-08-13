@@ -11,10 +11,11 @@
 #ifndef ZLMEDIAKIT_FRAME_H
 #define ZLMEDIAKIT_FRAME_H
 
+#include <list>
 #include <mutex>
 #include <functional>
+#include "Buffer.hpp"
 #include "Util/RingBuffer.h"
-#include "Network/Socket.h"
 #include "Common/Stamp.h"
 
 namespace mediakit {
@@ -201,6 +202,9 @@ public:
     bool keyFrame() const override { return false; }
     bool configFrame() const override { return false; }
 
+// protected:
+//   friend class toolkit::ResourcePool_l<FrameImp>;
+    FrameImp() = default;
 public:
     CodecId _codec_id = CodecInvalid;
     uint64_t _dts = 0;
@@ -212,9 +216,6 @@ private:
     //对象个数统计
     toolkit::ObjectStatistic<FrameImp> _statistic;
 
-protected:
-    friend class toolkit::ResourcePool_l<FrameImp>;
-    FrameImp() = default;
 };
 
 /**
@@ -542,7 +543,7 @@ private:
     int _type;
     bool _have_decode_able_frame = false;
     onOutput _cb;
-    toolkit::List<Frame::Ptr> _frame_cache;
+    std::list<Frame::Ptr> _frame_cache;
 };
 
 } // namespace mediakit

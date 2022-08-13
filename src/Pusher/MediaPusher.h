@@ -26,20 +26,20 @@ public:
                 const std::string &vhost,
                 const std::string &app,
                 const std::string &stream,
-                const toolkit::EventPoller::Ptr &poller = nullptr);
+                const toolkit::EventPollerPtr &poller = nullptr);
 
     MediaPusher(const MediaSource::Ptr &src,
-                const toolkit::EventPoller::Ptr &poller = nullptr);
+                const toolkit::EventPollerPtr &poller = nullptr);
 
     virtual ~MediaPusher();
 
     void publish(const std::string &url) override;
-    toolkit::EventPoller::Ptr getPoller();
+    toolkit::EventPollerPtr getPoller();
     void setOnCreateSocket(toolkit::Socket::onCreateSocket cb);
 
 private:
     std::weak_ptr<MediaSource> _src;
-    toolkit::EventPoller::Ptr _poller;
+    toolkit::EventPollerPtr _poller;
     toolkit::Socket::onCreateSocket _on_create_socket;
 };
 

@@ -12,8 +12,8 @@
 #define MK_TCP_PRIVATE_H
 
 #include "mk_tcp.h"
-#include "Network/TcpClient.h"
-#include "Network/Session.h"
+#include "TcpClient.h"
+#include "Session.h"
 
 class TcpClientForC : public toolkit::TcpClient {
 public:
@@ -33,7 +33,7 @@ private:
 
 class SessionForC : public toolkit::Session {
 public:
-    SessionForC(const toolkit::Socket::Ptr &pSock) ;
+    SessionForC(const toolkit::SocketPtr &pSock) ;
     ~SessionForC() override = default;
     void onRecv(const toolkit::Buffer::Ptr &buffer) override ;
     void onError(const toolkit::SockException &err) override;

@@ -12,7 +12,8 @@
 
 #include "MP4Reader.h"
 #include "Common/config.h"
-#include "Thread/WorkThreadPool.h"
+#include "EventLoopThreadPool.h"
+
 
 using namespace std;
 using namespace toolkit;
@@ -245,7 +246,7 @@ string MP4Reader::getOriginUrl(MediaSource &sender) const {
     return _file_path;
 }
 
-toolkit::EventPoller::Ptr MP4Reader::getOwnerPoller(MediaSource &sender) {
+toolkit::EventPollerPtr MP4Reader::getOwnerPoller(MediaSource &sender) {
     return _poller;
 }
 

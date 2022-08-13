@@ -11,7 +11,8 @@
 #if defined(ENABLE_RTPPROXY)
 #include "RtpSender.h"
 #include "Rtsp/RtspSession.h"
-#include "Thread/WorkThreadPool.h"
+#include "EventLoopThreadPool.h"
+
 #include "Util/uv_errno.h"
 #include "RtpCache.h"
 

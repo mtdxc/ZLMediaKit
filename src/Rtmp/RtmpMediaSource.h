@@ -27,7 +27,6 @@
 #include "Util/TimeTicker.h"
 #include "Util/ResourcePool.h"
 #include "Util/NoticeCenter.h"
-#include "Thread/ThreadPool.h"
 
 #define RTMP_GOP_SIZE 512
 

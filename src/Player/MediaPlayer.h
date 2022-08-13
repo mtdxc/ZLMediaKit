@@ -24,15 +24,15 @@ class MediaPlayer : public PlayerImp<PlayerBase, PlayerBase> {
 public:
     using Ptr = std::shared_ptr<MediaPlayer>;
 
-    MediaPlayer(const toolkit::EventPoller::Ptr &poller = nullptr);
+    MediaPlayer(const toolkit::EventPollerPtr &poller = nullptr);
     ~MediaPlayer() override = default;
 
     void play(const std::string &url) override;
-    toolkit::EventPoller::Ptr getPoller();
+    toolkit::EventPollerPtr getPoller();
     void setOnCreateSocket(toolkit::Socket::onCreateSocket cb);
 
 private:
-    toolkit::EventPoller::Ptr _poller;
+    toolkit::EventPollerPtr _poller;
     toolkit::Socket::onCreateSocket _on_create_socket;
 };
 
