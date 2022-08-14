@@ -10,7 +10,19 @@
 
 #include "RtpCodec.h"
 
-namespace mediakit{
+namespace mediakit {
+
+RtpInfo::RtpInfo(uint32_t ssrc, size_t mtu_size, uint32_t sample_rate, uint8_t pt, uint8_t interleaved)
+{
+    if (ssrc == 0) {
+        ssrc = ((uint64_t)this) & 0xFFFFFFFF;
+    }
+    _pt = pt;
+    _ssrc = ssrc;
+    _mtu_size = mtu_size;
+    _sample_rate = sample_rate;
+    _interleaved = interleaved;
+}
 
 RtpPacket::Ptr RtpInfo::makeRtp(TrackType type, const void* data, size_t len, bool mark, uint64_t stamp) {
     uint16_t payload_len = (uint16_t) (len + RtpPacket::kRtpHeaderSize);

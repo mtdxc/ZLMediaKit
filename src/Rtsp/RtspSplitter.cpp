@@ -13,7 +13,7 @@
 #include "Util/logger.h"
 #include "Util/util.h"
 
-using namespace std;
+//using namespace std;
 using namespace toolkit;
 
 namespace mediakit{
@@ -71,7 +71,7 @@ ssize_t RtspSplitter::onRecvHeader(const char *data, size_t len) {
 }
 
 void RtspSplitter::onRecvContent(const char *data, size_t len) {
-    _parser.setContent(string(data,len));
+    _parser.setContent(std::string(data,len));
     onWholeRtspPacket(_parser);
     _parser.Clear();
 }

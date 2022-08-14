@@ -14,23 +14,17 @@
 #include <string>
 #include <memory>
 #include "RtspSession.h"
-#include "RtspMediaSource.h"
 #include "Player/PlayerBase.h"
-#include "Util/util.h"
-#include "Util/logger.h"
 #include "Util/TimeTicker.h"
-
-#include "Session.h"
-#include "TcpClient.h"
+#include "toolkit.h"
+#include "TcpClient.hpp"
 #include "RtspSplitter.h"
 #include "RtpReceiver.h"
-#include "Common/Stamp.h"
-#include "Rtcp/RtcpContext.h"
 
 namespace mediakit {
-
+class RtcpContext;
 //实现了rtsp播放器协议部分的功能，及数据接收功能
-class RtspPlayer : public PlayerBase, public toolkit::TcpClient, public RtspSplitter, public RtpReceiver {
+class RtspPlayer : public PlayerBase, public toolkit::TcpClient, public RtspSplitter, public RtpReceiver{
 public:
     using Ptr = std::shared_ptr<RtspPlayer>;
 
@@ -61,7 +55,7 @@ protected:
      * @param data
      * @param len
      */
-    void onRtpPacket(const char *data,size_t len) override ;
+    void onRtpPacket(const char *data,size_t len) override;
 
     /**
      * rtp数据包排序后输出
@@ -87,9 +81,9 @@ protected:
     virtual void onRtcpPacket(int track_idx, SdpTrack::Ptr &track, uint8_t *data, size_t len);
 
     /////////////TcpClient override/////////////
-    void onConnect(const toolkit::SockException &err) override;
-    void onRecv(const toolkit::Buffer::Ptr &buf) override;
-    void onErr(const toolkit::SockException &ex) override;
+    void onConnect(const toolkit::SockException &err);
+    void onRecv(const toolkit::Buffer::Ptr &buf);
+    void onErr(const toolkit::SockException &ex);
 
 private:
     void onPlayResult_l(const toolkit::SockException &ex , bool handshake_done);
@@ -123,9 +117,9 @@ private:
     std::vector<SdpTrack::Ptr> _sdp_track;
     std::function<void(const Parser&)> _on_response;
     //RTP端口,trackid idx 为数组下标
-    toolkit::SocketPtr _rtp_sock[2];
+    toolkit::SessionPtr _rtp_sock[2];
     //RTCP端口,trackid idx 为数组下标
-    toolkit::SocketPtr _rtcp_sock[2];
+    toolkit::SessionPtr _rtcp_sock[2];
 
     //rtsp鉴权相关
     std::string _md5_nonce;
@@ -149,7 +143,7 @@ private:
     //rtcp发送时间,trackid idx 为数组下标
     toolkit::Ticker _rtcp_send_ticker[2];
     //统计rtp并发送rtcp
-    std::vector<RtcpContext::Ptr> _rtcp_context;
+    std::vector<std::shared_ptr<RtcpContext>> _rtcp_context;
 };
 
 } /* namespace mediakit */

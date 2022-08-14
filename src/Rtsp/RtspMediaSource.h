@@ -17,7 +17,6 @@
 #include "Common/MediaSource.h"
 #include "Common/PacketCache.h"
 #include "Util/RingBuffer.h"
-#include "Util/ResourcePool.h"
 #include "RtpCodec.h"
 
 #define RTP_GOP_SIZE 512
@@ -32,7 +31,6 @@ namespace mediakit {
  */
 class RtspMediaSource : public MediaSource, public toolkit::RingDelegate<RtpPacket::Ptr>, private PacketCache<RtpPacket> {
 public:
-    using PoolType = toolkit::ResourcePool<RtpPacket>;
     using Ptr = std::shared_ptr<RtspMediaSource>;
     using RingDataType = std::shared_ptr<std::list<RtpPacket::Ptr> >;
     using RingType = toolkit::RingBuffer<RingDataType>;
@@ -94,7 +92,7 @@ public:
     /**
      * 获取相应轨道的seqence
      */
-    virtual uint16_t getSeqence(TrackType trackType) {
+    virtual uint16_t getSequence(TrackType trackType) {
         assert(trackType >= 0 && trackType < TrackMax);
         auto &track = _tracks[trackType];
         if (!track) {
@@ -140,47 +138,14 @@ public:
     /**
      * 设置sdp
      */
-    virtual void setSdp(const std::string &sdp) {
-        SdpParser sdp_parser(sdp);
-        _tracks[TrackVideo] = sdp_parser.getTrack(TrackVideo);
-        _tracks[TrackAudio] = sdp_parser.getTrack(TrackAudio);
-        _have_video = (bool) _tracks[TrackVideo];
-        _sdp = sdp_parser.toString();
-        if (_ring) {
-            regist();
-        }
-    }
+    virtual void setSdp(const std::string &sdp);
 
     /**
      * 输入rtp
      * @param rtp rtp包
      * @param keyPos 该包是否为关键帧的第一个包
      */
-    void onWrite(RtpPacket::Ptr rtp, bool keyPos) override {
-        _speed[rtp->type] += rtp->size();
-        assert(rtp->type >= 0 && rtp->type < TrackMax);
-        auto &track = _tracks[rtp->type];
-        auto stamp = rtp->getStampMS();
-        if (track) {
-            track->_seq = rtp->getSeq();
-            track->_time_stamp = rtp->getStamp() * uint64_t(1000) / rtp->sample_rate;
-            track->_ssrc = rtp->getSSRC();
-        }
-        if (!_ring) {
-            std::weak_ptr<RtspMediaSource> weakSelf = std::dynamic_pointer_cast<RtspMediaSource>(shared_from_this());
-            //GOP默认缓冲512组RTP包，每组RTP包时间戳相同(如果开启合并写了，那么每组为合并写时间内的RTP包),
-            //每次遇到关键帧第一个RTP包，则会清空GOP缓存(因为有新的关键帧了，同样可以实现秒开)
-            _ring = std::make_shared<RingType>(_ring_size, [weakSelf](int size){
-                if (auto strongSelf = weakSelf.lock())
-                    strongSelf->onReaderChanged(size);
-            });
-            if (!_sdp.empty()) {
-                regist();
-            }
-        }
-        bool is_video = rtp->type == TrackVideo;
-        PacketCache<RtpPacket>::inputPacket(stamp, is_video, std::move(rtp), keyPos);
-    }
+    void onWrite(RtpPacket::Ptr rtp, bool keyPos) override;
 
     void clearCache() override{
         PacketCache<RtpPacket>::clearCache();
@@ -194,7 +159,7 @@ private:
      * @param key_pos 是否包含关键帧
      */
     void onFlush(std::shared_ptr<std::list<RtpPacket::Ptr> > rtp_list, bool key_pos) override {
-        //如果不存在视频，那么就没有存在GOP缓存的意义，所以is_key一直为true确保一直清空GOP缓存
+        //如不存在视频，那就没必要使用GOP缓存，因此让is_key为true，以确保一直清空GOP缓存
         _ring->write(std::move(rtp_list), _have_video ? key_pos : true);
     }
 

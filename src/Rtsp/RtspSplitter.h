@@ -12,17 +12,17 @@
 #define ZLMEDIAKIT_RTSPSPLITTER_H
 
 #include "Common/Parser.h"
-#include "Http/HttpRequestSplitter.h"
+#include "Util/HttpRequestSplitter.h"
 
 namespace mediakit{
-
+// rtsp tcp控制通道分包器
 class RtspSplitter : public HttpRequestSplitter{
 public:
     RtspSplitter(){}
     virtual ~RtspSplitter(){}
 
     /**
-    * 是否允许接收rtp包
+    * 是否允许rtp包接收
     * @param enable
     */
     void enableRecvRtp(bool enable);

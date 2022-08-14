@@ -14,22 +14,20 @@
 #include <string>
 #include <memory>
 #include "RtspMediaSource.h"
-#include "Util/util.h"
-#include "Util/logger.h"
-
-#include "Session.h"
-#include "TcpClient.h"
+#include "toolkit.h"
+#include "TcpClient.hpp"
 #include "RtspSplitter.h"
 #include "Pusher/PusherBase.h"
-#include "Rtcp/RtcpContext.h"
 
 namespace mediakit {
-
+class Parser;
+class RtcpContext;
 class RtspPusher : public toolkit::TcpClient, public RtspSplitter, public PusherBase {
 public:
     typedef std::shared_ptr<RtspPusher> Ptr;
     RtspPusher(const toolkit::EventPollerPtr &poller,const RtspMediaSource::Ptr &src);
     ~RtspPusher() override;
+
     void publish(const std::string &url) override;
     void teardown() override;
 
@@ -61,7 +59,8 @@ private:
     int getTrackIndexByInterleaved(int interleaved) const;
     int getTrackIndexByTrackType(TrackType type) const;
 
-    void sendRtpPacket(const RtspMediaSource::RingDataType & pkt) ;
+    void sendRtpPacket(const RtspMediaSource::RingDataType & pkt);
+    void sendRtcpPacket(int track_idx, toolkit::Buffer::Ptr ptr);
     void sendRtspRequest(const std::string &cmd, const std::string &url ,const StrCaseMap &header = StrCaseMap(),const std::string &sdp = "" );
     void sendRtspRequest(const std::string &cmd, const std::string &url ,const std::initializer_list<std::string> &header,const std::string &sdp = "");
 
@@ -70,7 +69,9 @@ private:
     void updateRtcpContext(const RtpPacket::Ptr &pkt);
 
 private:
+    // 当前命令id
     unsigned int _cseq = 1;
+    // rtp传输模式
     Rtsp::eRtpType _rtp_type = Rtsp::RTP_TCP;
 
     //rtsp鉴权相关
@@ -81,22 +82,28 @@ private:
     std::string _content_base;
     SdpParser _sdp_parser;
     std::vector<SdpTrack::Ptr> _track_vec;
-    //RTP端口,trackid idx 为数组下标
-    toolkit::SocketPtr _rtp_sock[2];
-    //RTCP端口,trackid idx 为数组下标
-    toolkit::SocketPtr _rtcp_sock[2];
+    //RTP端口, trackid idx 为数组下标
+    toolkit::SessionPtr _rtp_sock[2];
+    //RTCP端口, trackid idx 为数组下标
+    toolkit::SessionPtr _rtcp_sock[2];
     //超时功能实现
     std::shared_ptr<toolkit::Timer> _publish_timer;
     //心跳定时器
     std::shared_ptr<toolkit::Timer> _beat_timer;
+
+    // 推送媒体源
     std::weak_ptr<RtspMediaSource> _push_src;
+    // 媒体源读取器
     RtspMediaSource::RingType::RingReader::Ptr _rtsp_reader;
+
+    // 解析函数
     std::function<void(const Parser&)> _on_res_func;
+
     ////////// rtcp ////////////////
     //rtcp发送时间,trackid idx 为数组下标
     toolkit::Ticker _rtcp_send_ticker[2];
     //统计rtp并发送rtcp
-    std::vector<RtcpContext::Ptr> _rtcp_context;
+    std::vector<std::shared_ptr<RtcpContext>> _rtcp_context;
 };
 
 using RtspPusherImp = PusherImp<RtspPusher, PusherBase>;

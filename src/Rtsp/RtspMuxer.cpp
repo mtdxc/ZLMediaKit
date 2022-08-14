@@ -10,8 +10,9 @@
 
 #include "RtspMuxer.h"
 #include "Extension/Factory.h"
+#include "Common/Stamp.h"
 
-using namespace std;
+//using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
@@ -38,6 +39,7 @@ void RtspMuxer::onRtp(RtpPacket::Ptr in, bool is_key) {
 }
 
 RtspMuxer::RtspMuxer(const TitleSdp::Ptr &title) {
+    _stamp = new Stamp[TrackMax];
     if (!title) {
         _sdp = std::make_shared<TitleSdp>()->getSdp();
     } else {
@@ -50,6 +52,10 @@ RtspMuxer::RtspMuxer(const TitleSdp::Ptr &title) {
         onRtp(std::move(in), is_key);
     }));
     _ntp_stamp_start = getCurrentMillisecond(true);
+}
+
+RtspMuxer::~RtspMuxer() {
+    delete [] _stamp;
 }
 
 bool RtspMuxer::addTrack(const Track::Ptr &track) {
@@ -94,7 +100,7 @@ void RtspMuxer::flush() {
     }
 }
 
-string RtspMuxer::getSdp() {
+std::string RtspMuxer::getSdp() {
     return _sdp;
 }
 

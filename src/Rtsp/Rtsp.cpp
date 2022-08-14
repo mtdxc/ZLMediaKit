@@ -12,6 +12,9 @@
 #include <cinttypes>
 #include "Rtsp.h"
 #include "Common/Parser.h"
+#include "Common/config.h"
+#include "Extension/Track.h"
+#include "Session.h"
 
 using namespace std;
 using namespace toolkit;
@@ -76,6 +79,7 @@ static void getAttrSdp(const multimap<string, string> &attr, _StrPrinter &printe
             printer << "a=" << pr.first << ":" << pr.second << "\r\n";
         }
     }
+    // control attr放最后
     if (ptr) {
         printer << "a=" << ptr->first << ":" << ptr->second << "\r\n";
     }
@@ -96,6 +100,20 @@ string SdpTrack::getControlUrl(const string &base_url) const {
         return _control;
     }
     return base_url + "/" + _control;
+}
+
+// 获取bitrate
+
+int SdpTrack::getBitRate() const {
+    int data_rate = 0;
+    sscanf(_b.data(), "AS:%d", &data_rate);
+    return data_rate * 1024;
+}
+
+void SdpTrack::setBitRate(int bit) {
+    char buf[32];
+    sprintf(buf, "AS:%d", bit / 1024);
+    _b = buf;
 }
 
 string SdpTrack::toString(uint16_t port) const {
@@ -185,7 +203,9 @@ void SdpParser::load(const string &sdp) {
                     }
                     break;
                 }
-                default: track->_other[opt] = opt_val; break;
+                default: 
+                    track->_other[opt] = opt_val; 
+                    break;
             }
         }
     }
@@ -268,6 +288,7 @@ SdpTrack::Ptr SdpParser::getTrack(TrackType type) const {
 
 vector<SdpTrack::Ptr> SdpParser::getAvailableTrack() const {
     vector<SdpTrack::Ptr> ret;
+    // 最多只返回一个video_tracker和audio_tracker
     bool audio_added = false;
     bool video_added = false;
     for (auto &track : _track_vec) {
@@ -332,44 +353,34 @@ public:
         return *instance;
     }
 
-    void makeSockPair(std::pair<Socket::Ptr, Socket::Ptr> &pair, const string &local_ip, bool re_use_port, bool is_udp) {
-        auto &sock0 = pair.first;
-        auto &sock1 = pair.second;
+    void makeSockPair(toolkit::SessionPtr pair[2], const string &local_ip, bool re_use_port, bool is_udp) {
+        auto &sock0 = pair[0];
+        auto &sock1 = pair[1];
         auto sock_pair = getPortPair();
         if (!sock_pair) {
-            throw runtime_error("none reserved port in pool");
+            throw runtime_error("none reserved udp port in pool");
         }
-        if (is_udp) {
-            if (!sock0->bindUdpSock(2 * *sock_pair, local_ip.data(), re_use_port)) {
-                //分配端口失败
-                throw runtime_error("open udp socket[0] failed");
-            }
-
-            if (!sock1->bindUdpSock(2 * *sock_pair + 1, local_ip.data(), re_use_port)) {
-                //分配端口失败
-                throw runtime_error("open udp socket[1] failed");
-            }
-
-            auto on_cycle = [sock_pair](Socket::Ptr &, std::shared_ptr<void> &) {};
-            // udp socket没onAccept事件，设置该回调，目的是为了在销毁socket时，回收对象
-            sock0->setOnAccept(on_cycle);
-            sock1->setOnAccept(on_cycle);
-        } else {
-            if (!sock0->listen(2 * *sock_pair, local_ip.data())) {
-                //分配端口失败
-                throw runtime_error("listen tcp socket[0] failed");
-            }
-
-            if (!sock1->listen(2 * *sock_pair + 1, local_ip.data())) {
-                //分配端口失败
-                throw runtime_error("listen tcp socket[1] failed");
-            }
-
-            auto on_cycle = [sock_pair](const Buffer::Ptr &buf, struct sockaddr *addr, int addr_len) {};
-            // udp socket没onAccept事件，设置该回调，目的是为了在销毁socket时，回收对象
-            sock0->setOnRead(on_cycle);
-            sock1->setOnRead(on_cycle);
+        hloop_t* loop = hv::tlsEventLoop()->loop();
+        hio_type_e iotype = is_udp ? HIO_TYPE_UDP : HIO_TYPE_TCP;
+        hio_t* io1 = hio_create_socket(loop, local_ip.data(), 2 * *sock_pair, iotype, HIO_SERVER_SIDE);
+        if (!io1) {
+            //分配端口失败
+            throw runtime_error("open udp socket[0] failed");
         }
+        hio_t* io2 = hio_create_socket(loop, local_ip.data(), 2 * *sock_pair + 1, iotype, HIO_SERVER_SIDE);
+        if (!io2) {
+            hio_close(io1);
+            //分配端口失败
+            throw runtime_error("open udp socket[1] failed");
+        }
+        pair[0] = std::make_shared<toolkit::Session>(io1);
+        pair[1] = std::make_shared<toolkit::Session>(io2);
+        /*
+        auto on_cycle = [sock_pair](Socket::Ptr &, std::shared_ptr<void> &) {};
+        // udp socket没onAccept事件，设置该回调，目的是为了在销毁socket时，回收对象
+        sock0->setOnAccept(on_cycle);
+        sock1->setOnAccept(on_cycle);
+        */
     }
 
 private:
@@ -392,14 +403,12 @@ private:
         weak_ptr<PortManager> weak_self = this->shared_from_this();
         std::shared_ptr<uint16_t> ret(new uint16_t(pos), [weak_self, pos](uint16_t *ptr) {
             delete ptr;
-            auto strong_self = weak_self.lock();
-            if (!strong_self) {
-                return;
+            if (auto strong_self = weak_self.lock()) {
+                InfoL << "return port to pool:" << 2 * pos << "-" << 2 * pos + 1;
+                //回收端口号
+                std::lock_guard<std::recursive_mutex> lck(strong_self->_pool_mtx);
+                strong_self->_port_pair_pool.emplace_back(pos);
             }
-            InfoL << "return port to pool:" << 2 * pos << "-" << 2 * pos + 1;
-            //回收端口号
-            lock_guard<recursive_mutex> lck(strong_self->_pool_mtx);
-            strong_self->_port_pair_pool.emplace_back(pos);
         });
         return ret;
     }
@@ -409,7 +418,7 @@ private:
     deque<uint16_t> _port_pair_pool;
 };
 
-void makeSockPair(std::pair<Socket::Ptr, Socket::Ptr> &pair, const string &local_ip, bool re_use_port, bool is_udp) {
+void makeSockPair(toolkit::SessionPtr pair[2], const string &local_ip, bool re_use_port, bool is_udp) {
     int try_count = 0;
     while (true) {
         try {
@@ -431,11 +440,7 @@ void makeSockPair(std::pair<Socket::Ptr, Socket::Ptr> &pair, const string &local
 
 string printSSRC(uint32_t ui32Ssrc) {
     char tmp[9] = {0};
-    ui32Ssrc = htonl(ui32Ssrc);
-    uint8_t *pSsrc = (uint8_t *) &ui32Ssrc;
-    for (int i = 0; i < 4; i++) {
-        sprintf(tmp + 2 * i, "%02X", pSsrc[i]);
-    }
+    sprintf(tmp, "%08X", ui32Ssrc);
     return tmp;
 }
 
@@ -535,6 +540,13 @@ string RtpHeader::dumpString(size_t rtp_size) const {
     return std::move(printer);
 }
 
+std::string RtpHeader::dump(size_t rtp_size) const {
+    char line[256] = { 0 };
+    int n = sprintf(line, "ssrc:%" PRIu32 " pt:%" PRIu8 " seq:%" PRIu16 " tsp:%" PRIu32 "%c%c len:%zu",
+        ntohl(ssrc), pt, ntohs(seq), ntohl(stamp), mark?'M':' ', ext?'E':' ', rtp_size);
+    return line;
+}
+
 ///////////////////////////////////////////////////////////////////////
 
 RtpHeader *RtpPacket::getHeader() {
@@ -547,7 +559,13 @@ const RtpHeader *RtpPacket::getHeader() const {
 }
 
 string RtpPacket::dumpString() const {
-    return ((RtpPacket *) this)->getHeader()->dumpString(size() - RtpPacket::kRtpTcpHeaderSize);
+    return getHeader()->dumpString(size() - RtpPacket::kRtpTcpHeaderSize);
+}
+
+string RtpPacket::dump(int t) const {
+    return StrPrinter << getTrackString(type) << "Rtp " 
+        << getHeader()->dump(size() - RtpPacket::kRtpTcpHeaderSize)
+        << " MS:" << getStampMS(t);
 }
 
 uint16_t RtpPacket::getSeq() const {
@@ -587,6 +605,33 @@ RtpPacket::Ptr RtpPacket::create() {
 #else
     return Ptr(new RtpPacket);
 #endif
+}
+
+TitleSdp::TitleSdp(float dur_sec, const std::map<string, string>& header, int version) : Sdp(0, 0) {
+    _printer << "v=" << version << "\r\n";
+
+    if (!header.empty()) {
+        for (auto &pr : header) {
+            _printer << pr.first << "=" << pr.second << "\r\n";
+        }
+    }
+    else {
+        _printer << "o=- 0 0 IN IP4 0.0.0.0\r\n";
+        _printer << "s=Streamed by " << kServerName << "\r\n";
+        _printer << "c=IN IP4 0.0.0.0\r\n";
+        _printer << "t=0 0\r\n";
+    }
+
+    if (dur_sec <= 0) {
+        //直播
+        _printer << "a=range:npt=now-\r\n";
+    }
+    else {
+        //点播
+        _dur_sec = dur_sec;
+        _printer << "a=range:npt=0-" << dur_sec << "\r\n";
+    }
+    _printer << "a=control:*\r\n";
 }
 
 }//namespace mediakit

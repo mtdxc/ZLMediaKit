@@ -10,6 +10,8 @@
 
 #include "Common/config.h"
 #include "RtpReceiver.h"
+#include "Util/netdef.h"
+#include "Util/logger.h"
 
 namespace mediakit {
 
@@ -72,7 +74,7 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
         //ssrc错误
         if (_ssrc_alive.elapsedTime() < 3 * 1000) {
             //接受正确ssrc的rtp在10秒内，那么我们认为存在多路rtp,忽略掉ssrc不匹配的rtp
-            WarnL << "ssrc mismatch, rtp dropped:" << ssrc << " != " << _ssrc;
+            WarnL << "ssrc dismatch " << ssrc << " != " << _ssrc << ",drop rtp " << ntohs(header->seq);
             return nullptr;
         }
         InfoL << "rtp ssrc changed:" << _ssrc << " -> " << ssrc;
@@ -95,6 +97,7 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
     data[3] = len & 0xFF;
     //拷贝rtp
     memcpy(&data[4], ptr, len);
+
     if (_disable_ntp) {
         //不支持ntp时间戳，例如国标推流，那么直接使用rtp时间戳
         rtp->ntp_stamp = rtp->getStamp() * uint64_t(1000) / sample_rate;
@@ -103,6 +106,7 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
         rtp->ntp_stamp = _ntp_stamp.getNtpStamp(rtp->getStamp(), sample_rate);
     }
     onBeforeRtpSorted(rtp);
+    // 根据系列号排序
     sortPacket(rtp->getSeq(), rtp);
     return rtp;
 }

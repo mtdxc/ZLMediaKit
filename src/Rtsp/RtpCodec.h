@@ -58,22 +58,13 @@ protected:
     RingType::Ptr _ring;
 };
 
+// rtp包生成模板
 class RtpInfo{
 public:
     using Ptr = std::shared_ptr<RtpInfo>;
 
-    RtpInfo(uint32_t ssrc, size_t mtu_size, uint32_t sample_rate, uint8_t pt, uint8_t interleaved) {
-        if (ssrc == 0) {
-            ssrc = ((uint64_t) this) & 0xFFFFFFFF;
-        }
-        _pt = pt;
-        _ssrc = ssrc;
-        _mtu_size = mtu_size;
-        _sample_rate = sample_rate;
-        _interleaved = interleaved;
-    }
-
-    virtual ~RtpInfo() {}
+    RtpInfo(uint32_t ssrc, size_t mtu_size, uint32_t sample_rate, uint8_t pt, uint8_t interleaved);
+    virtual ~RtpInfo() = default;
 
     //返回rtp负载最大长度
     size_t getMaxSize() const {
@@ -84,6 +75,7 @@ public:
         return _ssrc;
     }
 
+    // 根据RtpInfo构造rtp头部，并保证序列号连续
     RtpPacket::Ptr makeRtp(TrackType type,const void *data, size_t len, bool mark, uint64_t stamp);
 
 private:

@@ -13,7 +13,6 @@
 
 #include "Extension/Frame.h"
 #include "Common/MediaSink.h"
-#include "Common/Stamp.h"
 #include "RtpCodec.h"
 
 namespace mediakit{
@@ -47,7 +46,7 @@ public:
      * 构造函数
      */
     RtspMuxer(const TitleSdp::Ptr &title = nullptr);
-    ~RtspMuxer() override = default;
+    ~RtspMuxer();
 
     /**
      * 获取完整的SDP字符串
@@ -80,7 +79,7 @@ public:
     /**
      * 重置所有track
      */
-    void resetTracks() override ;
+    void resetTracks() override;
 
 private:
     void onRtp(RtpPacket::Ptr in, bool is_key);
@@ -92,7 +91,7 @@ private:
     uint64_t _ntp_stamp[TrackMax]{0};
     uint64_t _ntp_stamp_start;
     std::string _sdp;
-    Stamp _stamp[TrackMax];
+    Stamp* _stamp;
     RtpCodec::Ptr _encoder[TrackMax];
     RtpRing::RingType::Ptr _rtpRing;
     RtpRing::RingType::Ptr _rtpInterceptor;

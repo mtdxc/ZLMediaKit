@@ -14,19 +14,20 @@
 #include <map>
 #include <string>
 #include <memory>
-#include "RtpCodec.h"
-#include "RtspMediaSource.h"
+#include "Rtsp.h"
 #include "Common/Stamp.h"
+#include "Util/TimeTicker.h"
 
 namespace mediakit {
-
+// 处理rtp乱序排序，并过滤重复包
 template<typename T, typename SEQ = uint16_t, size_t kMax = 1024, size_t kMin = 32>
 class PacketSortor {
 public:
     PacketSortor() = default;
     ~PacketSortor() = default;
-
-    void setOnSort(std::function<void(SEQ seq, T &packet)> cb) {
+    // 输出排序后的包
+    typedef std::function<void(SEQ seq, T& packet)> SortCallback;
+    void setOnSort(SortCallback cb) {
         _cb = std::move(cb);
     }
 
@@ -35,7 +36,7 @@ public:
      */
     void clear() {
         _seq_cycle_count = 0;
-        _pkt_sort_cache_map.clear();
+        _pkt_cache_map.clear();
         _next_seq_out = 0;
         _max_sort_size = kMin;
     }
@@ -44,7 +45,7 @@ public:
      * 获取排序缓存长度
      */
     size_t getJitterSize() const{
-        return _pkt_sort_cache_map.size();
+        return _pkt_cache_map.size();
     }
 
     /**
@@ -66,7 +67,7 @@ public:
         }
         if (seq < _next_seq_out) {
             if (_next_seq_out < seq + kMax) {
-                //过滤seq回退包(回环包除外)
+                //过滤seq回退包，比已输出的seq还小的(回环包除外)
                 return;
             }
         } else if (_next_seq_out && seq - _next_seq_out > ((std::numeric_limits<SEQ>::max)() >> 1)) {
@@ -75,60 +76,61 @@ public:
         }
 
         //放入排序缓存
-        _pkt_sort_cache_map.emplace(seq, std::move(packet));
+        _pkt_cache_map.emplace(seq, std::move(packet));
         //尝试输出排序后的包
         tryPopPacket();
     }
 
     void flush(){
         //清空缓存
-        while (!_pkt_sort_cache_map.empty()) {
-            popIterator(_pkt_sort_cache_map.begin());
+        while (!_pkt_cache_map.empty()) {
+            popIterator(_pkt_cache_map.begin());
         }
     }
 
 private:
     void popPacket() {
-        auto it = _pkt_sort_cache_map.begin();
+        auto it = _pkt_cache_map.begin();
         if (it->first >= _next_seq_out) {
             //过滤回跳包
             popIterator(it);
             return;
         }
 
-        if (_next_seq_out - it->first > (0xFFFF >> 1)) {
+        if (_next_seq_out - it->first > ((std::numeric_limits<SEQ>::max)() >> 1)) {
             //产生回环了
-            if (_pkt_sort_cache_map.size() < 2 * kMin) {
+            if (_pkt_cache_map.size() < 2 * kMin) {
                 //等足够多的数据后才处理回环, 因为后面还可能出现大的SEQ
                 return;
             }
             ++_seq_cycle_count;
             //找到大的SEQ并清空掉，然后从小的SEQ重新开始排序
-            auto hit = _pkt_sort_cache_map.upper_bound((SEQ) (_next_seq_out - _pkt_sort_cache_map.size()));
-            while (hit != _pkt_sort_cache_map.end()) {
+            auto hit = _pkt_cache_map.upper_bound((SEQ)(_next_seq_out - _pkt_cache_map.size()));
+            while (hit != _pkt_cache_map.end()) {
                 //回环前，清空剩余的大的SEQ的数据
                 _cb(hit->first, hit->second);
-                hit = _pkt_sort_cache_map.erase(hit);
+                hit = _pkt_cache_map.erase(hit);
             }
             //下一个回环的数据
-            popIterator(_pkt_sort_cache_map.begin());
-            return;
+            popIterator(_pkt_cache_map.begin());
         }
-        //删除回跳的数据包
-        _pkt_sort_cache_map.erase(it);
+        else {
+            //删除回跳的数据包
+            _pkt_cache_map.erase(it);
+        }
     }
 
+    // 删除并回调包，然后更新_next_seq_out
     void popIterator(typename std::map<SEQ, T>::iterator it) {
         auto seq = it->first;
         auto data = std::move(it->second);
-        _pkt_sort_cache_map.erase(it);
+        _pkt_cache_map.erase(it);
         _next_seq_out = seq + 1;
         _cb(seq, data);
     }
-
     void tryPopPacket() {
         int count = 0;
-        while ((!_pkt_sort_cache_map.empty() && _pkt_sort_cache_map.begin()->first == _next_seq_out)) {
+        while ((!_pkt_cache_map.empty() && _pkt_cache_map.begin()->first == _next_seq_out)) {
             //找到下个包，直接输出
             popPacket();
             ++count;
@@ -136,7 +138,7 @@ private:
 
         if (count) {
             setSortSize();
-        } else if (_pkt_sort_cache_map.size() > _max_sort_size) {
+        } else if (_pkt_cache_map.size() > _max_sort_size) {
             //排序缓存溢出，不再继续排序
             popPacket();
             setSortSize();
@@ -144,7 +146,7 @@ private:
     }
 
     void setSortSize() {
-        _max_sort_size = kMin + _pkt_sort_cache_map.size();
+        _max_sort_size = kMin + _pkt_cache_map.size();
         if (_max_sort_size > kMax) {
             _max_sort_size = kMax;
         }
@@ -161,11 +163,15 @@ private:
     //排序缓存长度
     size_t _max_sort_size = kMin;
     //pkt排序缓存，根据seq排序
-    std::map<SEQ, T> _pkt_sort_cache_map;
+    std::map<SEQ, T> _pkt_cache_map;
     //回调
-    std::function<void(SEQ seq, T &packet)> _cb;
+    SortCallback _cb;
 };
 
+/* 
+rtp流接收/生成器
+负责接收某个rtp流，并生成排序后的RtpPacket
+*/
 class RtpTrack : private PacketSortor<RtpPacket::Ptr>{
 public:
     class BadRtpException : public std::invalid_argument {
@@ -180,11 +186,19 @@ public:
 
     void clear();
     uint32_t getSSRC() const;
+    /*
+    input data.
+    根据ssrc和pt来过滤和生成某个rtp流的包(RtpPacket)，其中
+    - pt 确定后就不会变化
+    - ssrc 若3s没收到该ssrc的包，则可进行切换
+    */
     RtpPacket::Ptr inputRtp(TrackType type, int sample_rate, uint8_t *ptr, size_t len);
+    // rtcp sr用于更新ntp时间戳
     void setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms);
     void setPT(uint8_t pt);
 
 protected:
+    // output callback for subclass
     virtual void onRtpSorted(RtpPacket::Ptr rtp) {}
     virtual void onBeforeRtpSorted(const RtpPacket::Ptr &rtp) {}
 
@@ -192,6 +206,7 @@ private:
     bool _disable_ntp = false;
     uint8_t _pt = 0xFF;
     uint32_t _ssrc = 0;
+    // ssrc切换计时器
     toolkit::Ticker _ssrc_alive;
     NtpStamp _ntp_stamp;
 };
@@ -216,6 +231,7 @@ private:
     BeforeSorted _on_before_sorted;
 };
 
+// 多流接收器
 template<int kCount = 2>
 class RtpMultiReceiver {
 public:
@@ -305,6 +321,7 @@ private:
     RtpTrackImp _track[kCount];
 };
 
+// 两流(音频、视频)Rtp接收器
 using RtpReceiver = RtpMultiReceiver<2>;
 
 }//namespace mediakit
