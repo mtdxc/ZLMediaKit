@@ -10,11 +10,13 @@
 
 #ifndef ZLMEDIAKIT_RTPSENDER_H
 #define ZLMEDIAKIT_RTPSENDER_H
+
 #if defined(ENABLE_RTPPROXY)
-#include "PSEncoder.h"
 #include "Extension/CommonRtp.h"
 #include "Rtcp/RtcpContext.h"
-
+#include "Common/MediaSource.h"
+#include "Common/MediaSink.h"
+#include "toolkit.h"
 namespace mediakit{
 
 //rtp发送客户端，支持发送GB28181协议
@@ -63,7 +65,7 @@ public:
 
 private:
     //合并写输出
-    void onFlushRtpList(std::shared_ptr<toolkit::List<toolkit::Buffer::Ptr> > rtp_list);
+    void onFlushRtpList(std::shared_ptr<std::list<toolkit::Buffer::Ptr> > rtp_list);
     //udp/tcp连接成功回调
     void onConnect();
     //异常断开socket事件
@@ -76,8 +78,8 @@ private:
 private:
     bool _is_connect = false;
     MediaSourceEvent::SendRtpArgs _args;
-    toolkit::SocketPtr _socket_rtp;
-    toolkit::SocketPtr _socket_rtcp;
+    toolkit::SessionPtr _socket_rtp;
+    toolkit::SessionPtr _socket_rtcp;
     toolkit::EventPollerPtr _poller;
     MediaSinkInterface::Ptr _interface;
     std::shared_ptr<RtcpContext> _rtcp_context;

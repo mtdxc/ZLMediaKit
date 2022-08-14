@@ -14,7 +14,6 @@
 #if defined(ENABLE_RTPPROXY)
 
 #include "Common/MediaSink.h"
-#include "Common/Stamp.h"
 #include "Extension/CommonRtp.h"
 
 namespace mediakit {

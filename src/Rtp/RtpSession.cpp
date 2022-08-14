@@ -11,8 +11,8 @@
 #if defined(ENABLE_RTPPROXY)
 #include "RtpSession.h"
 #include "RtpSelector.h"
-#include "TcpServer.h"
 #include "Rtsp/RtpReceiver.h"
+#include "Common/config.h"
 
 using namespace std;
 using namespace toolkit;
@@ -21,48 +21,49 @@ namespace mediakit{
 
 const string RtpSession::kStreamID = "stream_id";
 const string RtpSession::kSSRC = "ssrc";
-
+#if 0
 void RtpSession::attachServer(const Server &server) {
     _stream_id = const_cast<Server &>(server)[kStreamID];
     _ssrc = const_cast<Server &>(server)[kSSRC];
 }
+#endif
 
-RtpSession::RtpSession(const Socket::Ptr &sock) : Session(sock) {
+RtpSession::RtpSession(hio_t* io) : Session(io) {
     DebugP(this);
-    socklen_t addr_len = sizeof(_addr);
-    getpeername(sock->rawFD(), (struct sockaddr *)&_addr, &addr_len);
-    _is_udp = sock->sockType() == SockNum::Sock_UDP;
+    _addr = hio_peeraddr(io);
+    _is_udp = hio_type(io) == HIO_TYPE_UDP;
     if (_is_udp) {
         // 设置udp socket读缓存
-        SockUtil::setRecvBuf(getSock()->rawFD(), 4 * 1024 * 1024);
+        // SockUtil::setRecvBuf(getSock()->rawFD(), 4 * 1024 * 1024);
     }
 }
 
 RtpSession::~RtpSession() {
     DebugP(this);
-    if(_process){
-        RtpSelector::Instance().delProcess(_stream_id,_process.get());
+    if(_process) {
+        RtpSelector::Instance().delProcess(_stream_id, _process.get());
     }
 }
 
 void RtpSession::onRecv(const Buffer::Ptr &data) {
     if (_is_udp) {
         onRtpPacket(data->data(), data->size());
-        return;
     }
-    RtpSplitter::input(data->data(), data->size());
+    else { // tcp 须进行拆包
+        RtpSplitter::input(data->data(), data->size());
+    }
 }
 
 void RtpSession::onError(const SockException &err) {
-    WarnP(this) << _stream_id << " " << err.what();
+    WarnL << _stream_id << " " << err.what();
 }
 
 void RtpSession::onManager() {
-    if(_process && !_process->alive()){
-        shutdown(SockException(Err_timeout, "receive rtp timeout"));
+    if(_process){
+        if(!_process->alive())
+            shutdown(SockException(Err_timeout, "rtp receive timeout"));
     }
-
-    if(!_process && _ticker.createdTime() > 10 * 1000){
+    else if(_ticker.createdTime() > 10 * 1000){
         shutdown(SockException(Err_timeout, "illegal connection"));
     }
 }
@@ -105,7 +106,7 @@ void RtpSession::onRtpPacket(const char *data, size_t len) {
             WarnP(this) << "ssrc不匹配,rtp已丢弃:" << rtp_ssrc << " != " << _ssrc;
             return;
         }
-        _process->inputRtp(false, getSock(), data, len, (struct sockaddr *)&_addr);
+        _process->inputRtp(false, shared_from_this(), data, len, (struct sockaddr *)&_addr);
     } catch (RtpTrack::BadRtpException &ex) {
         if (!_is_udp) {
             WarnL << ex.what() << "，开始搜索ssrc以便恢复上下文";
@@ -121,8 +122,8 @@ void RtpSession::onRtpPacket(const char *data, size_t len) {
 
 bool RtpSession::close(MediaSource &sender) {
     //此回调在其他线程触发
-    string err = StrPrinter << "close media: " << sender.getUrl();
-    safeShutdown(SockException(Err_shutdown, err));
+    std::string err = StrPrinter << "close media:" << sender.getUrl();
+    shutdown(SockException(Err_shutdown, err), true);
     return true;
 }
 

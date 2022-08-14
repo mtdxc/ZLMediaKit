@@ -13,9 +13,9 @@
 
 #if defined(ENABLE_RTPPROXY)
 #include <memory>
-#include "Session.h"
+#include "toolkit.h"
 #include "TcpServer.h"
-#include "UdpServer.h"
+#include "UdpServer2.h"
 #include "RtpSession.h"
 
 namespace mediakit {
@@ -66,12 +66,14 @@ public:
 
 private:
     // tcp主动模式连接服务器成功回调
-    void onConnect();
+    void onConnect(hio_t* io);
 
 protected:
-    toolkit::SocketPtr _rtp_socket;
-    toolkit::UdpServer::Ptr _udp_server;
-    toolkit::TcpServer::Ptr _tcp_server;
+    toolkit::SessionPtr _rtp_socket;
+    using UdpServer = hv::UdpServerEventLoopTmpl2<RtpSession>;
+    using TcpServer = hv::TcpServerEventLoopTmpl<RtpSession>;
+    std::shared_ptr<UdpServer> _udp_server;
+    std::shared_ptr<TcpServer> _tcp_server;
     std::shared_ptr<RtcpHelper> _rtcp_helper;
     std::function<void()> _on_cleanup;
 

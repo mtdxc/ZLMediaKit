@@ -13,6 +13,7 @@
 #include "RawEncoder.h"
 #include "Extension/Factory.h"
 #include "Rtsp/RtspMuxer.h"
+#include "Util/logger.h"
 
 using namespace toolkit;
 

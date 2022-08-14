@@ -12,13 +12,15 @@
 #define ZLMEDIAKIT_RTPPROCESS_H
 
 #if defined(ENABLE_RTPPROXY)
+#include <deque>
+#include <functional>
 #include "ProcessInterface.h"
 #include "Rtcp/RtcpContext.h"
 #include "Common/MultiMediaSourceMuxer.h"
 
 namespace mediakit {
 
-class RtpProcess final : public RtcpContextForRecv, public toolkit::SockInfo, public MediaSinkInterface, public MediaSourceEventInterceptor, public std::enable_shared_from_this<RtpProcess>{
+class RtpProcess : public RtcpContextForRecv, public MediaSinkInterface, public MediaSourceEventInterceptor, public std::enable_shared_from_this<RtpProcess>{
 public:
     typedef std::shared_ptr<RtpProcess> Ptr;
     friend class RtpProcessHelper;
@@ -35,7 +37,7 @@ public:
      * @param dts_out 解析出最新的dts
      * @return 是否解析成功
      */
-    bool inputRtp(bool is_udp, const toolkit::SocketPtr &sock, const char *data, size_t len, const struct sockaddr *addr , uint64_t *dts_out = nullptr);
+    bool inputRtp(bool is_udp, const toolkit::SessionPtr &sock, const char *data, size_t len, const struct sockaddr *addr , uint64_t *dts_out = nullptr);
 
     /**
      * 是否超时，用于超时移除对象
@@ -57,18 +59,6 @@ public:
      */
     void setStopCheckRtp(bool is_check=false);
 
-    /**
-     * flush输出缓存
-     */
-    void flush() override;
-
-    /// SockInfo override
-    std::string get_local_ip() override;
-    uint16_t get_local_port() override;
-    std::string get_peer_ip() override;
-    uint16_t get_peer_port() override;
-    std::string getIdentifier() const override;
-
 protected:
     bool inputFrame(const Frame::Ptr &frame) override;
     bool addTrack(const Track::Ptr & track) override;
@@ -78,10 +68,10 @@ protected:
     //// MediaSourceEvent override ////
     MediaOriginType getOriginType(MediaSource &sender) const override;
     std::string getOriginUrl(MediaSource &sender) const override;
-    std::shared_ptr<SockInfo> getOriginSock(MediaSource &sender) const override;
+    std::shared_ptr<toolkit::SockInfo> getOriginSock(MediaSource &sender) const override;
     toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
     float getLossRate(MediaSource &sender, TrackType type) override;
-
+    void flush();
 private:
     void emitOnPublish();
     void doCachedFunc();
@@ -89,8 +79,8 @@ private:
 private:
     uint64_t _dts = 0;
     uint64_t _total_bytes = 0;
-    std::unique_ptr<sockaddr_storage> _addr;
-    toolkit::SocketPtr _sock;
+    //std::unique_ptr<sockaddr_storage> _addr;
+    toolkit::SessionPtr _sock;
     MediaInfo _media_info;
     toolkit::Ticker _last_frame_time;
     std::function<void()> _on_detach;

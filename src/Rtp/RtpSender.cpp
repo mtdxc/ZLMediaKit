@@ -12,19 +12,17 @@
 #include "RtpSender.h"
 #include "Rtsp/RtspSession.h"
 #include "EventLoopThreadPool.h"
-
-#include "Util/uv_errno.h"
 #include "Util/TimeTicker.h"
 #include "RtpCache.h"
-
+#include "hsocket.h"
 using namespace std;
 using namespace toolkit;
 
 namespace mediakit{
 
 RtpSender::RtpSender(EventPoller::Ptr poller) {
-    _poller = poller ? std::move(poller) : EventPollerPool::Instance().getPoller();
-    _socket_rtp = Socket::createSocket(_poller, false);
+    _poller = poller ? std::move(poller) : hv::EventLoopThreadPool::Instance()->loop();
+    //_socket_rtp = Socket::createSocket(_poller, false);
 }
 
 RtpSender::~RtpSender() {
@@ -35,7 +33,7 @@ void RtpSender::startSend(const MediaSourceEvent::SendRtpArgs &args, const funct
     _args = args;
     if (!_interface) {
         //重连时不重新创建对象
-        auto lam = [this](std::shared_ptr<List<Buffer::Ptr>> list) { onFlushRtpList(std::move(list)); };
+        auto lam = [this](std::shared_ptr<std::list<Buffer::Ptr>> list) { onFlushRtpList(std::move(list)); };
         if (args.use_ps) {
             _interface = std::make_shared<RtpCachePS>(lam, atoi(args.ssrc.data()), args.pt);
         } else {
@@ -50,18 +48,20 @@ void RtpSender::startSend(const MediaSourceEvent::SendRtpArgs &args, const funct
         // 默认等待链接
         bool is_wait = true;
         try {
-            auto tcp_listener = Socket::createSocket(_poller, false);
+            toolkit::SessionPtr tcp_listener = nullptr;
             if (args.src_port) {
+                hio_t* io = hio_create_socket(_poller->loop(), "::", args.src_port);
                 //指定端口
-                if (!tcp_listener->listen(args.src_port)) {
-                    throw std::invalid_argument(StrPrinter << "open tcp passive server failed on port:" << args.src_port
-                                                           << ", err:" << get_uv_errmsg(true));
+                if (!io) {
+                    throw std::invalid_argument(StrPrinter << "open tcp passive server failed on port:" << args.src_port);
                 }
+                tcp_listener = std::make_shared<toolkit::Session>(io);
                 is_wait = true;
             } else {
-                auto pr = std::make_pair(tcp_listener, Socket::createSocket(_poller, false));
+                toolkit::SessionPtr pr[2];
                 //从端口池获取随机端口
                 makeSockPair(pr, "::", false, false);
+                tcp_listener = pr[0];
                 // 随机端口不等待，保证调用者可以知道端口
                 is_wait = false;
             }
@@ -73,20 +73,31 @@ void RtpSender::startSend(const MediaSourceEvent::SendRtpArgs &args, const funct
                 tcp_listener = nullptr;
                 return 0;
             });
-            tcp_listener->setOnAccept([weak_self, cb, delay_task,is_wait](Socket::Ptr &sock, std::shared_ptr<void> &complete) {
+            typedef std::function<void(hio_t*)> AcceptCB;
+            AcceptCB* acceptCb = new AcceptCB([weak_self, is_wait, cb, delay_task](hio_t* io) {
                 auto strong_self = weak_self.lock();
                 if (!strong_self) {
                     return;
                 }
                 //立即关闭tcp服务器
-                delay_task->cancel();
-                strong_self->_socket_rtp = sock;
+                hv::killTimer(delay_task);
+                strong_self->_socket_rtp = std::make_shared<toolkit::Session>(io);
                 strong_self->onConnect();
                 if (is_wait) {
-                    cb(sock->get_local_port(), SockException());
+                    cb(strong_self->_socket_rtp->get_local_port(), SockException());
                 }
-                InfoL << "accept connection from:" << sock->get_peer_ip() << ":" << sock->get_peer_port();
+                InfoL << "accept connection from:" << strong_self->_socket_rtp->peeraddr();
             });
+
+            hio_t* io = tcp_listener->io();
+            hevent_set_userdata(io, acceptCb);
+            hio_setcb_accept(tcp_listener->io(), [](hio_t* io) {
+                if (AcceptCB* pCB = (AcceptCB*)hevent_userdata(io)) {
+                    (*pCB)(io);
+                    delete pCB;
+                }
+            });
+            hio_accept(tcp_listener->io());
             InfoL << "start tcp passive server on:" << tcp_listener->get_local_port();
             if (!is_wait) {
                 // 随机端口马上返回端口，保证调用者知道端口
@@ -100,17 +111,17 @@ void RtpSender::startSend(const MediaSourceEvent::SendRtpArgs &args, const funct
     }
     if (args.is_udp) {
         auto poller = _poller;
-        WorkThreadPool::Instance().getPoller()->async([cb, args, weak_self, poller]() {
-            struct sockaddr_storage addr;
-            //切换线程目的是为了dns解析放在后台线程执行
-            if (!SockUtil::getDomainIP(args.dst_url.data(), args.dst_port, addr, AF_INET, SOCK_DGRAM, IPPROTO_UDP)) {
+        hv::EventLoopThreadPool::Instance()->loop()->async([cb, args, weak_self, poller]() {
+            sockaddr_u addr;
+            // 切换线程目的是为了dns解析放在后台线程执行
+            if (!ResolveAddr(args.dst_url.data(), &addr)) {
                 poller->async([args, cb]() {
                     //切回自己的线程
                     cb(0, SockException(Err_dns, StrPrinter << "dns解析域名失败:" << args.dst_url));
                 });
                 return;
             }
-
+            sockaddr_set_port(&addr, args.dst_port);
             //dns解析成功
             poller->async([args, addr, weak_self, cb]() {
                 //切回自己的线程
@@ -118,30 +129,35 @@ void RtpSender::startSend(const MediaSourceEvent::SendRtpArgs &args, const funct
                 if (!strong_self) {
                     return;
                 }
-                string ifr_ip = addr.ss_family == AF_INET ? "0.0.0.0" : "::";
+                string ifr_ip = addr.sa.sa_family == AF_INET ? "0.0.0.0" : "::";
                 try {
                     if (args.src_port) {
                         //指定端口
-                        if (!strong_self->_socket_rtp->bindUdpSock(args.src_port, ifr_ip)) {
-                            throw std::invalid_argument(StrPrinter << "bindUdpSock failed on port:" << args.src_port
-                                                                   << ", err:" << get_uv_errmsg(true));
+                        hio_t* io = hloop_create_udp_server(hv::tlsEventLoop()->loop(), ifr_ip.data(), args.src_port);
+                        if (!io) {
+                            throw std::invalid_argument(StrPrinter << "bindUdpSock failed on port:" << args.src_port);
                         }
+                        strong_self->_socket_rtp = std::make_shared<toolkit::Session>(io);
                     } else {
-                        auto pr = std::make_pair(strong_self->_socket_rtp, Socket::createSocket(strong_self->_poller, false));
+                        toolkit::SessionPtr pr[2];
                         //从端口池获取随机端口
                         makeSockPair(pr, ifr_ip, true);
+                        strong_self->_socket_rtp = pr[0];
                     }
                 } catch (std::exception &ex) {
                     cb(0, SockException(Err_other, ex.what()));
                     return;
                 }
-                strong_self->_socket_rtp->bindPeerAddr((struct sockaddr *)&addr);
+                hio_set_peeraddr(strong_self->_socket_rtp->io(), (struct sockaddr *)&addr, sockaddr_len(&addr));
                 strong_self->onConnect();
                 cb(strong_self->_socket_rtp->get_local_port(), SockException());
             });
         });
     } else {
-        _socket_rtp->connect(args.dst_url, args.dst_port, [cb, weak_self](const SockException &err) {
+        hio_t* io = hio_create_socket(_poller->loop(), "::", args.src_port);
+        _socket_rtp = std::make_shared<toolkit::Session>(io);
+        _socket_rtp->onconnect = [cb, weak_self]() {
+            SockException err;
             auto strong_self = weak_self.lock();
             if (strong_self) {
                 if (!err) {
@@ -152,7 +168,17 @@ void RtpSender::startSend(const MediaSourceEvent::SendRtpArgs &args, const funct
             } else {
                 cb(0, err);
             }
-        }, 5.0F, "::", args.src_port);
+        };//, 5.0F, "::", args.src_port);
+        _socket_rtp->setConnectTimeout(5000);
+        _socket_rtp->onclose = [cb, weak_self]() {
+            auto err = SockException(Err_eof, "socket closed");
+            auto strong_self = weak_self.lock();
+            if (strong_self) {
+                cb(strong_self->_socket_rtp->get_local_port(), err);
+            }
+        };
+        // connect(args.dst_url, args.dst_port , 5.0F, "::", args.src_port);
+        _socket_rtp->startConnect(args.dst_port, args.dst_url.c_str());
     }
 }
 
@@ -160,38 +186,34 @@ void RtpSender::createRtcpSocket() {
     if (_socket_rtcp) {
         return;
     }
-    _socket_rtcp = Socket::createSocket(_socket_rtp->getPoller(), false);
     //rtcp端口使用户rtp端口+1
-    if(!_socket_rtcp->bindUdpSock(_socket_rtp->get_local_port() + 1, _socket_rtp->get_local_ip(), false)){
-        WarnL << "bind rtcp udp socket failed:" << get_uv_errmsg(true);
-        _socket_rtcp = nullptr;
-        return;
+    hio_t* io = hloop_create_udp_server(_poller->loop(), 
+        _socket_rtp->get_local_ip().c_str(), _socket_rtp->get_local_port() + 1);
+    if (!io) {
+        WarnL << "bind rtcp udp socket failed";
+        return ;
     }
+    _socket_rtcp = std::make_shared<toolkit::Session>(io);
 
-    struct sockaddr_storage addr;
     //目标rtp端口
-    SockUtil::get_sock_peer_addr(_socket_rtp->rawFD(), addr);
+    sockaddr_u addr = *(sockaddr_u*)hio_peeraddr(_socket_rtp->io());
     //绑定目标rtcp端口(目标rtp端口 + 1)
-    switch (addr.ss_family) {
-        case AF_INET: ((sockaddr_in *)&addr)->sin_port = htons(ntohs(((sockaddr_in *)&addr)->sin_port) + 1); break;
-        case AF_INET6: ((sockaddr_in6 *)&addr)->sin6_port = htons(ntohs(((sockaddr_in6 *)&addr)->sin6_port) + 1); break;
-        default: assert(0); break;
-    }
-    _socket_rtcp->bindPeerAddr((struct sockaddr *)&addr);
+    sockaddr_set_port(&addr, sockaddr_port(&addr)+1);
+    hio_set_peeraddr(io, (sockaddr*)&addr, sockaddr_len(&addr));
 
     _rtcp_context = std::make_shared<RtcpContextForSend>();
     weak_ptr<RtpSender> weak_self = shared_from_this();
-    _socket_rtcp->setOnRead([weak_self](const Buffer::Ptr &buf, struct sockaddr *, int) {
+    _socket_rtcp->onread = [weak_self](hv::Buffer* buf) {
         //接收receive report rtcp
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
         }
-        auto rtcp_arr = RtcpHeader::loadFromBytes(buf->data(), buf->size());
+        auto rtcp_arr = RtcpHeader::loadFromBytes((char*)buf->data(), buf->size());
         for (auto &rtcp : rtcp_arr) {
             strong_self->onRecvRtcp(rtcp);
         }
-    });
+    };
     InfoL << "open rtcp port success, start check rr rtcp timeout";
 }
 
@@ -204,22 +226,21 @@ void RtpSender::onRecvRtcp(RtcpHeader *rtcp) {
 void RtpSender::onConnect(){
     _is_connect = true;
     //加大发送缓存,防止udp丢包之类的问题
-    SockUtil::setSendBuf(_socket_rtp->rawFD(), 4 * 1024 * 1024);
+    so_rcvbuf(_socket_rtp->fd(), 4 * 1024 * 1024);
     if (!_args.is_udp) {
         //关闭tcp no_delay并开启MSG_MORE, 提高发送性能
-        SockUtil::setNoDelay(_socket_rtp->rawFD(), false);
-        _socket_rtp->setSendFlags(SOCKET_DEFAULE_FLAGS | FLAG_MORE);
+        tcp_nodelay(_socket_rtp->fd(), false);
+        //_socket_rtp->setSendFlags(SOCKET_DEFAULE_FLAGS | FLAG_MORE);
     } else if (_args.udp_rtcp_timeout) {
         createRtcpSocket();
     }
+    
     //连接建立成功事件
-    weak_ptr<RtpSender> weak_self = shared_from_this();
-    _socket_rtp->setOnErr([weak_self](const SockException &err) {
-        auto strong_self = weak_self.lock();
-        if (strong_self) {
-            strong_self->onErr(err);
-        }
-    });
+    std::weak_ptr<RtpSender> weak_self = shared_from_this();
+    _socket_rtp->onclose = [weak_self]() {
+        if (auto strong_self = weak_self.lock())
+            strong_self->onErr(SockException(Err_eof, "socket closed"));
+    };
     //获取本地端口，断开重连后确保端口不变
     _args.src_port = _socket_rtp->get_local_port();
     InfoL << "开始发送 rtp:" << _socket_rtp->get_peer_ip() << ":" << _socket_rtp->get_peer_port() << ", 是否为udp方式:" << _args.is_udp;
@@ -266,7 +287,7 @@ void RtpSender::onSendRtpUdp(const toolkit::Buffer::Ptr &buf, bool check) {
         //rtcp ssrc为rtp ssrc + 1
        auto sr = _rtcp_context->createRtcpSR(atoi(_args.ssrc.data()) + 1);
        //send sender report rtcp
-       _socket_rtcp->send(sr);
+       _socket_rtcp->write(sr->data(), sr->size());
     }
 
     if (_rtcp_recv_ticker.elapsedTime() > _args.rtcp_timeout_ms) {
@@ -286,24 +307,25 @@ void RtpSender::onClose(const SockException &ex) {
 }
 
 //此函数在其他线程执行
-void RtpSender::onFlushRtpList(shared_ptr<List<Buffer::Ptr> > rtp_list) {
+void RtpSender::onFlushRtpList(shared_ptr<std::list<Buffer::Ptr> > rtp_list) {
     if(!_is_connect){
         //连接成功后才能发送数据
         return;
     }
 
+
     size_t i = 0;
     auto size = rtp_list->size();
-    rtp_list->for_each([&](Buffer::Ptr &packet) {
+    for (auto packet : *rtp_list) {
         if (_args.is_udp) {
             onSendRtpUdp(packet, i == 0);
-            // udp模式，rtp over tcp前4个字节可以忽略
-            _socket_rtp->send(std::make_shared<BufferRtp>(std::move(packet), RtpPacket::kRtpTcpHeaderSize), nullptr, 0, ++i == size);
+            //udp模式，rtp over tcp前4个字节可以忽略
+            _socket_rtp->write(packet->data() + 4, packet->size() - 4);
         } else {
             // tcp模式, rtp over tcp前2个字节可以忽略,只保留后续rtp长度的2个字节
-            _socket_rtp->send(std::make_shared<BufferRtp>(std::move(packet), 2), nullptr, 0, ++i == size);
+            _socket_rtp->write(packet->data() + 2, packet->size() - 2);
         }
-    });
+    }
 }
 
 void RtpSender::onErr(const SockException &ex) {

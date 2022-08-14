@@ -25,13 +25,13 @@ public:
     static const std::string kStreamID;
     static const std::string kSSRC;
 
-    RtpSession(const toolkit::SocketPtr &sock);
+    RtpSession(hio_t* io);
     ~RtpSession() override;
-    void onRecv(const toolkit::Buffer::Ptr &) override;
+
+    void onRecv(const toolkit::Buffer::Ptr &);
     void onError(const toolkit::SockException &err) override;
     void onManager() override;
-    void attachServer(const toolkit::Server &server) override;
-
+    //void attachServer(const toolkit::Server &server) override;
 protected:
     // 通知其停止推流
     bool close(MediaSource &sender) override;
@@ -47,7 +47,7 @@ private:
     uint32_t _ssrc = 0;
     toolkit::Ticker _ticker;
     std::string _stream_id;
-    struct sockaddr_storage _addr;
+    struct sockaddr* _addr;
     RtpProcess::Ptr _process;
 };
 

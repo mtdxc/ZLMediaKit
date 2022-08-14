@@ -15,7 +15,6 @@
 
 #include "Record/MPEG.h"
 #include "Common/MediaSink.h"
-#include "Common/Stamp.h"
 #include "Extension/CommonRtp.h"
 
 namespace mediakit{

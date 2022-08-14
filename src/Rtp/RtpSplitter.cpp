@@ -69,9 +69,11 @@ const char *RtpSplitter::onSearchPacketTail(const char *data, size_t len) {
         _offset = 4;
         return onSearchPacketTail_l(data + 2, len - 2);
     }
-    //两个字节的rtp头
-    _offset = 2;
-    return onSearchPacketTail_l(data, len);
+    else {
+        //两个字节的rtp头
+        _offset = 2;
+        return onSearchPacketTail_l(data, len);
+    }
 }
 
 const char *RtpSplitter::onSearchPacketTail_l(const char *data, size_t len) {

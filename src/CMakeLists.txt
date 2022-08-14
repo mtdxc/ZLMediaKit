@@ -38,7 +38,7 @@ aux_source_directory(Rtsp MediaKit_SRC_LIST)
 aux_source_directory(Player MediaKit_SRC_LIST)
 aux_source_directory(Pusher MediaKit_SRC_LIST)
 aux_source_directory(Shell MediaKit_SRC_LIST)
-# aux_source_directory(Rtp MediaKit_SRC_LIST)
+aux_source_directory(Rtp MediaKit_SRC_LIST)
 # aux_source_directory(Record MediaKit_SRC_LIST)
 # aux_source_directory(Hls MediaKit_SRC_LIST)
 

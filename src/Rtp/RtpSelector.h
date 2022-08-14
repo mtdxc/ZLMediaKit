@@ -21,13 +21,17 @@
 namespace mediakit{
 
 class RtpSelector;
-class RtpProcessHelper : public MediaSourceEvent , public std::enable_shared_from_this<RtpProcessHelper> {
+// 主要作用：在close时，调用RtpSelector::Instance()->delProcess()
+class RtpProcessHelper : public MediaSourceEvent, 
+    public std::enable_shared_from_this<RtpProcessHelper> {
 public:
     typedef std::shared_ptr<RtpProcessHelper> Ptr;
-    RtpProcessHelper(const std::string &stream_id, const std::weak_ptr<RtpSelector > &parent);
+
+    RtpProcessHelper(const std::string &stream_id, const std::weak_ptr<RtpSelector> &parent);
     ~RtpProcessHelper();
+
     void attachEvent();
-    RtpProcess::Ptr & getProcess();
+    RtpProcess::Ptr& getProcess() { return _process; }
 
 protected:
     // 通知其停止推流
@@ -39,6 +43,11 @@ private:
     std::weak_ptr<RtpSelector> _parent;
 };
 
+/*
+RtpProcess管理类.
+支持根据ssrc自动创建或根据stream_id手工创建RtpProcess
+并定期清理过期的RtpProcess(alive() = false)
+*/
 class RtpSelector : public std::enable_shared_from_this<RtpSelector>{
 public:
     RtpSelector() = default;
@@ -72,7 +81,7 @@ private:
     void createTimer();
 
 private:
-    toolkit::Timer::Ptr _timer;
+    std::shared_ptr<toolkit::Timer> _timer;
     std::recursive_mutex _mtx_map;
     std::unordered_map<std::string,RtpProcessHelper::Ptr> _map_rtp_process;
 };

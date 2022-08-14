@@ -12,6 +12,8 @@
 #include <stddef.h>
 #include "RtpSelector.h"
 #include "RtpSplitter.h"
+#include "Util/logger.h"
+#include "EventLoopThreadPool.h"
 
 using namespace std;
 using namespace toolkit;
@@ -29,8 +31,8 @@ bool RtpSelector::getSSRC(const char *data, size_t data_len, uint32_t &ssrc){
     if (data_len < 12) {
         return false;
     }
-    uint32_t *ssrc_ptr = (uint32_t *) (data + 8);
-    ssrc = ntohl(*ssrc_ptr);
+    auto rtp = (RtpHeader*)data;
+    ssrc = ntohl(rtp->ssrc);
     return true;
 }
 
@@ -54,18 +56,16 @@ RtpProcess::Ptr RtpSelector::getProcess(const string &stream_id,bool makeNew) {
 }
 
 void RtpSelector::createTimer() {
-    if (!_timer) {
-        //创建超时管理定时器
-        weak_ptr<RtpSelector> weakSelf = shared_from_this();
-        _timer = std::make_shared<Timer>(3.0f, [weakSelf] {
-            auto strongSelf = weakSelf.lock();
-            if (!strongSelf) {
-                return false;
-            }
+    if (_timer) return;
+    //创建超时管理定时器
+    weak_ptr<RtpSelector> weakSelf = shared_from_this();
+    _timer = std::make_shared<Timer>(3.0f, [weakSelf] {
+        if (auto strongSelf = weakSelf.lock()) {
             strongSelf->onManager();
             return true;
-        }, EventPollerPool::Instance().getPoller());
-    }
+        }
+        return false;
+    }, hv::EventLoopThreadPool::Instance()->loop());
 }
 
 void RtpSelector::delProcess(const string &stream_id,const RtpProcess *ptr) {
@@ -86,23 +86,24 @@ void RtpSelector::delProcess(const string &stream_id,const RtpProcess *ptr) {
 }
 
 void RtpSelector::onManager() {
-    List<RtpProcess::Ptr> clear_list;
+    std::list<RtpProcess::Ptr> clear_list;
     {
-        lock_guard<decltype(_mtx_map)> lck(_mtx_map);
+        std::lock_guard<decltype(_mtx_map)> lck(_mtx_map);
         for (auto it = _map_rtp_process.begin(); it != _map_rtp_process.end();) {
             if (it->second->getProcess()->alive()) {
                 ++it;
-                continue;
             }
-            WarnL << "RtpProcess timeout:" << it->first;
-            clear_list.emplace_back(it->second->getProcess());
-            it = _map_rtp_process.erase(it);
+            else {
+                WarnL << "RtpProcess timeout:" << it->first;
+                clear_list.emplace_back(it->second->getProcess());
+                it = _map_rtp_process.erase(it);
+            }
         }
     }
 
-    clear_list.for_each([](const RtpProcess::Ptr &process) {
+    for(auto process : clear_list) {
         process->onDetach();
-    });
+    }
 }
 
 RtpProcessHelper::RtpProcessHelper(const string &stream_id, const weak_ptr<RtpSelector> &parent) {
@@ -127,7 +128,9 @@ void RtpProcessHelper::attachEvent() {
 }
 
 bool RtpProcessHelper::close(MediaSource &sender) {
+    bool ret = false;
     //此回调在其他线程触发
+    // 在parent中取消注册自己
     auto parent = _parent.lock();
     if (!parent) {
         return false;
@@ -135,10 +138,6 @@ bool RtpProcessHelper::close(MediaSource &sender) {
     parent->delProcess(_stream_id, _process.get());
     WarnL << "close media: " << sender.getUrl();
     return true;
-}
-
-RtpProcess::Ptr &RtpProcessHelper::getProcess() {
-    return _process;
 }
 
 }//namespace mediakit
