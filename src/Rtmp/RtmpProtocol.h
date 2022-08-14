@@ -14,17 +14,16 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include "amf.h"
 #include "Rtmp.h"
-#include "Util/util.h"
-#include "Util/logger.h"
-#include "Util/TimeTicker.h"
-#include "Session.h"
 #include "Util/ResourcePool.h"
-#include "Http/HttpRequestSplitter.h"
+#include "Util/HttpRequestSplitter.h"
 
 namespace mediakit {
-
+/*
+rtmp协议封装和解析器
+解析: input/onParseRtmp -> onRtmpChunk/onStreamXXX
+封装：sendXXX -> onSendRawData
+*/
 class RtmpProtocol : public HttpRequestSplitter{
 public:
     RtmpProtocol();
@@ -59,6 +58,7 @@ protected:
     void sendSetBufferLength(uint32_t stream_index, uint32_t len);
     void sendUserControl(uint16_t event_type, uint32_t event_data);
     void sendUserControl(uint16_t event_type, const std::string &event_data);
+    // 会增加_send_req_id，可用于处理rpc响应
     void sendInvoke(const std::string &cmd, const AMFValue &val);
     void sendRequest(int cmd, const std::string &str);
     void sendResponse(int type, const std::string &str);

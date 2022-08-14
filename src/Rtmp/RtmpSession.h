@@ -14,25 +14,28 @@
 #include <unordered_map>
 #include "amf.h"
 #include "Rtmp.h"
-#include "utils.h"
-#include "Common/config.h"
 #include "RtmpProtocol.h"
 #include "RtmpMediaSourceImp.h"
-#include "Util/util.h"
 #include "Util/TimeTicker.h"
 #include "Session.h"
-#include "Common/Stamp.h"
 
 namespace mediakit {
-
+/// Rtmp服务器会话，负责承载rtmp推流和拉流功能.
 class RtmpSession : public toolkit::Session, public RtmpProtocol, public MediaSourceEvent {
 public:
     using Ptr = std::shared_ptr<RtmpSession>;
 
-    RtmpSession(const toolkit::SocketPtr &sock);
+    RtmpSession(hio_t* io);
     ~RtmpSession() override;
 
-    void onRecv(const toolkit::Buffer::Ptr &buf) override;
+    /*
+    来数据回调
+    - onParseRtmp
+     - onRtmpChunk
+       - onProcessCmd or
+       - _push_src->onWrite
+    */
+    void onRecv(const char *data, size_t size);
     void onError(const toolkit::SockException &err) override;
     void onManager() override;
 
@@ -56,10 +59,11 @@ private:
     void setMetaData(AMFDecoder &dec);
 
     void onSendMedia(const RtmpPacket::Ptr &pkt);
-    void onSendRawData(toolkit::Buffer::Ptr buffer) override{
+    void onSendRawData(toolkit::Buffer::Ptr buffer) override {
         _total_bytes += buffer->size();
-        send(std::move(buffer));
+        write(buffer->data(), buffer->size());
     }
+
     void onRtmpChunk(RtmpPacket::Ptr chunk_data) override;
 
     template<typename first, typename second>
@@ -79,7 +83,7 @@ private:
     // 获取媒体源url或者文件路径
     std::string getOriginUrl(MediaSource &sender) const override;
     // 获取媒体源客户端相关信息
-    std::shared_ptr<SockInfo> getOriginSock(MediaSource &sender) const override;
+    std::shared_ptr<toolkit::SockInfo> getOriginSock(MediaSource &sender) const override;
     // 由于支持断连续推，存在OwnerPoller变更的可能
     toolkit::EventPollerPtr getOwnerPoller(MediaSource &sender) override;
 
@@ -109,7 +113,7 @@ private:
 /**
  * 支持ssl加密的rtmp服务器
  */
-using RtmpSessionWithSSL = toolkit::SessionWithSSL<RtmpSession>;
+//using RtmpSessionWithSSL = toolkit::SessionWithSSL<RtmpSession>;
 
 } /* namespace mediakit */
 #endif /* SRC_RTMP_RTMPSESSION_H_ */

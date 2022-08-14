@@ -8,10 +8,10 @@
  * may be found in the AUTHORS file in the root of the source tree.
  */
 
-#include <algorithm>
 #include "RtmpProtocol.h"
 #include "Rtmp/utils.h"
 #include "RtmpMediaSource.h"
+#include "Util/logger.h"
 
 using namespace std;
 using namespace toolkit;
@@ -26,12 +26,12 @@ using namespace toolkit;
 #define C1_OFFSET_SIZE 4
 
 #ifdef ENABLE_OPENSSL
-#include "Util/SSLBox.h"
+//#include "Util/SSLBox.h"
 #include <openssl/hmac.h>
 #include <openssl/opensslv.h>
 
 static string openssl_HMACsha256(const void *key, size_t key_len, const void *data, size_t data_len){
-    std::shared_ptr<char> out(new char[32], [](char *ptr) { delete[] ptr; });
+    unsigned char out[32];
     unsigned int out_len;
 
 #if defined(OPENSSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER > 0x10100000L)
@@ -40,7 +40,7 @@ static string openssl_HMACsha256(const void *key, size_t key_len, const void *da
     HMAC_CTX_reset(ctx);
     HMAC_Init_ex(ctx, key, (int)key_len, EVP_sha256(), NULL);
     HMAC_Update(ctx, (unsigned char*)data, data_len);
-    HMAC_Final(ctx, (unsigned char *)out.get(), &out_len);
+    HMAC_Final(ctx, out, &out_len);
     HMAC_CTX_reset(ctx);
     HMAC_CTX_free(ctx);
 #else
@@ -48,10 +48,11 @@ static string openssl_HMACsha256(const void *key, size_t key_len, const void *da
     HMAC_CTX_init(&ctx);
     HMAC_Init_ex(&ctx, key, key_len, EVP_sha256(), NULL);
     HMAC_Update(&ctx, (unsigned char*)data, data_len);
-    HMAC_Final(&ctx, (unsigned char *)out.get(), &out_len);
+    HMAC_Final(&ctx, out, &out_len);
     HMAC_CTX_cleanup(&ctx);
 #endif //defined(OPENSSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER > 0x10100000L)
-    return string(out.get(),out_len);
+
+    return string((char*)out,out_len);
 }
 #endif //ENABLE_OPENSSL
 
@@ -208,8 +209,7 @@ void RtmpProtocol::sendRtmp(uint8_t type, uint32_t stream_index, const std::stri
 
 void RtmpProtocol::sendRtmp(uint8_t type, uint32_t stream_index, const Buffer::Ptr &buf, uint32_t stamp, int chunk_id){
     if (chunk_id < 2 || chunk_id > 63) {
-        auto strErr = StrPrinter << "不支持发送该类型的块流 ID:" << chunk_id << endl;
-        throw std::runtime_error(strErr);
+        throw std::runtime_error("不支持发送该类型的块流 ID:" + std::to_string(chunk_id));
     }
     //是否有扩展时间戳
     bool ext_stamp = stamp >= 0xFFFFFF;
@@ -288,7 +288,7 @@ const char *RtmpProtocol::onSearchPacketTail(const char *data,size_t len){
 }
 
 ////for client////
-void RtmpProtocol::startClientSession(const function<void()> &func, bool complex) {
+void RtmpProtocol::startClientSession(const std::function<void()> &func, bool complex) {
     //发送 C0C1
     char handshake_head = HANDSHAKE_PLAINTEXT;
     onSendRawData(obtainBuffer(&handshake_head, 1));
@@ -303,7 +303,7 @@ void RtmpProtocol::startClientSession(const function<void()> &func, bool complex
     };
 }
 
-const char* RtmpProtocol::handle_S0S1S2(const char *data, size_t len, const function<void()> &func) {
+const char* RtmpProtocol::handle_S0S1S2(const char *data, size_t len, const std::function<void()> &func) {
     if (len < 1 + 2 * C1_HANDSHARK_SIZE) {
         //数据不够
         return nullptr;

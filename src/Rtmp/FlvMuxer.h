@@ -15,11 +15,11 @@
 #include "Rtmp/RtmpMediaSource.h"
 #include "Util/ResourcePool.h"
 #include "Buffer.hpp"
-#include "Session.h"
+#include "toolkit.h"
 
 namespace mediakit {
-
-class FlvMuxer {
+class RtmpMuxer;
+class FlvMuxer: public toolkit::RingDelegate<RtmpPacket::Ptr> {
 public:
     using Ptr = std::shared_ptr<FlvMuxer>;
     FlvMuxer();
@@ -28,20 +28,30 @@ public:
     void stop();
 
 protected:
+    void start(RtmpMuxer* muxer);
     void start(const toolkit::EventPollerPtr &poller, const RtmpMediaSource::Ptr &media, uint32_t start_pts = 0);
+
+    // 子类重载函数.
+    // 写入二进制数据
     virtual void onWrite(const toolkit::Buffer::Ptr &data, bool flush) = 0;
+    // stop或RtmpMediaSource Detach时回调
     virtual void onDetach() = 0;
+    // 为了跨线程投递, 为啥不 enable_shared_from_this?
     virtual std::shared_ptr<FlvMuxer> getSharedPtr() = 0;
 
 private:
-    void onWriteFlvHeader(const RtmpMediaSource::Ptr &src);
+    void writeFlvHeader(bool hasAudio, bool hasVideo);
+    void onWrite(RtmpPacket::Ptr in, bool is_key = true) override;
+
+    // 写Rtmp数据包
     void onWriteRtmp(const RtmpPacket::Ptr &pkt, bool flush);
-    void onWriteFlvTag(const RtmpPacket::Ptr &pkt, uint32_t time_stamp, bool flush);
+
     void onWriteFlvTag(uint8_t type, const toolkit::Buffer::Ptr &buffer, uint32_t time_stamp, bool flush);
     toolkit::BufferRaw::Ptr obtainBuffer(const void *data, size_t len);
     toolkit::BufferRaw::Ptr obtainBuffer();
 
 private:
+    bool _wait_key = true;
     toolkit::ResourcePool<toolkit::BufferRaw> _packet_pool;
     RtmpMediaSource::RingType::RingReader::Ptr _ring_reader;
 };
@@ -52,6 +62,7 @@ public:
     FlvRecorder() = default;
     ~FlvRecorder() override = default;
 
+    void startRecord(RtmpMuxer* muxer, const std::string &file_path);
     void startRecord(const toolkit::EventPollerPtr &poller, const RtmpMediaSource::Ptr &media, const std::string &file_path);
     void startRecord(const toolkit::EventPollerPtr &poller, const std::string &vhost, const std::string &app, const std::string &stream, const std::string &file_path);
 

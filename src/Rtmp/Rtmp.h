@@ -14,7 +14,6 @@
 #include <memory>
 #include <string>
 #include <cstdlib>
-#include "Util/util.h"
 #include "Buffer.hpp"
 #include "amf.h"
 #include "Extension/Track.h"
@@ -91,7 +90,6 @@ public:
     uint8_t random[RANDOM_LEN];
 
     void random_generate(char *bytes, int size);
-
     void create_complex_c0c1();
 
 }PACKED;
@@ -154,11 +152,12 @@ public:
 #pragma pack(pop)
 #endif // defined(_WIN32)
 
-class RtmpPacket : public toolkit::Buffer{
+class RtmpPacket : public toolkit::Buffer {
 public:
     friend class RtmpProtocol;
     using Ptr = std::shared_ptr<RtmpPacket>;
     bool is_abs_stamp;
+    // MSG_*
     uint8_t type_id;
     uint32_t time_stamp;
     uint32_t ts_field;
@@ -177,65 +176,17 @@ public:
         return buffer.size();
     }
 
-    void clear(){
-        is_abs_stamp = false;
-        time_stamp = 0;
-        ts_field = 0;
-        body_size = 0;
-        buffer.clear();
-    }
+    void clear();
 
-    bool isVideoKeyFrame() const {
-        return type_id == MSG_VIDEO && (uint8_t) buffer[0] >> 4 == FLV_KEY_FRAME && (uint8_t) buffer[1] == 1;
-    }
+    bool isVideoKeyFrame() const;
+    bool isCfgFrame() const;
 
-    bool isCfgFrame() const {
-        switch (type_id){
-            case MSG_VIDEO : return buffer[1] == 0;
-            case MSG_AUDIO : {
-                switch (getMediaType()){
-                    case FLV_CODEC_AAC : return buffer[1] == 0;
-                    default : return false;
-                }
-            }
-            default : return false;
-        }
-    }
+    // Rtmp包的首字节包含好多音视频信息 : 编码，采样率，还有通道数等
+    int getMediaType() const;
 
-    int getMediaType() const {
-        switch (type_id) {
-            case MSG_VIDEO : return (uint8_t) buffer[0] & 0x0F;
-            case MSG_AUDIO : return (uint8_t) buffer[0] >> 4;
-            default : return 0;
-        }
-    }
-
-    int getAudioSampleRate() const {
-        if (type_id != MSG_AUDIO) {
-            return 0;
-        }
-        int flvSampleRate = ((uint8_t) buffer[0] & 0x0C) >> 2;
-        const static int sampleRate[] = { 5512, 11025, 22050, 44100 };
-        return sampleRate[flvSampleRate];
-    }
-
-    int getAudioSampleBit() const {
-        if (type_id != MSG_AUDIO) {
-            return 0;
-        }
-        int flvSampleBit = ((uint8_t) buffer[0] & 0x02) >> 1;
-        const static int sampleBit[] = { 8, 16 };
-        return sampleBit[flvSampleBit];
-    }
-
-    int getAudioChannel() const {
-        if (type_id != MSG_AUDIO) {
-            return 0;
-        }
-        int flvStereoOrMono = (uint8_t) buffer[0] & 0x01;
-        const static int channel[] = { 1, 2 };
-        return channel[flvStereoOrMono];
-    }
+    int getAudioSampleRate() const;
+    int getAudioSampleBit() const;
+    int getAudioChannel() const;
 
 private:
     //friend class toolkit::ResourcePool_l<RtmpPacket>;
@@ -261,7 +212,7 @@ private:
 /**
  * rtmp metadata基类，用于描述rtmp格式信息
  */
-class Metadata : public CodecInfo{
+class Metadata : public CodecInfo {
 public:
     typedef std::shared_ptr<Metadata> Ptr;
 

@@ -14,7 +14,7 @@
 #include "Util/onceToken.h"
 #include "Common/Parser.h"
 
-using namespace std;
+using std::string;
 using namespace toolkit;
 
 namespace mediakit {
@@ -25,11 +25,11 @@ RtmpPusher::RtmpPusher(const EventPoller::Ptr &poller, const RtmpMediaSource::Pt
 
 RtmpPusher::~RtmpPusher() {
     teardown();
-    DebugL << endl;
+    DebugL;
 }
 
 void RtmpPusher::teardown() {
-    if (alive()) {
+    if (isConnected()) {
         _app.clear();
         _stream_id.clear();
         _tc_url.clear();
@@ -63,6 +63,7 @@ void RtmpPusher::onPublishResult_l(const SockException &ex, bool handshake_done)
 
 void RtmpPusher::publish(const string &url)  {
     teardown();
+
     string host_url = FindField(url.data(), "://", "/");
     _app = FindField(url.data(), (host_url + "/").data(), "/");
     _stream_id = FindField(url.data(), (host_url + "/" + _app + "/").data(), NULL);
@@ -77,16 +78,14 @@ void RtmpPusher::publish(const string &url)  {
     uint16_t port = 1935;
     splitUrl(host_url, host_url, port);
 
-    weak_ptr<RtmpPusher> weakSelf = dynamic_pointer_cast<RtmpPusher>(shared_from_this());
+    std::weak_ptr<RtmpPusher> weakSelf = std::dynamic_pointer_cast<RtmpPusher>(shared_from_this());
+    // 启动推流超时定时器
     float publishTimeOutSec = (*this)[Client::kTimeoutMS].as<int>() / 1000.0f;
     _publish_timer.reset(new Timer(publishTimeOutSec, [weakSelf]() {
-        auto strongSelf = weakSelf.lock();
-        if (!strongSelf) {
-            return false;
-        }
-        strongSelf->onPublishResult_l(SockException(Err_timeout, "publish rtmp timeout"), false);
+        if (auto strongSelf = weakSelf.lock())
+            strongSelf->onPublishResult_l(SockException(Err_timeout, "publish rtmp timeout"), false);
         return false;
-    }, getPoller()));
+    }, loop()));
 
     if (!(*this)[Client::kNetAdapter].empty()) {
         setNetAdapter((*this)[Client::kNetAdapter]);
@@ -105,29 +104,27 @@ void RtmpPusher::onConnect(const SockException &err){
         onPublishResult_l(err, false);
         return;
     }
-    weak_ptr<RtmpPusher> weak_self = dynamic_pointer_cast<RtmpPusher>(shared_from_this());
-    startClientSession([weak_self]() {
-        auto strong_self = weak_self.lock();
-        if (!strong_self) {
-            return;
-        }
 
-        strong_self->sendChunkSize(60000);
-        strong_self->send_connect();
+    std::weak_ptr<RtmpPusher> weak_self = std::dynamic_pointer_cast<RtmpPusher>(shared_from_this());
+    startClientSession([weak_self]() {
+        if (auto strong_self = weak_self.lock()) {
+            strong_self->sendChunkSize(60000);
+            strong_self->send_connect();
+        }
     });
 }
 
 void RtmpPusher::onRecv(const Buffer::Ptr &buf){
     try {
         onParseRtmp(buf->data(), buf->size());
-    } catch (exception &e) {
+    } catch (std::exception &e) {
         SockException ex(Err_other, e.what());
         //定时器_pPublishTimer为空后表明握手结束了
         onPublishResult_l(ex, !_publish_timer);
     }
 }
 
-inline void RtmpPusher::send_connect() {
+void RtmpPusher::send_connect() {
     AMFValue obj(AMF_OBJECT);
     obj.set("app", _app);
     obj.set("type", "nonprivate");
@@ -141,13 +138,13 @@ inline void RtmpPusher::send_connect() {
         auto level = val["level"].as_string();
         auto code = val["code"].as_string();
         if (level != "status") {
-            throw std::runtime_error(StrPrinter << "connect 失败:" << level << " " << code << endl);
+            throw std::runtime_error(StrPrinter << "connect 失败:" << level << " " << code);
         }
         send_createStream();
     });
 }
 
-inline void RtmpPusher::send_createStream() {
+void RtmpPusher::send_createStream() {
     AMFValue obj(AMF_NULL);
     sendInvoke("createStream", obj);
     addOnResultCB([this](AMFDecoder &dec) {
@@ -159,7 +156,7 @@ inline void RtmpPusher::send_createStream() {
 }
 
 #define RTMP_STREAM_LIVE    "live"
-inline void RtmpPusher::send_publish() {
+void RtmpPusher::send_publish() {
     AMFEncoder enc;
     enc << "publish" << ++_send_req_id << nullptr << _stream_id << RTMP_STREAM_LIVE;
     sendRequest(MSG_CMD, enc.data());
@@ -168,46 +165,48 @@ inline void RtmpPusher::send_publish() {
         auto level = val["level"].as_string();
         auto code = val["code"].as_string();
         if (level != "status") {
-            throw std::runtime_error(StrPrinter << "publish 失败:" << level << " " << code << endl);
+            throw std::runtime_error(StrPrinter << "publish 失败:" << level << " " << code);
         }
         //start send media
         send_metaData();
     });
 }
 
-inline void RtmpPusher::send_metaData(){
+void RtmpPusher::send_metaData(){
     auto src = _publish_src.lock();
     if (!src) {
         throw std::runtime_error("the media source was released");
     }
-
+    // write metadata
     AMFEncoder enc;
     enc << "@setDataFrame" << "onMetaData" << src->getMetaData();
     sendRequest(MSG_DATA, enc.data());
-
+    // write config frame
     src->getConfigFrame([&](const RtmpPacket::Ptr &pkt) {
         sendRtmp(pkt->type_id, _stream_index, pkt, pkt->time_stamp, pkt->chunk_id);
     });
 
     src->pause(false);
-    _rtmp_reader = src->getRing()->attach(getPoller());
-    weak_ptr<RtmpPusher> weak_self = dynamic_pointer_cast<RtmpPusher>(shared_from_this());
+
+    _rtmp_reader = src->getRing()->attach(loop());
+    std::weak_ptr<RtmpPusher> weak_self = std::dynamic_pointer_cast<RtmpPusher>(shared_from_this());
     _rtmp_reader->setReadCB([weak_self](const RtmpMediaSource::RingDataType &pkt) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
         }
-
+        // write packet
         size_t i = 0;
         auto size = pkt->size();
-        strong_self->setSendFlushFlag(false);
-        pkt->for_each([&](const RtmpPacket::Ptr &rtmp) {
+        // strong_self->setSendFlushFlag(false);
+        for (auto& rtmp : *pkt) {
             if (++i == size) {
-                strong_self->setSendFlushFlag(true);
+        //      strong_self->setSendFlushFlag(true);
             }
             strong_self->sendRtmp(rtmp->type_id, strong_self->_stream_index, rtmp, rtmp->time_stamp, rtmp->chunk_id);
-        });
+        }
     });
+
     _rtmp_reader->setDetachCB([weak_self]() {
         auto strong_self = weak_self.lock();
         if (strong_self) {
@@ -220,12 +219,14 @@ inline void RtmpPusher::send_metaData(){
 }
 
 void RtmpPusher::setSocketFlags(){
+#ifdef ENABLE_MERGE_WIRTE
     GET_CONFIG(int, mergeWriteMS, General::kMergeWriteMS);
     if (mergeWriteMS > 0) {
         //提高发送性能
         setSendFlags(SOCKET_DEFAULE_FLAGS | FLAG_MORE);
         SockUtil::setNoDelay(getSock()->rawFD(), false);
     }
+#endif    
 }
 
 void RtmpPusher::onCmd_result(AMFDecoder &dec){
@@ -259,7 +260,7 @@ void RtmpPusher::onCmd_onStatus(AMFDecoder &dec) {
         auto code = val["code"].as_string();
         if (level.type() == AMF_STRING) {
             if (level.as_string() != "status") {
-                throw std::runtime_error(StrPrinter << "onStatus 失败:" << level.as_string() << " " << code << endl);
+                throw std::runtime_error(StrPrinter << "onStatus 失败:" << level.as_string() << " " << code);
             }
         }
     }
@@ -271,7 +272,7 @@ void RtmpPusher::onRtmpChunk(RtmpPacket::Ptr packet) {
         case MSG_CMD:
         case MSG_CMD3: {
             typedef void (RtmpPusher::*rtmpCMDHandle)(AMFDecoder &dec);
-            static unordered_map<string, rtmpCMDHandle> g_mapCmd;
+            static std::unordered_map<string, rtmpCMDHandle> g_mapCmd;
             static onceToken token([]() {
                 g_mapCmd.emplace("_error", &RtmpPusher::onCmd_result);
                 g_mapCmd.emplace("_result", &RtmpPusher::onCmd_result);

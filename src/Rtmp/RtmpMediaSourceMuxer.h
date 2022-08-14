@@ -28,12 +28,14 @@ public:
                          const TitleMeta::Ptr &title = nullptr) : RtmpMuxer(title) {
         _option = option;
         _media_src = std::make_shared<RtmpMediaSource>(vhost, strApp, strId);
+        // 将ring数据拦截到RtmpMediaSource上的RtmpRing上去
         getRtmpRing()->setDelegate(_media_src);
     }
 
     ~RtmpMediaSourceMuxer() override { RtmpMuxer::flush(); }
 
     void setListener(const std::weak_ptr<MediaSourceEvent> &listener){
+        // 事件路径: RtmpMediaSource-> this -> listener
         setDelegate(listener);
         _media_src->setListener(shared_from_this());
     }

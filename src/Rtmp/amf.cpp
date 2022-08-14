@@ -12,11 +12,11 @@
 #include <stdexcept>
 #include "amf.h"
 #include "utils.h"
-#include "Util/util.h"
 #include "Util/logger.h"
 #include "Util/util.h"
+#include "Util/netdef.h"
+#include "Buffer.hpp"
 
-using namespace std;
 using namespace toolkit;
 
 /////////////////////AMFValue/////////////////////////////
@@ -202,7 +202,7 @@ bool AMFValue::as_boolean() const {
     }
 }
 
-string AMFValue::to_string() const{
+std::string AMFValue::to_string() const{
     switch (_type) {
         case AMF_NUMBER:
             return StrPrinter << _value.number;
@@ -223,7 +223,7 @@ string AMFValue::to_string() const{
         case AMF_STRICT_ARRAY:
             return "strict_array";
         default:
-            throw std::runtime_error("can not convert to string ");
+            throw std::runtime_error("can not convert to string");
     }
 }
 
@@ -239,7 +239,7 @@ const AMFValue& AMFValue::operator[](const char *str) const {
     return i->second;
 }
 
-void AMFValue::object_for_each(const function<void(const string &key, const AMFValue &val)> &fun) const {
+void AMFValue::object_for_each(const std::function<void(const std::string &key, const AMFValue &val)> &fun) const {
     if (_type != AMF_OBJECT && _type != AMF_ECMA_ARRAY) {
         throw std::runtime_error("AMF not a object");
     }
@@ -352,7 +352,6 @@ AMFEncoder & AMFEncoder::operator <<(std::nullptr_t) {
 AMFEncoder & AMFEncoder::write_undefined() {
     buf += char(AMF0_UNDEFINED);
     return *this;
-
 }
 
 AMFEncoder & AMFEncoder::operator <<(const int n){
@@ -578,7 +577,7 @@ AMFValue AMFDecoder::load<AMFValue>() {
             return AMF_UNDEFINED;
         default:
             throw std::runtime_error(
-            StrPrinter << "Unsupported AMF3 type:" << (int) type << endl);
+            StrPrinter << "Unsupported AMF3 type:" << (int) type);
         }
     } else {
         switch (type) {
@@ -602,7 +601,7 @@ AMFValue AMFDecoder::load<AMFValue>() {
             return load_arr();
         default:
             throw std::runtime_error(
-            StrPrinter << "Unsupported AMF type:" << (int) type << endl);
+            StrPrinter << "Unsupported AMF type:" << (int) type);
         }
     }
 

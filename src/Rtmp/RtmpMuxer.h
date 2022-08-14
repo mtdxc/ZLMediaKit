@@ -14,10 +14,15 @@
 #include "Rtmp/Rtmp.h"
 #include "Extension/Frame.h"
 #include "Common/MediaSink.h"
+// RtmpRing
 #include "RtmpCodec.h"
 
 namespace mediakit{
-
+/*
+Rtmp混合器.
+- 拦截MediaSink的addTrack回调，生成metadata
+- 处理MediaSink的inputFrame，编码后传给 RtmpRing
+*/
 class RtmpMuxer : public MediaSinkInterface {
 public:
     typedef std::shared_ptr<RtmpMuxer> Ptr;
@@ -29,14 +34,12 @@ public:
     ~RtmpMuxer() override = default;
 
     /**
-     * 获取完整的SDP字符串
-     * @return SDP字符串
+     * 获取完整的MetaData头部
      */
-    const AMFValue &getMetadata() const ;
+    const AMFValue &getMetadata() const;
 
     /**
-     * 获取rtmp环形缓存
-     * @return
+     * 获取rtmp环形缓存，用于输出数据
      */
     RtmpRing::RingType::Ptr getRtmpRing() const;
 
@@ -46,7 +49,7 @@ public:
     bool addTrack(const Track::Ptr & track) override;
 
     /**
-     * 写入帧数据
+     * 写入帧数据，最终数据从_rtmp_ring出
      * @param frame 帧
      */
     bool inputFrame(const Frame::Ptr &frame) override;
@@ -65,6 +68,20 @@ public:
      * 生成config包
      */
      void makeConfigPacket();
+     /**
+      * 获取所有的config帧
+      */
+     template<typename FUNC>
+     void getConfigFrame(const FUNC &f) {
+         for (auto &pr : _encoder) {
+             if (!pr)
+                 continue;
+             if (auto pkt = pr->makeConfigPacket())
+                f(pkt);
+         }
+     }
+     bool haveAudio() const { return nullptr != _encoder[TrackAudio]; }
+     bool haveVideo() const { return nullptr != _encoder[TrackVideo]; }
 private:
     RtmpRing::RingType::Ptr _rtmp_ring;
     AMFValue _metadata;

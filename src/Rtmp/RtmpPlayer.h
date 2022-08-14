@@ -18,11 +18,9 @@
 #include "Rtmp.h"
 #include "RtmpProtocol.h"
 #include "Player/PlayerBase.h"
-#include "Util/util.h"
-#include "Util/logger.h"
 #include "Util/TimeTicker.h"
-#include "Session.h"
-#include "TcpClient.h"
+#include "toolkit.h"
+#include "TcpClient.hpp"
 
 namespace mediakit {
 
@@ -57,7 +55,7 @@ protected:
     void onRtmpChunk(RtmpPacket::Ptr chunk_data) override;
     void onStreamDry(uint32_t stream_index) override;
     void onSendRawData(toolkit::Buffer::Ptr buffer) override {
-        send(std::move(buffer));
+        send(buffer->data(), buffer->size());
     }
 
     template<typename FUNC>
@@ -93,6 +91,7 @@ private:
     uint32_t _fist_stamp[2] = {0, 0};
     uint32_t _now_stamp[2] = {0, 0};
     toolkit::Ticker _now_stamp_ticker[2];
+    // 回调列表
     std::deque<std::function<void(AMFValue &dec)> > _deque_on_status;
     std::unordered_map<int, std::function<void(AMFDecoder &dec)> > _map_on_result;
 

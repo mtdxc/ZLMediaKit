@@ -10,6 +10,8 @@
 
 #include "Rtmp.h"
 #include "Extension/Factory.h"
+#include "Util/logger.h"
+
 namespace mediakit{
 
 VideoMeta::VideoMeta(const VideoTrack::Ptr &video){
@@ -144,6 +146,73 @@ RtmpPacket::Ptr RtmpPacket::create(){
 #else
     return Ptr(new RtmpPacket);
 #endif
+}
+
+void RtmpPacket::clear()
+{
+    is_abs_stamp = false;
+    time_stamp = 0;
+    ts_field = 0;
+    body_size = 0;
+    buffer.clear();
+}
+
+bool RtmpPacket::isVideoKeyFrame() const
+{
+    return type_id == MSG_VIDEO && (uint8_t)buffer[0] >> 4 == FLV_KEY_FRAME && (uint8_t)buffer[1] == 1;
+}
+
+bool RtmpPacket::isCfgFrame() const
+{
+    switch (type_id) {
+    case MSG_VIDEO:
+        return buffer[1] == 0;
+    case MSG_AUDIO: {
+        switch (getMediaType()) {
+        case FLV_CODEC_AAC:
+            return buffer[1] == 0;
+        default:
+            return false;
+        }
+    }
+    default:
+        return false;
+    }
+}
+
+int RtmpPacket::getMediaType() const
+{
+    switch (type_id) {
+    case MSG_VIDEO: return (uint8_t)buffer[0] & 0x0F;
+    case MSG_AUDIO: return (uint8_t)buffer[0] >> 4;
+    default: return 0;
+    }
+}
+
+int RtmpPacket::getAudioSampleRate() const
+{
+    if (type_id != MSG_AUDIO) {
+        return 0;
+    }
+    int flvSampleRate = ((uint8_t)buffer[0] & 0x0C) >> 2;
+    const static int sampleRate[] = { 5512, 11025, 22050, 44100 };
+    return sampleRate[flvSampleRate];
+}
+
+int RtmpPacket::getAudioSampleBit() const
+{
+    if (type_id != MSG_AUDIO) {
+        return 0;
+    }
+    return  buffer[0] & 0x02 ? 16 : 8;
+}
+
+int RtmpPacket::getAudioChannel() const
+{
+    if (type_id != MSG_AUDIO) {
+        return 0;
+    }
+    return buffer[0] & 0x01 ? 2 : 1;
 }
 
 RtmpHandshake::RtmpHandshake(uint32_t _time, uint8_t *_random /*= nullptr*/)

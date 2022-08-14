@@ -9,7 +9,9 @@
  */
 
 #include "RtmpDemuxer.h"
+#include "RtmpCodec.h"
 #include "Extension/Factory.h"
+#include "Util/logger.h"
 
 using namespace std;
 
