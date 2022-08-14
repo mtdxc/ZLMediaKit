@@ -7,7 +7,15 @@
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
-
+#include <csignal>
+#include <stdexcept>
+#include "Process.h"
+#include "Util/File.h"
+#include "Util/util.h"
+#include "Util/logger.h"
+#include "Util/uv_errno.h"
+//#include "Poller/EventPoller.h"
+#include "EventLoopThreadPool.h"
 #include <limits.h>
 #include <sys/stat.h>
 #ifndef _WIN32
@@ -18,13 +26,6 @@
 #include <windows.h>
 #endif
 
-#include <csignal>
-#include <stdexcept>
-#include "Process.h"
-#include "Util/File.h"
-#include "Util/util.h"
-#include "Util/logger.h"
-#include "Util/uv_errno.h"
 
 #define STACK_SIZE (8192 * 1024)
 
@@ -297,7 +298,7 @@ static void s_kill(pid_t pid, void *handle, int max_delay, bool force) {
     }
 
     //发送SIGTERM信号后，2秒后检查子进程是否已经退出
-    EventPollerPool::Instance().getPoller()->doDelayTask(max_delay, [pid, handle]() {
+    hv::EventLoopThreadPool::Instance()->loop()->doDelayTask(max_delay, [pid, handle]() {
         if (!s_wait(pid, handle, nullptr, false)) {
             //进程已经退出了
             return 0;

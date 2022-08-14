@@ -13,22 +13,12 @@
 
 #include <string>
 #include <functional>
-#include "json/json.h"
-
-//支持json或urlencoded方式传输参数
-#define JSON_ARGS
-
-#ifdef JSON_ARGS
-typedef Json::Value ArgsType;
-#else
-typedef mediakit::HttpArgs ArgsType;
-#endif
-
+#include <json.hpp>
 namespace Hook {
 //web hook回复最大超时时间
 extern const std::string kTimeoutSec;
 }//namespace Hook
-
+using ArgsType = nlohmann::json;
 void installWebHook();
 void unInstallWebHook();
 /**
@@ -37,5 +27,5 @@ void unInstallWebHook();
  * @param body 请求body
  * @param func 回调
  */
-void do_http_hook(const std::string &url, const ArgsType &body, const std::function<void(const Json::Value &, const std::string &)> &func = nullptr);
+void do_http_hook(const std::string &url, const ArgsType &body, const std::function<void(const nlohmann::json &, const std::string &)> &func = nullptr);
 #endif //ZLMEDIAKIT_WEBHOOK_H

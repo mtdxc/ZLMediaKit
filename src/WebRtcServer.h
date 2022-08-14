@@ -97,6 +97,12 @@ private:
     std::unordered_map<std::string, Plugin> _map_creator;
 };
 
-
+uint16_t openRtpServer(uint16_t local_port, const std::string& stream_id, bool enable_tcp, const std::string& local_ip, bool re_use_port, uint32_t ssrc);
+bool closeRtpServer(const std::string& stream_id);
+hv::Json makeMediaSourceJson(mediakit::MediaSource& media);
+void getStatisticJson(const std::function<void(hv::Json& val)>& cb);
+void addStreamProxy(const std::string& vhost, const std::string& app, const std::string& stream, const std::string& url, int retry_count,
+    const mediakit::ProtocolOption& option, int rtp_type, float timeout_sec,
+    const std::function<void(const toolkit::SockException& ex, const std::string& key)>& cb);
 } // end namespace mediakit
 #endif //ZLMEDIAKIT_WEBRTCSERVER_H

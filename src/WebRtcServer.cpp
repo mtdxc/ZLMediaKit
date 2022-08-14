@@ -19,6 +19,7 @@
 #include <string>
 #include <iostream>
 #include "Common/config.h"
+#include "../server/WebHook.h"
 
 using namespace std;
 using namespace mediakit;
@@ -212,6 +213,9 @@ void WebRtcServer::start(const char* cfgPath)
     port = mINI::Instance()[::Rtsp::kPort];
     if (port)
         _rtsp = newRtspServer(port);
+
+    startHttp();
+    installWebHook();
 }
 
 void WebRtcServer::stop()
@@ -238,6 +242,7 @@ void WebRtcServer::stop()
         AutoLock lck(s_proxyPusherMapMtx);
         s_proxyPusherMap.clear();
     }
+    unInstallWebHook();
     EventLoopThreadPool::Instance()->stop();
 }
 
@@ -618,6 +623,45 @@ void WebRtcServer::startHttp()
     websocket_server_run(&_http, 0);
 }
 
+void addStreamProxy(const string& vhost, const string& app, const string& stream,
+    const string& url, int retry_count, const ProtocolOption& option, int rtp_type, float timeout_sec,
+    const std::function<void(const SockException& ex, const string& key)>& cb) {
+    auto key = getProxyKey(vhost, app, stream);
+    AutoLock lck(s_proxyMapMtx);
+    if (s_proxyMap.find(key) != s_proxyMap.end()) {
+        //已经在拉流了
+        cb(SockException(Err_success), key);
+        return;
+    }
+    //添加拉流代理
+    auto player = std::make_shared<PlayerProxy>(vhost, app, stream, option, retry_count ? retry_count : -1);
+    s_proxyMap[key] = player;
+
+    //指定RTP over TCP(播放rtsp时有效)
+    (*player)[Client::kRtpType] = rtp_type;
+
+    if (timeout_sec > 0.1) {
+        //播放握手超时时间
+        (*player)[Client::kTimeoutMS] = timeout_sec * 1000;
+    }
+
+    //开始播放，如果播放失败或者播放中止，将会自动重试若干次，默认一直重试
+    player->setPlayCallbackOnce([cb, key](const SockException& ex) {
+        if (ex) {
+            AutoLock lck(s_proxyMapMtx);
+            s_proxyMap.erase(key);
+        }
+        cb(ex, key);
+    });
+
+    //被主动关闭拉流
+    player->setOnClose([key](const SockException& ex) {
+        AutoLock lck(s_proxyMapMtx);
+        s_proxyMap.erase(key);
+    });
+    player->play(url);
+};
+
 void WebRtcServer::setupRestApi(HttpService &http)
 {
     GET_CONFIG(std::string, api_secret, "api.secret");
@@ -862,45 +906,6 @@ void WebRtcServer::setupRestApi(HttpService &http)
         resp->Json(val);
         return HTTP_STATUS_OK;
     });
-
-    static auto addStreamProxy = [](const string &vhost, const string &app, const string &stream, 
-        const string &url, int retry_count, const ProtocolOption &option, int rtp_type, float timeout_sec,
-        const std::function<void(const SockException &ex, const string &key)> &cb) {
-        auto key = getProxyKey(vhost, app, stream);
-        AutoLock lck(s_proxyMapMtx);
-        if (s_proxyMap.find(key) != s_proxyMap.end()) {
-            //已经在拉流了
-            cb(SockException(Err_success), key);
-            return;
-        }
-        //添加拉流代理
-        auto player = std::make_shared<PlayerProxy>(vhost, app, stream, option, retry_count ? retry_count : -1);
-        s_proxyMap[key] = player;
-
-        //指定RTP over TCP(播放rtsp时有效)
-        (*player)[Client::kRtpType] = rtp_type;
-
-        if (timeout_sec > 0.1) {
-            //播放握手超时时间
-            (*player)[Client::kTimeoutMS] = timeout_sec * 1000;
-        }
-
-        //开始播放，如果播放失败或者播放中止，将会自动重试若干次，默认一直重试
-        player->setPlayCallbackOnce([cb, key](const SockException &ex) {
-            if (ex) {
-                AutoLock lck(s_proxyMapMtx);
-                s_proxyMap.erase(key);
-            }
-            cb(ex, key);
-        });
-
-        //被主动关闭拉流
-        player->setOnClose([key](const SockException &ex) {
-            AutoLock lck(s_proxyMapMtx);
-            s_proxyMap.erase(key);
-        });
-        player->play(url);
-    };
 
     //动态添加rtsp/rtmp拉流代理
     //测试url http://127.0.0.1/index/api/addStreamProxy?vhost=__defaultVhost__&app=proxy&enable_rtsp=1&enable_rtmp=1&stream=0&url=rtmp://127.0.0.1/live/obs

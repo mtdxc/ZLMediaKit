@@ -50,8 +50,8 @@ int main(int argc, char *argv[]) {
     //设置退出信号处理函数
     signal(SIGINT, [](int) { SDLDisplayerHelper::Instance().shutdown(); });
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
 
     if (argc < 3) {
         ErrorL << "\r\n测试方法：./test_player rtxp_url rtp_type\r\n"

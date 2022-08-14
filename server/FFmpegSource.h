@@ -15,8 +15,8 @@
 #include <memory>
 #include <functional>
 #include "Process.h"
-#include "toolkit.h"
 #include "Util/TimeTicker.h"
+#include "toolkit.h"
 #include "Common/MediaSource.h"
 
 namespace FFmpeg {
@@ -32,7 +32,7 @@ public:
     /// \param timeout_sec 生成截图超时时间(防止阻塞太久)
     /// \param cb 生成截图成功与否回调
     static void makeSnap(const std::string &play_url, const std::string &save_path, float timeout_sec, const onSnap &cb);
-
+    static void makeRecord(const std::string &play_url, const std::string &save_path, float duration, const onSnap &cb);
 private:
     FFmpegSnap() = delete;
     ~FFmpegSnap() = delete;
@@ -87,7 +87,7 @@ private:
     bool _enable_hls = false;
     bool _enable_mp4 = false;
     Process _process;
-    toolkit::Timer::Ptr _timer;
+    std::shared_ptr<toolkit::Timer> _timer;
     toolkit::EventPollerPtr _poller;
     mediakit::MediaInfo _media_info;
     std::string _src_url;

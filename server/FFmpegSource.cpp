@@ -13,8 +13,8 @@
 #include "Common/MediaSource.h"
 #include "Util/File.h"
 #include "System.h"
+#include "cpputil/ifconfig.h"
 #include "EventLoopThreadPool.h"
-
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;
@@ -25,6 +25,7 @@ const string kBin = FFmpeg_FIELD"bin";
 const string kCmd = FFmpeg_FIELD"cmd";
 const string kLog = FFmpeg_FIELD"log";
 const string kSnap = FFmpeg_FIELD"snap";
+const string kRecord = FFmpeg_FIELD"record";
 const string kRestartSec = FFmpeg_FIELD"restart_sec";
 
 onceToken token([]() {
@@ -39,12 +40,13 @@ onceToken token([]() {
     mINI::Instance()[kLog] = "./ffmpeg/ffmpeg.log";
     mINI::Instance()[kCmd] = "%s -re -i %s -c:a aac -strict -2 -ar 44100 -ab 48k -c:v libx264 -f flv %s";
     mINI::Instance()[kSnap] = "%s -i %s -y -f mjpeg -t 0.001 %s";
+    mINI::Instance()[kRecord] = "%s -i %s -y -c:v copy -t %f -f mp4 %s";
     mINI::Instance()[kRestartSec] = 0;
 });
 }
 
 FFmpegSource::FFmpegSource() {
-    _poller = EventPollerPool::Instance().getPoller();
+    _poller = hv::EventLoopThreadPool::Instance()->loop();
 }
 
 FFmpegSource::~FFmpegSource() {
@@ -55,9 +57,10 @@ static bool is_local_ip(const string &ip){
     if (ip == "127.0.0.1" || ip == "localhost") {
         return true;
     }
-    auto ips = SockUtil::getInterfaceList();
+    std::vector<ifconfig_t> ips;
+    hv::ifconfig(ips);
     for (auto &obj : ips) {
-        if (ip == obj["ip"]) {
+        if (ip == obj.ip) {
             return true;
         }
     }
@@ -164,13 +167,13 @@ void FFmpegSource::findAsync(int maxWaitMS, const function<void(const MediaSourc
         cb(nullptr);
         return 0;
     });
-
+    auto loop = _poller;
     weak_ptr<FFmpegSource> weakSelf = shared_from_this();
-    auto onRegist = [listener_tag,weakSelf,cb,onRegistTimeout](BroadcastMediaChangedArgs) {
+    auto onRegist = [listener_tag,weakSelf,cb,onRegistTimeout,loop](BroadcastMediaChangedArgs) {
         auto strongSelf = weakSelf.lock();
         if(!strongSelf) {
             //本身已经销毁，取消延时任务
-            onRegistTimeout->cancel();
+            loop->killTimer(onRegistTimeout);
             NoticeCenter::Instance().delListener(listener_tag,Broadcast::kBroadcastMediaChanged);
             return;
         }
@@ -185,7 +188,7 @@ void FFmpegSource::findAsync(int maxWaitMS, const function<void(const MediaSourc
         }
 
         //查找的流终于注册上了；取消延时任务，防止多次回调
-        onRegistTimeout->cancel();
+        loop->killTimer(onRegistTimeout);
         //取消事件监听
         NoticeCenter::Instance().delListener(listener_tag,Broadcast::kBroadcastMediaChanged);
 
@@ -317,7 +320,7 @@ void FFmpegSnap::makeSnap(const string &play_url, const string &save_path, float
     GET_CONFIG(string,ffmpeg_snap,FFmpeg::kSnap);
     GET_CONFIG(string,ffmpeg_log,FFmpeg::kLog);
     Ticker ticker;
-    WorkThreadPool::Instance().getPoller()->async([timeout_sec, play_url,save_path,cb, ticker](){
+    hv::EventLoopThreadPool::Instance()->loop()->async([timeout_sec, play_url,save_path,cb, ticker](){
         auto elapsed_ms = ticker.elapsedTime();
         if (elapsed_ms > timeout_sec * 1000) {
             //超时，后台线程负载太高，当代太久才启动该任务
@@ -332,8 +335,50 @@ void FFmpegSnap::makeSnap(const string &play_url, const string &save_path, float
         process->run(cmd, log_file);
 
         //定时器延时应该减去后台任务启动的延时
-        auto delayTask = EventPollerPool::Instance().getPoller()->doDelayTask(
+        auto loop = hv::EventLoopThreadPool::Instance()->loop();
+        auto delayTask = loop->doDelayTask(
             (uint64_t)(timeout_sec * 1000 - elapsed_ms), [process, cb, log_file, save_path]() {
+                if (process->wait(false)) {
+                    // FFmpeg进程还在运行，超时就关闭它
+                    process->kill(2000);
+                }
+                return 0;
+            });
+
+        //等待FFmpeg进程退出
+        process->wait(true);
+        // FFmpeg进程退出了可以取消定时器了
+        loop->killTimer(delayTask);
+        //执行回调函数
+        bool success = process->exit_code() == 0 && File::fileSize(save_path.data());
+        cb(success, (!success && !log_file.empty()) ? File::loadFile(log_file.data()) : "");
+    });
+}
+
+
+void FFmpegSnap::makeRecord(const string &play_url, const string &save_path, float duration, const onSnap &cb) {
+    GET_CONFIG(string,ffmpeg_bin,FFmpeg::kBin);
+    GET_CONFIG(string,ffmpeg_record,FFmpeg::kRecord);
+    GET_CONFIG(string,ffmpeg_log,FFmpeg::kLog);
+    Ticker ticker;
+    WorkThreadPool::Instance().getPoller()->async([duration, play_url,save_path,cb, ticker](){
+        int64_t timeout_ms = duration * 1000 + 30000;
+        auto elapsed_ms = ticker.elapsedTime();
+        if (elapsed_ms > timeout_ms) {
+            //超时，后台线程负载太高，当代太久才启动该任务
+            cb(false, "wait work poller schedule record task timeout");
+            return;
+        }
+        char cmd[2048] = { 0 };
+        snprintf(cmd, sizeof(cmd), ffmpeg_record.data(), File::absolutePath("", ffmpeg_bin).data(), play_url.data(), duration, save_path.data());
+
+        std::shared_ptr<Process> process = std::make_shared<Process>();
+        auto log_file = ffmpeg_log.empty() ? ffmpeg_log : File::absolutePath("", ffmpeg_log);
+        process->run(cmd, log_file);
+
+        // 定时器延时应该减去后台任务启动的延时
+        auto delayTask = EventPollerPool::Instance().getPoller()->doDelayTask(
+            (uint64_t)(timeout_ms - elapsed_ms), [process, cb, log_file, save_path]() {
                 if (process->wait(false)) {
                     // FFmpeg进程还在运行，超时就关闭它
                     process->kill(2000);
@@ -350,4 +395,3 @@ void FFmpegSnap::makeSnap(const string &play_url, const string &save_path, float
         cb(success, (!success && !log_file.empty()) ? File::loadFile(log_file.data()) : "");
     });
 }
-
