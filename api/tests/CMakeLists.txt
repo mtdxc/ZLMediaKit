@@ -33,6 +33,13 @@ foreach(TEST_SRC ${TEST_SRC_LIST})
     endif()
   endif()
 
+  if (NOT ENABLE_HTTP)
+    # 暂时过滤掉依赖 FFMPEG 的测试模块
+    if ("${TEST_EXE_NAME}" MATCHES "httpclient")
+      continue()
+    endif ()
+  endif ()
+
   message(STATUS "add c api tester: ${TEST_EXE_NAME}")
   set(exe_name api_tester_${TEST_EXE_NAME})
   add_executable(${exe_name} ${TEST_SRC})

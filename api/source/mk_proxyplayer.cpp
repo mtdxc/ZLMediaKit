@@ -10,7 +10,7 @@
 
 #include "mk_proxyplayer.h"
 #include "Player/PlayerProxy.h"
-
+#include "EventLoop.h"
 using namespace toolkit;
 using namespace mediakit;
 

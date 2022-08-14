@@ -9,7 +9,7 @@
  */
 
 #include "mk_httpclient.h"
-
+#ifdef ENABLE_HTTP
 #include "Util/logger.h"
 #include "Http/HttpDownloader.h"
 #include "Http/HttpRequester.h"
@@ -143,3 +143,4 @@ API_EXPORT void API_CALL mk_http_requester_start(mk_http_requester ctx,const cha
     (*obj)->sendRequest(url);
 }
 
+#endif

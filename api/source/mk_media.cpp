@@ -11,6 +11,7 @@
 #include "mk_media.h"
 #include "Util/logger.h"
 #include "Common/Device.h"
+#include "EventLoop.h"
 
 using namespace std;
 using namespace toolkit;

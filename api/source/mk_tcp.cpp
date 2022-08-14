@@ -11,12 +11,15 @@
 #include "string.h"
 #include "mk_tcp.h"
 #include "mk_tcp_private.h"
+#include "Buffer.hpp"
+#include "Util/logger.h"
+#include "TcpServer.h"
+#include "Common/macros.h"
+#ifdef ENABLE_HTTP
 #include "Http/WebSocketClient.h"
 #include "Http/WebSocketSession.h"
-#include "Buffer.hpp"
-
+#endif
 using namespace toolkit;
-using namespace mediakit;
 
 class BufferForC : public Buffer {
 public:
@@ -116,13 +119,14 @@ API_EXPORT mk_sock_info API_CALL mk_tcp_session_get_sock_info(const mk_tcp_sessi
 API_EXPORT void API_CALL mk_tcp_session_shutdown(const mk_tcp_session ctx,int err,const char *err_msg){
     assert(ctx);
     SessionForC *session = (SessionForC *)ctx;
-    session->safeShutdown(SockException((ErrCode)err,err_msg));
+    session->shutdown(SockException((ErrCode)err,err_msg), true);
 }
 
 API_EXPORT void API_CALL mk_tcp_session_send_buffer(const mk_tcp_session ctx, mk_buffer buffer) {
     assert(ctx && buffer);
     SessionForC *session = (SessionForC *) ctx;
-    session->send(*((Buffer::Ptr *) buffer));
+    auto buf = *(Buffer::Ptr*)buffer;
+    session->write(buf->data(), buf->size());
 }
 
 API_EXPORT void API_CALL mk_tcp_session_send(const mk_tcp_session ctx, const char *data, size_t len) {
@@ -139,7 +143,8 @@ API_EXPORT void API_CALL mk_tcp_session_send_buffer_safe(const mk_tcp_session ct
         ((SessionForC *) ctx)->async([weak_session, ref]() {
             auto session_session = weak_session.lock();
             if (session_session) {
-                session_session->send(*((Buffer::Ptr *) ref));
+                auto buf = *((Buffer::Ptr*)ref);
+                session_session->write(buf->data(), buf->size());
             }
             mk_buffer_unref(ref);
         });
@@ -168,10 +173,9 @@ API_EXPORT void API_CALL mk_tcp_session_send_safe(const mk_tcp_session ctx, cons
 }
 
 ////////////////////////////////////////SessionForC////////////////////////////////////////////////
-static TcpServer::Ptr s_tcp_server[4];
 static mk_tcp_session_events s_events_server = {0};
 
-SessionForC::SessionForC(const Socket::Ptr &pSock) : Session(pSock) {
+SessionForC::SessionForC(hio_t* io) : Session(io) {
     _local_port = get_local_port();
     if (s_events_server.on_mk_tcp_session_create) {
         s_events_server.on_mk_tcp_session_create(_local_port,this);
@@ -196,10 +200,6 @@ void SessionForC::onManager() {
     }
 }
 
-void stopAllTcpServer(){
-    CLEAR_ARR(s_tcp_server);
-}
-
 API_EXPORT void API_CALL mk_tcp_session_set_user_data(mk_tcp_session session,void *user_data){
     assert(session);
     SessionForC *obj = (SessionForC *)session;
@@ -220,29 +220,36 @@ API_EXPORT void API_CALL mk_tcp_server_events_listen(const mk_tcp_session_events
     }
 }
 
+using TcpServer = hv::TcpServerTmpl<SessionForC>;
+static std::shared_ptr<TcpServer> s_tcp_server[4];
+void stopAllTcpServer() {
+    CLEAR_ARR(s_tcp_server);
+}
+
 API_EXPORT uint16_t API_CALL mk_tcp_server_start(uint16_t port, mk_tcp_type type){
     type = MAX(mk_type_tcp, MIN(type, mk_type_wss));
     try {
         s_tcp_server[type] = std::make_shared<TcpServer>();
         switch (type) {
             case mk_type_tcp:
-                s_tcp_server[type]->start<SessionForC>(port);
+                s_tcp_server[type]->createsocket(port);
+                s_tcp_server[type]->start();
                 break;
             case mk_type_ssl:
-                s_tcp_server[type]->start<SessionWithSSL<SessionForC> >(port);
+                // s_tcp_server[type]->start<SessionWithSSL<SessionForC> >(port);
                 break;
             case mk_type_ws:
                 //此处你也可以修改WebSocketHeader::BINARY
-                s_tcp_server[type]->start<WebSocketSession<SessionForC, HttpSession, WebSocketHeader::TEXT> >(port);
+                // s_tcp_server[type]->start<WebSocketSession<SessionForC, HttpSession, WebSocketHeader::TEXT> >(port);
                 break;
             case mk_type_wss:
                 //此处你也可以修改WebSocketHeader::BINARY
-                s_tcp_server[type]->start<WebSocketSession<SessionForC, HttpsSession, WebSocketHeader::TEXT> >(port);
+                // s_tcp_server[type]->start<WebSocketSession<SessionForC, HttpsSession, WebSocketHeader::TEXT> >(port);
                 break;
             default:
                 return 0;
         }
-        return s_tcp_server[type]->getPort();
+        return s_tcp_server[type]->port;
     } catch (std::exception &ex) {
         s_tcp_server[type].reset();
         WarnL << ex.what();
@@ -288,20 +295,20 @@ void TcpClientForC::setClient(mk_tcp_client client) {
     TraceL << "mk_tcp_client_create:" << _client;
 }
 
-TcpClientForC::Ptr *mk_tcp_client_create_l(mk_tcp_client_events *events, mk_tcp_type type){
+TcpClientForC::Ptr* mk_tcp_client_create_l(mk_tcp_client_events* events, mk_tcp_type type) {
     assert(events);
     type = MAX(mk_type_tcp, MIN(type, mk_type_wss));
     switch (type) {
         case mk_type_tcp:
             return new TcpClientForC::Ptr(new TcpClientForC(events));
         case mk_type_ssl:
-            return (TcpClientForC::Ptr *)new std::shared_ptr<SessionWithSSL<TcpClientForC> >(new SessionWithSSL<TcpClientForC>(events));
+            //return (TcpClientForC::Ptr *)new std::shared_ptr<SessionWithSSL<TcpClientForC> >(new SessionWithSSL<TcpClientForC>(events));
         case mk_type_ws:
             //此处你也可以修改WebSocketHeader::BINARY
-            return (TcpClientForC::Ptr *)new std::shared_ptr<WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, false> >(new WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, false>(events));
+            //return (TcpClientForC::Ptr *)new std::shared_ptr<WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, false> >(new WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, false>(events));
         case mk_type_wss:
             //此处你也可以修改WebSocketHeader::BINARY
-            return (TcpClientForC::Ptr *)new std::shared_ptr<WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, true> >(new WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, true>(events));
+            //return (TcpClientForC::Ptr *)new std::shared_ptr<WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, true> >(new WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, true>(events));
         default:
             return nullptr;
     }
@@ -334,7 +341,8 @@ API_EXPORT void API_CALL mk_tcp_client_connect(mk_tcp_client ctx, const char *ho
 API_EXPORT void API_CALL mk_tcp_client_send_buffer(mk_tcp_client ctx, mk_buffer buffer) {
     assert(ctx && buffer);
     TcpClientForC::Ptr *client = (TcpClientForC::Ptr *) ctx;
-    (*client)->send(*((Buffer::Ptr *) buffer));
+    auto buf = *((Buffer::Ptr*)buffer);
+    (*client)->send(buf->data(), buf->size());
 }
 
 API_EXPORT void API_CALL mk_tcp_client_send(mk_tcp_client ctx, const char *data, int len) {
@@ -346,12 +354,13 @@ API_EXPORT void API_CALL mk_tcp_client_send(mk_tcp_client ctx, const char *data,
 API_EXPORT void API_CALL mk_tcp_client_send_buffer_safe(mk_tcp_client ctx, mk_buffer buffer) {
     assert(ctx && buffer);
     TcpClientForC::Ptr *client = (TcpClientForC::Ptr *) ctx;
-    std::weak_ptr<TcpClient> weakClient = *client;
+    std::weak_ptr<hv::TcpClient> weakClient = *client;
     auto ref = mk_buffer_ref(buffer);
-    (*client)->async([weakClient, ref]() {
+    (*client)->loop()->async([weakClient, ref]() {
         auto strongClient = weakClient.lock();
         if (strongClient) {
-            strongClient->send(*((Buffer::Ptr *) ref));
+            auto buf = *((Buffer::Ptr*)ref);
+            strongClient->send(buf->data(), buf->size());
         }
         mk_buffer_unref(ref);
     });

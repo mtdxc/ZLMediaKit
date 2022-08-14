@@ -11,7 +11,7 @@
 #include "mk_thread.h"
 #include "mk_tcp_private.h"
 #include "Util/logger.h"
-#include "EventLoopThreadPool.h"
+#include "Util/semaphore.h"
 
 using namespace std;
 using namespace toolkit;
@@ -25,15 +25,15 @@ API_EXPORT mk_thread API_CALL mk_thread_from_tcp_session(mk_tcp_session ctx){
 API_EXPORT mk_thread API_CALL mk_thread_from_tcp_client(mk_tcp_client ctx){
     assert(ctx);
     TcpClientForC::Ptr *client = (TcpClientForC::Ptr *)ctx;
-    return (*client)->getPoller().get();
+    return (*client)->loop().get();
 }
 
 API_EXPORT mk_thread API_CALL mk_thread_from_pool(){
-    return EventPollerPool::Instance().getPoller().get();
+    return hv::EventLoopThreadPool::Instance()->loop().get();
 }
 
 API_EXPORT mk_thread API_CALL mk_thread_from_pool_work(){
-    return WorkThreadPool::Instance().getPoller().get();
+    return hv::EventLoopThreadPool::Instance()->loop().get();
 }
 
 API_EXPORT void API_CALL mk_async_do(mk_thread ctx,on_mk_async cb, void *user_data){
@@ -56,7 +56,7 @@ API_EXPORT void API_CALL mk_async_do_delay(mk_thread ctx, size_t ms, on_mk_async
 API_EXPORT void API_CALL mk_sync_do(mk_thread ctx,on_mk_async cb, void *user_data){
     assert(ctx && cb);
     EventPoller *poller = (EventPoller *)ctx;
-    poller->sync([cb,user_data](){
+    poller->async([cb,user_data](){
         cb(user_data);
     });
 }
@@ -83,24 +83,20 @@ public:
     void cancel(){
         lock_guard<recursive_mutex> lck(_mxt);
         _cb = nullptr;
-        _task->cancel();
     }
 
     void start(uint64_t ms ,EventPoller &poller){
         weak_ptr<TimerForC> weak_self = shared_from_this();
-        _task = poller.doDelayTask(ms, [weak_self]() {
-            auto strong_self = weak_self.lock();
-            if (!strong_self) {
-                return (uint64_t) 0;
+        poller.doDelayTask(ms, [weak_self]() {
+            if (auto strong_self = weak_self.lock()) {
+                (*strong_self)();
             }
-            return (*strong_self)();
         });
     }
 private:
     on_mk_timer _cb = nullptr;
     void *_user_data = nullptr;
     recursive_mutex _mxt;
-    EventPoller::DelayTask::Ptr _task;
 };
 
 API_EXPORT mk_timer API_CALL mk_timer_create(mk_thread ctx,uint64_t delay_ms,on_mk_timer cb, void *user_data){
@@ -118,6 +114,7 @@ API_EXPORT void API_CALL mk_timer_release(mk_timer ctx){
     delete obj;
 }
 
+#if 0
 class WorkThreadPoolForC : public TaskExecutorGetterImp {
 public:
     ~WorkThreadPoolForC() override = default;
@@ -146,6 +143,7 @@ API_EXPORT mk_thread API_CALL mk_thread_from_thread_pool(mk_thread_pool pool) {
     assert(pool);
     return ((WorkThreadPoolForC *) pool)->getPoller().get();
 }
+#endif
 
 API_EXPORT mk_sem API_CALL mk_sem_create() {
     return new toolkit::semaphore;

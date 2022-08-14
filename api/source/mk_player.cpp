@@ -12,7 +12,7 @@
 #include "Util/logger.h"
 #include "Player/MediaPlayer.h"
 #include "Extension/H264.h"
-
+#include "EventLoop.h"
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;

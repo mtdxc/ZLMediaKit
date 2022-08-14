@@ -11,23 +11,22 @@
 #include "mk_common.h"
 #include <stdarg.h>
 #include <unordered_map>
+#include "Common/macros.h"
 #include "Util/logger.h"
-#include "Util/SSLBox.h"
-#include "TcpServer.h"
-#include "UdpServer.h"
+
 #include "EventLoopThreadPool.h"
-#include "Rtsp/RtspSession.h"
-#include "Rtmp/RtmpSession.h"
-#include "Http/HttpSession.h"
-#include "Shell/ShellSession.h"
+//#include "Util/SSLBox.h"
+//#include "Http/HttpSession.h"
+#include "WebRtcServer.h"
+
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;
 
-static TcpServer::Ptr rtsp_server[2];
-static TcpServer::Ptr rtmp_server[2];
-static TcpServer::Ptr http_server[2];
-static TcpServer::Ptr shell_server;
+//static TcpServer::Ptr http_server[2];
+std::shared_ptr<WebRtcServer::RtmpServer> rtmp_server[2];
+std::shared_ptr<WebRtcServer::RtspServer> rtsp_server[2];
+std::shared_ptr<WebRtcServer::ShellServer> shell_server;
 
 #ifdef ENABLE_RTPPROXY
 #include "Rtp/RtpServer.h"
@@ -37,13 +36,13 @@ static std::shared_ptr<RtpServer> rtpServer;
 #ifdef ENABLE_WEBRTC
 #include "../webrtc/WebRtcSession.h"
 #include "../webrtc/WebRtcTransport.h"
-static std::shared_ptr<UdpServer> rtcServer_udp;
-static std::shared_ptr<TcpServer> rtcServer_tcp;
+static std::shared_ptr<WebRtcServer::RtcServer> rtcServer_udp;
+static std::shared_ptr<WebRtcServer::RtcTcpServer> rtcServer_tcp;
 #endif
 
 #if defined(ENABLE_SRT)
 #include "../srt/SrtSession.hpp"
-static std::shared_ptr<UdpServer> srtServer;
+static std::shared_ptr<WebRtcServer::SrtServer> srtServer;
 #endif
 
 //////////////////////////environment init///////////////////////////
@@ -64,10 +63,10 @@ API_EXPORT void API_CALL mk_env_init(const mk_config *cfg) {
 
 extern void stopAllTcpServer();
 
-API_EXPORT void API_CALL mk_stop_all_server(){
+API_EXPORT void API_CALL mk_stop_all_server() {
     CLEAR_ARR(rtsp_server);
     CLEAR_ARR(rtmp_server);
-    CLEAR_ARR(http_server);
+    //CLEAR_ARR(http_server);
     shell_server = nullptr;
 #ifdef ENABLE_RTPPROXY
     rtpServer = nullptr;
@@ -94,31 +93,38 @@ API_EXPORT void API_CALL mk_env_init1(int thread_num,
                                       const char *ssl_pwd) {
     //确保只初始化一次
     static onceToken token([&]() {
+        hlog_set_level(log_level);
         if (log_mask & LOG_CONSOLE) {
             //控制台日志
-            Logger::Instance().add(std::make_shared<ConsoleChannel>("ConsoleChannel", (LogLevel) log_level));
+            hlog_set_handler(stdout_logger);
+            // Logger::Instance().add(std::make_shared<ConsoleChannel>("ConsoleChannel", (LogLevel) log_level));
         }
 
         if (log_mask & LOG_CALLBACK) {
             //广播日志
-            Logger::Instance().add(std::make_shared<EventChannel>("EventChannel", (LogLevel) log_level));
+            //Logger::Instance().add(std::make_shared<EventChannel>("EventChannel", (LogLevel) log_level));
         }
 
         if (log_mask & LOG_FILE) {
             //日志文件
+#if 1
+            hlog_set_file(log_file_path);
+            hlog_set_handler(file_logger);
+#else
             auto channel = std::make_shared<FileChannel>("FileChannel",
                                                          log_file_path ? File::absolutePath("", log_file_path) :
                                                          exeDir() + "log/", (LogLevel) log_level);
             channel->setMaxDay(log_file_days ? log_file_days : 1);
             Logger::Instance().add(channel);
+#endif
         }
 
         //异步日志线程
-        Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+        //Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
 
         //设置线程数
-        EventPollerPool::setPoolSize(thread_num);
-        WorkThreadPool::setPoolSize(thread_num);
+        hv::EventLoopThreadPool::Instance()->setThreadNum(thread_num);
+        //WorkThreadPool::setPoolSize(thread_num);
 
         if (ini && ini[0]) {
             //设置配置文件
@@ -136,17 +142,27 @@ API_EXPORT void API_CALL mk_env_init1(int thread_num,
 
         if (ssl && ssl[0]) {
             //设置ssl证书
-            SSL_Initor::Instance().loadCertificate(ssl, true, ssl_pwd ? ssl_pwd : "", ssl_is_path);
+            //SSL_Initor::Instance().loadCertificate(ssl, true, ssl_pwd ? ssl_pwd : "", ssl_is_path);
+            hssl_ctx_init_param_t param;
+            memset(&param, 0, sizeof(param));
+            param.crt_file = "";// cert.c_str();
+            param.key_file = "";// key.c_str();
+            param.endpoint = HSSL_SERVER;
+            if (hssl_ctx_init(&param) == NULL) {
+                fprintf(stderr, "hssl_ctx_init failed!\n");
+            }
         }
     });
 }
 
 API_EXPORT void API_CALL mk_set_log(int file_max_size, int file_max_count) {
+#if 0
     auto channel = dynamic_pointer_cast<FileChannel>(Logger::Instance().get("FileChannel"));
     if (channel) {
         channel->setFileMaxSize(file_max_size);
         channel->setFileMaxCount(file_max_count);
     }
+#endif
 }
 
 API_EXPORT void API_CALL mk_set_option(const char *key, const char *val) {
@@ -171,6 +187,7 @@ API_EXPORT const char * API_CALL mk_get_option(const char *key)
 
 API_EXPORT uint16_t API_CALL mk_http_server_start(uint16_t port, int ssl) {
     ssl = MAX(0,MIN(ssl,1));
+#ifdef ENABLE_HTTP
     try {
         http_server[ssl] = std::make_shared<TcpServer>();
         if(ssl){
@@ -184,18 +201,15 @@ API_EXPORT uint16_t API_CALL mk_http_server_start(uint16_t port, int ssl) {
         WarnL << ex.what();
         return 0;
     }
+#endif // ENABLE_HTTP
+    return 0;
 }
 
 API_EXPORT uint16_t API_CALL mk_rtsp_server_start(uint16_t port, int ssl) {
     ssl = MAX(0,MIN(ssl,1));
     try {
-        rtsp_server[ssl] = std::make_shared<TcpServer>();
-        if(ssl){
-            rtsp_server[ssl]->start<SessionWithSSL<RtspSession> >(port);
-        }else{
-            rtsp_server[ssl]->start<RtspSession>(port);
-        }
-        return rtsp_server[ssl]->getPort();
+        rtsp_server[ssl] = WebRtcServer::Instance().newRtspServer(port);
+        return rtsp_server[ssl]->port;
     } catch (std::exception &ex) {
         rtsp_server[ssl] = nullptr;;
         WarnL << ex.what();
@@ -206,13 +220,8 @@ API_EXPORT uint16_t API_CALL mk_rtsp_server_start(uint16_t port, int ssl) {
 API_EXPORT uint16_t API_CALL mk_rtmp_server_start(uint16_t port, int ssl) {
     ssl = MAX(0,MIN(ssl,1));
     try {
-        rtmp_server[ssl] = std::make_shared<TcpServer>();
-        if(ssl){
-            rtmp_server[ssl]->start<SessionWithSSL<RtmpSession> >(port);
-        }else{
-            rtmp_server[ssl]->start<RtmpSession>(port);
-        }
-        return rtmp_server[ssl]->getPort();
+        rtmp_server[ssl] = WebRtcServer::Instance().newRtmpServer(port);
+        return rtmp_server[ssl]->port;
     } catch (std::exception &ex) {
         rtmp_server[ssl] = nullptr;;
         WarnL << ex.what();
@@ -241,24 +250,10 @@ API_EXPORT uint16_t API_CALL mk_rtp_server_start(uint16_t port){
 API_EXPORT uint16_t API_CALL mk_rtc_server_start(uint16_t port) {
 #ifdef ENABLE_WEBRTC
     try {
-        //创建rtc udp服务器
-        rtcServer_udp = std::make_shared<UdpServer>();
-        rtcServer_udp->setOnCreateSocket([](const EventPoller::Ptr &poller, const Buffer::Ptr &buf, struct sockaddr *, int) {
-            if (!buf) {
-                return Socket::createSocket(poller, false);
-            }
-            auto new_poller = WebRtcSession::queryPoller(buf);
-            if (!new_poller) {
-                //该数据对应的webrtc对象未找到，丢弃之
-                return Socket::Ptr();
-            }
-            return Socket::createSocket(new_poller, false);
-        });
-        rtcServer_udp->start<WebRtcSession>(port);
-        //创建rtc tcp服务器
-        rtcServer_tcp = std::make_shared<TcpServer>();
-        rtcServer_tcp->start<WebRtcSession>(rtcServer_udp->getPort());
-        return rtcServer_udp->getPort();
+        //创建rtc服务器
+        rtcServer_udp = WebRtcServer::Instance().newRtcServer(port);
+        rtcServer_tcp = WebRtcServer::Instance().newRtcTcpServer(port);
+        return port;
 
     } catch (std::exception &ex) {
         rtcServer_udp = nullptr;
@@ -272,31 +267,14 @@ API_EXPORT uint16_t API_CALL mk_rtc_server_start(uint16_t port) {
 #endif
 }
 
-#ifdef ENABLE_WEBRTC
-class WebRtcArgsUrl : public mediakit::WebRtcArgs {
-public:
-    WebRtcArgsUrl(std::string url) { _url = std::move(url); }
-    ~WebRtcArgsUrl() = default;
-
-    toolkit::variant operator[](const std::string &key) const override {
-        if (key == "url") {
-            return _url;
-        }
-        return "";
-    }
-
-private:
-    std::string _url;
-};
-#endif
-
 API_EXPORT void API_CALL mk_webrtc_get_answer_sdp(void *user_data, on_mk_webrtc_get_answer_sdp cb, const char *type,
                                                   const char *offer, const char *url) {
 #ifdef ENABLE_WEBRTC
     assert(type && offer && url && cb);
-    auto session = std::make_shared<HttpSession>(Socket::createSocket());
+    WebRtcArgs args; args["url"] = url;
+    auto session = std::make_shared<hv::SocketChannel>(nullptr);
     std::string offer_str = offer;
-    WebRtcPluginManager::Instance().getAnswerSdp(*session, type, WebRtcArgsUrl(url),
+    WebRtcServer::Instance().getAnswerSdp(session, type, args,
                                                  [offer_str, session, user_data, cb](const WebRtcInterface &exchanger) mutable {
         try {
             auto sdp_answer = const_cast<WebRtcInterface &>(exchanger).getAnswerSdp(offer_str);
@@ -313,23 +291,9 @@ API_EXPORT void API_CALL mk_webrtc_get_answer_sdp(void *user_data, on_mk_webrtc_
 API_EXPORT uint16_t API_CALL mk_srt_server_start(uint16_t port) {
 #ifdef ENABLE_SRT
     try {
-        srtServer = std::make_shared<UdpServer>();
-        srtServer->setOnCreateSocket([](const EventPoller::Ptr &poller, const Buffer::Ptr &buf, struct sockaddr *, int) {
-            if (!buf) {
-                return Socket::createSocket(poller, false);
-            }
-            auto new_poller = SRT::SrtSession::queryPoller(buf);
-            if (!new_poller) {
-                //握手第一阶段
-                return Socket::createSocket(poller, false);
-            }
-            return Socket::createSocket(new_poller, false);
-        });
-        srtServer->start<SRT::SrtSession>(port);
-        return srtServer->getPort();
-
+        srtServer = WebRtcServer::Instance().newSrtServer(port);
+        return port;
     } catch (std::exception &ex) {
-        srtServer = nullptr;;
         WarnL << ex.what();
         return 0;
     }
@@ -341,9 +305,8 @@ API_EXPORT uint16_t API_CALL mk_srt_server_start(uint16_t port) {
 
 API_EXPORT uint16_t API_CALL mk_shell_server_start(uint16_t port){
     try {
-        shell_server =  std::make_shared<TcpServer>();
-        shell_server->start<ShellSession>(port);
-        return shell_server->getPort();
+        shell_server = WebRtcServer::Instance().newShellServer(port);
+        return shell_server->port;
     } catch (std::exception &ex) {
         shell_server = nullptr;;
         WarnL << ex.what();

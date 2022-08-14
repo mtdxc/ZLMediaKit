@@ -11,7 +11,9 @@
 #include "mk_events.h"
 #include "Common/config.h"
 #include "Common/MediaSource.h"
+#ifdef ENABLE_HTTP
 #include "Http/HttpSession.h"
+#endif
 #include "Rtsp/RtspSession.h"
 #include "Record/MP4Recorder.h"
 
@@ -41,7 +43,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                 s_events.on_mk_record_mp4((mk_mp4_info)&info);
             }
         });
-
+#ifdef ENABLE_HTTP
         NoticeCenter::Instance().addListener(&s_tag,Broadcast::kBroadcastHttpRequest,[](BroadcastHttpRequestArgs){
             if(s_events.on_mk_http_request){
                 int consumed_int = consumed;
@@ -65,6 +67,13 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
             }
         });
 
+        NoticeCenter::Instance().addListener(&s_tag, EventChannel::kBroadcastLogEvent, [](BroadcastLogEventArgs) {
+            if (s_events.on_mk_log) {
+                auto log = ctx->str();
+                s_events.on_mk_log((int)ctx->_level, ctx->_file.data(), ctx->_line, ctx->_function.data(), log.data());
+            }
+        });
+#endif
         NoticeCenter::Instance().addListener(&s_tag,Broadcast::kBroadcastHttpBeforeAccess,[](BroadcastHttpBeforeAccessArgs){
             if(s_events.on_mk_http_before_access){
                 char path_c[4 * 1024] = {0};
@@ -151,13 +160,6 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
         NoticeCenter::Instance().addListener(&s_tag,Broadcast::kBroadcastStreamNoneReader,[](BroadcastStreamNoneReaderArgs){
             if (s_events.on_mk_media_no_reader) {
                 s_events.on_mk_media_no_reader((mk_media_source) &sender);
-            }
-        });
-
-        NoticeCenter::Instance().addListener(&s_tag, EventChannel::kBroadcastLogEvent,[](BroadcastLogEventArgs){
-            if (s_events.on_mk_log) {
-                auto log = ctx->str();
-                s_events.on_mk_log((int) ctx->_level, ctx->_file.data(), ctx->_line, ctx->_function.data(), log.data());
             }
         });
     });

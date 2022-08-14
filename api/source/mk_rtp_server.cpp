@@ -10,6 +10,7 @@
 
 #include "mk_rtp_server.h"
 #include "Util/logger.h"
+#include "toolkit.h"
 using namespace toolkit;
 
 #if defined(ENABLE_RTPPROXY)

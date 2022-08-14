@@ -11,6 +11,7 @@
 #include "mk_recorder.h"
 #include "Rtmp/FlvMuxer.h"
 #include "Record/Recorder.h"
+#include "EventLoopThreadPool.h"
 
 using namespace std;
 using namespace toolkit;
@@ -29,7 +30,7 @@ API_EXPORT int API_CALL mk_flv_recorder_start(mk_flv_recorder ctx, const char *v
     assert(ctx && vhost && app && stream && file_path);
     try {
         FlvRecorder::Ptr *record = (FlvRecorder::Ptr *)(ctx);
-        (*record)->startRecord(EventPollerPool::Instance().getPoller(),vhost,app,stream,file_path);
+        (*record)->startRecord(hv::EventLoopThreadPool::Instance()->loop(),vhost,app,stream,file_path);
         return 0;
     }catch (std::exception &ex){
         WarnL << ex.what();

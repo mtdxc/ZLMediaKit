@@ -12,12 +12,12 @@
 #include "mk_events_objects.h"
 #include "Common/config.h"
 #include "Record/MP4Recorder.h"
+#include "Rtsp/RtspSession.h"
+#ifdef ENABLE_HTTP
 #include "Http/HttpSession.h"
 #include "Http/HttpBody.h"
-
 #include "Http/HttpClient.h"
-#include "Rtsp/RtspSession.h"
-
+#endif
 using namespace toolkit;
 using namespace mediakit;
 
@@ -253,6 +253,7 @@ API_EXPORT void API_CALL mk_media_source_for_each(void *user_data, on_mk_media_s
 }
 
 ///////////////////////////////////////////HttpBody/////////////////////////////////////////////
+#ifdef ENABLE_HTTP
 API_EXPORT mk_http_body API_CALL mk_http_body_from_string(const char *str, size_t len){
     assert(str);
     if(!len){
@@ -360,7 +361,7 @@ API_EXPORT void API_CALL mk_http_access_path_invoker_clone_release(const mk_http
     HttpSession::HttpAccessPathInvoker *invoker = (HttpSession::HttpAccessPathInvoker *)ctx;
     delete invoker;
 }
-
+#endif
 ///////////////////////////////////////////RtspSession::onGetRealm/////////////////////////////////////////////
 API_EXPORT void API_CALL mk_rtsp_get_realm_invoker_do(const mk_rtsp_get_realm_invoker ctx,
                                                       const char *realm){

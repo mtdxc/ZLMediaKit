@@ -7,7 +7,7 @@
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
-
+#include <stdio.h>
 #include <string.h>
 #include "mk_mediakit.h"
 #define LOG_LEV 4
@@ -121,7 +121,7 @@ void API_CALL on_mk_media_no_reader(const mk_media_source sender) {
                mk_media_source_get_app(sender),
                mk_media_source_get_stream(sender));
 }
-
+#ifdef ENABLE_HTTP
 //按照json转义规则转义webrtc answer sdp
 static char *escape_string(const char *ptr){
     char *escaped = malloc(2 * strlen(ptr));
@@ -318,7 +318,7 @@ void API_CALL on_mk_http_before_access(const mk_parser parser,
                mk_parser_get_content(parser,NULL));
     //覆盖path的值可以重定向文件
 }
-
+#endif
 /**
  * 该rtsp流是否需要认证？是的话调用invoker并传入realm,否则传入空的realm
  * @param url_info 请求rtsp url相关信息
@@ -487,6 +487,7 @@ int main(int argc, char *argv[]) {
     mk_rtp_server_start(10000);
     mk_rtc_server_start(8000);
     mk_srt_server_start(9000);
+#ifdef ENABLE_HTTP
 
     mk_events events = {
             .on_mk_media_changed = on_mk_media_changed,
@@ -504,6 +505,7 @@ int main(int argc, char *argv[]) {
             .on_mk_flow_report = on_mk_flow_report
     };
     mk_events_listen(&events);
+#endif
     log_info("media server %s", "stared!");
 
     log_info("enter any key to exit");

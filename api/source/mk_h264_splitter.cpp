@@ -9,7 +9,7 @@
  */
 
 #include "mk_h264_splitter.h"
-#include "Http/HttpRequestSplitter.h"
+#include "Util/HttpRequestSplitter.h"
 
 using namespace mediakit;
 

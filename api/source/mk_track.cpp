@@ -9,8 +9,10 @@
  */
 
 #include "mk_track.h"
+#include "Util/logger.h"
 #include "Extension/Track.h"
 #include "Extension/Factory.h"
+#include "Extension/AudioTrack.h"
 
 using namespace std;
 using namespace toolkit;
