@@ -9,6 +9,7 @@
  */
 
 #include "RtcpContext.h"
+#include "Util/netdef.h"
 #include "Util/logger.h"
 using namespace toolkit;
 
@@ -56,7 +57,8 @@ void RtcpContextForSend::onRtcp(RtcpHeader *rtcp) {
     switch ((RtcpType)rtcp->pt) {
     case RtcpType::RTCP_RR: {
         auto rtcp_rr = (RtcpRR *)rtcp;
-        for (auto item : rtcp_rr->getItemList()) {
+        for (int i = 0; i < rtcp->count; i++) {
+            auto item = rtcp_rr->getItem(i);
             if (!item->last_sr_stamp) {
                 continue;
             }

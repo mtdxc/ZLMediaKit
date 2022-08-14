@@ -809,7 +809,7 @@ void WebRtcTransportImp::onRtcp(const char *buf, size_t len) {
                 break;
             }
             // RTPFB
-            switch ((RTPFBType)rtcp->report_count) {
+            switch ((RTPFBType)rtcp->count) {
             case RTPFBType::RTCP_RTPFB_NACK: {
                 RtcpFB *fb = (RtcpFB *)rtcp;
                 auto it = _ssrc_to_track.find(fb->ssrc_media);

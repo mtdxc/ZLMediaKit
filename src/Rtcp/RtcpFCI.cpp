@@ -10,6 +10,7 @@
 
 #include "RtcpFCI.h"
 #include "Util/logger.h"
+#include "Util/netdef.h"
 
 using namespace std;
 using namespace toolkit;
@@ -294,7 +295,7 @@ public:
 } PACKED;
 
 StatusVecChunk::StatusVecChunk(bool symbol_bit, const vector<SymbolStatus> &status) {
-    CHECK(status.size() << symbol_bit <= 14);
+    //CHECK(status.size() << symbol_bit <= 14);
     uint16_t value = 0;
     type = 1;
     symbol = symbol_bit;
@@ -432,7 +433,7 @@ FCI_TWCC::TwccPacketStatus FCI_TWCC::getPacketChunkList(size_t total_size) const
     CHECK(ptr < end);
     auto seq = getBaseSeq();
     auto rtp_count = getPacketCount();
-    for (uint8_t i = 0; i < rtp_count;) {
+    for (uint16_t i = 0; i < rtp_count;) {
         CHECK(ptr + RunLengthChunk::kSize <= end);
         RunLengthChunk *chunk = (RunLengthChunk *)ptr;
         if (!chunk->type) {
@@ -497,7 +498,7 @@ string FCI_TWCC::create(uint32_t ref_time, uint8_t fb_pkt_count, TwccPacketStatu
     fci.resize(FCI_TWCC::kSize);
     FCI_TWCC *ptr = (FCI_TWCC *)(fci.data());
     ptr->base_seq = htons(status.begin()->first);
-    ptr->pkt_status_count = htons(status.size());
+    ptr->pkt_status_count = htons((short)status.size());
     ptr->fb_pkt_count = fb_pkt_count;
     ptr->ref_time[0] = (ref_time >> 16) & 0xFF;
     ptr->ref_time[1] = (ref_time >> 8) & 0xFF;
