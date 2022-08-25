@@ -10,14 +10,13 @@
 
 #include "TsPlayer.h"
 
-using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
 
 TsPlayer::TsPlayer(const EventPoller::Ptr &poller) : HttpTSPlayer(poller) {}
 
-void TsPlayer::play(const string &url) {
+void TsPlayer::play(const std::string &url) {
     TraceL << "play http-ts: " << url;
     _play_result = false;
     _benchmark_mode = (*this)[Client::kBenchmarkMode].as<int>();

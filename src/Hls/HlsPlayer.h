@@ -15,7 +15,7 @@
 #include "HttpTSPlayer.h"
 #include "HlsParser.h"
 #include "HttpClient.h"
-#include "Rtp/TSDecoder.h"
+#include "TS/TSDecoder.h"
 
 #define MIN_TIMEOUT_MULTIPLE 2
 #define MAX_TIMEOUT_MULTIPLE 5

@@ -14,7 +14,7 @@
 #include "Rtsp/RtspPlayerImp.h"
 #include "Rtmp/RtmpPlayerImp.h"
 #include "Hls/HlsPlayer.h"
-#include "Hls/TsPlayerImp.h"
+#include "TS/TsPlayerImp.h"
 
 using namespace std;
 using namespace toolkit;

@@ -13,7 +13,7 @@
 
 #if defined(ENABLE_RTPPROXY)
 
-#include "Record/MPEG.h"
+#include "TS/MPEG.h"
 #include "Common/MediaSink.h"
 #include "Extension/CommonRtp.h"
 

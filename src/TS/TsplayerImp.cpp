@@ -9,9 +9,8 @@
  */
 
 #include "TsPlayerImp.h"
-#include "HlsPlayer.h"
+#include "Hls/HlsPlayer.h"
 
-using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
@@ -46,10 +45,10 @@ void TsPlayerImp::onPlayResult(const SockException &ex) {
 }
 
 void TsPlayerImp::onShutdown(const SockException &ex) {
-    while (_demuxer) {
+    if (_demuxer) {
         try {
-            std::weak_ptr<TsPlayerImp> weak_self = static_pointer_cast<TsPlayerImp>(shared_from_this());
-            static_pointer_cast<HlsDemuxer>(_demuxer)->pushTask([weak_self, ex]() {
+            std::weak_ptr<TsPlayerImp> weak_self = std::static_pointer_cast<TsPlayerImp>(shared_from_this());
+            std::static_pointer_cast<HlsDemuxer>(_demuxer)->pushTask([weak_self, ex]() {
                 auto strong_self = weak_self.lock();
                 if (strong_self) {
                     strong_self->_demuxer = nullptr;
@@ -58,17 +57,17 @@ void TsPlayerImp::onShutdown(const SockException &ex) {
             });
             return;
         } catch (...) {
-            break;
         }
     }
     PlayerImp<TsPlayer, PlayerBase>::onShutdown(ex);
 }
 
-vector<Track::Ptr> TsPlayerImp::getTracks(bool ready) const {
-    if (!_demuxer) {
-        return vector<Track::Ptr>();
+std::vector<Track::Ptr> TsPlayerImp::getTracks(bool ready) const {
+    std::vector<Track::Ptr> ret;
+    if (_demuxer) {
+        ret = std::static_pointer_cast<HlsDemuxer>(_demuxer)->getTracks(ready);
     }
-    return static_pointer_cast<HlsDemuxer>(_demuxer)->getTracks(ready);
+    return ret;
 }
 
 }//namespace mediakit

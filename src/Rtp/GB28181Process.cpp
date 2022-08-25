@@ -9,7 +9,7 @@
  */
 
 #if defined(ENABLE_RTPPROXY)
-#include "TSDecoder.h"
+#include "TS/TSDecoder.h"
 #include "GB28181Process.h"
 #include "Common/config.h"
 #include "Rtsp/RtpReceiver.h"

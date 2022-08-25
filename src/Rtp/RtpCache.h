@@ -13,7 +13,7 @@
 
 #if defined(ENABLE_RTPPROXY)
 
-#include "PSEncoder.h"
+#include "TS/PSEncoder.h"
 #include "RawEncoder.h"
 #include "Extension/CommonRtp.h"
 #include "Common/PacketCache.h"

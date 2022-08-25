@@ -11,7 +11,7 @@
 #ifndef HTTP_TSPLAYER_H
 #define HTTP_TSPLAYER_H
 
-#include "HttpTSPlayer.h"
+#include "Hls/HttpTSPlayer.h"
 #include "Player/PlayerBase.h"
 
 namespace mediakit {

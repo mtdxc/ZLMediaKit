@@ -12,7 +12,7 @@
 #define ZLMEDIAKIT_TSMEDIASOURCEMUXER_H
 
 #include "TSMediaSource.h"
-#include "Record/MPEG.h"
+#include "TS/MPEG.h"
 
 namespace mediakit {
 
