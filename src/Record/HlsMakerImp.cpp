@@ -13,6 +13,9 @@
 #include "HlsMakerImp.h"
 #include "Util/util.h"
 #include "Util/uv_errno.h"
+#include "Util/File.h"
+#include "EventLoopThreadPool.h"
+#include "Common/config.h"
 
 using namespace std;
 using namespace toolkit;
@@ -25,7 +28,7 @@ HlsMakerImp::HlsMakerImp(const string &m3u8_file,
                          float seg_duration,
                          uint32_t seg_number,
                          bool seg_keep):HlsMaker(seg_duration, seg_number, seg_keep) {
-    _poller = EventPollerPool::Instance().getPoller();
+    _poller = hv::EventLoopThreadPool::Instance()->loop();
     _path_prefix = m3u8_file.substr(0, m3u8_file.rfind('/'));
     _path_hls = m3u8_file;
     _params = params;

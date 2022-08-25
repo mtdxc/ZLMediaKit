@@ -28,9 +28,9 @@ void HlsCookieData::addReaderCount() {
     if (!*_added) {
         auto src = getMediaSource();
         if (src) {
-            *_added = true;
-            _ring_reader = src->getRing()->attach(EventPollerPool::Instance().getPoller());
             auto added = _added;
+            *added = true;
+            _ring_reader = src->getRing()->attach(hv::EventLoopThreadPool::Instance()->loop());
             _ring_reader->setDetachCB([added]() {
                 // HlsMediaSource已经销毁
                 *added = false;
@@ -42,8 +42,7 @@ void HlsCookieData::addReaderCount() {
 HlsCookieData::~HlsCookieData() {
     if (*_added) {
         uint64_t duration = (_ticker.createdTime() - _ticker.elapsedTime()) / 1000;
-        WarnL << _sock_info->getIdentifier() << "(" << _sock_info->get_peer_ip() << ":" << _sock_info->get_peer_port()
-              << ") " << "HLS播放器(" << _info.shortUrl() << ")断开,耗时(s):" << duration;
+        WarnP(_sock_info)  << "HLS播放器(" << _info.shortUrl() << ")断开,耗时(s):" << duration;
 
         GET_CONFIG(uint32_t, iFlowThreshold, General::kFlowThreshold);
         uint64_t bytes = _bytes.load();
@@ -57,14 +56,6 @@ void HlsCookieData::addByteUsage(size_t bytes) {
     addReaderCount();
     _bytes += bytes;
     _ticker.resetTime();
-}
-
-void HlsCookieData::setMediaSource(const HlsMediaSource::Ptr &src) {
-    _src = src;
-}
-
-HlsMediaSource::Ptr HlsCookieData::getMediaSource() const {
-    return _src.lock();
 }
 
 } // namespace mediakit

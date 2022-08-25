@@ -9,8 +9,9 @@
  */
 
 #include "HlsMaker.h"
-
-using namespace std;
+#include "Util/util.h"
+#include "Util/logger.h"
+#include "Common/config.h"
 
 namespace mediakit {
 
@@ -21,14 +22,8 @@ HlsMaker::HlsMaker(float seg_duration, uint32_t seg_number, bool seg_keep) {
     _seg_keep = seg_keep;
 }
 
-HlsMaker::~HlsMaker() {
-}
-
-
 void HlsMaker::makeIndexFile(bool eof) {
-    char file_content[1024];
     int maxSegmentDuration = 0;
-
     for (auto &tp : _seg_dur_list) {
         int dur = std::get<0>(tp);
         if (dur > maxSegmentDuration) {
@@ -36,10 +31,9 @@ void HlsMaker::makeIndexFile(bool eof) {
         }
     }
 
+    char file_content[1024];
     auto sequence = _seg_number ? (_file_index > _seg_number ? _file_index - _seg_number : 0LL) : 0LL;
-
-    string m3u8;
-     if (_seg_number == 0) {
+    if (_seg_number == 0) {
         // 录像点播支持时移
         snprintf(file_content, sizeof(file_content),
                  "#EXTM3U\n"
@@ -60,6 +54,7 @@ void HlsMaker::makeIndexFile(bool eof) {
                  sequence);
     }
     
+    std::string m3u8;
     m3u8.assign(file_content);
 
     for (auto &tp : _seg_dur_list) {
@@ -142,15 +137,12 @@ void HlsMaker::flushLastSegment(bool eof){
         seg_dur = 100;
     }
     _seg_dur_list.emplace_back(seg_dur, std::move(_last_file_name));
+
     delOldSegment();
-    //先flush ts切片，否则可能存在ts文件未写入完毕就被访问的情况
+    //先flush ts切片，否则可能存在ts文件未写完，就被访问的情况
     onFlushLastSegment(seg_dur);
     //然后写m3u8文件
     makeIndexFile(eof);
-}
-
-bool HlsMaker::isLive() {
-    return _seg_number != 0;
 }
 
 bool HlsMaker::isKeep() {

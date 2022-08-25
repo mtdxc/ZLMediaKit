@@ -12,10 +12,11 @@
 #define ZLMEDIAKIT_TRANSCODE_H
 
 #if defined(ENABLE_FFMPEG)
-
+#include <memory>
+#include <thread>
 #include "Util/TimeTicker.h"
 #include "Common/MediaSink.h"
-
+#include "Util/semaphore.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -111,7 +112,7 @@ private:
     size_t _max_task = 30;
     std::mutex _task_mtx;
     toolkit::semaphore _sem;
-    toolkit::List<std::function<void()> > _task;
+    std::list<std::function<void()> > _task;
     std::shared_ptr<std::thread> _thread;
 };
 

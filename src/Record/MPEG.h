@@ -11,17 +11,16 @@
 #ifndef ZLMEDIAKIT_MPEG_H
 #define ZLMEDIAKIT_MPEG_H
 
+#include "Common/MediaSink.h"
+
 #if defined(ENABLE_HLS) || defined(ENABLE_RTPPROXY)
 
 #include <cstdio>
 #include <cstdint>
 #include <unordered_map>
-#include "Extension/Frame.h"
-#include "Extension/Track.h"
-#include "Util/File.h"
-#include "Common/MediaSink.h"
-#include "Common/Stamp.h"
-#include "Util/ResourcePool.h"
+#include "Ap4Mpeg2Ts.h"
+class AP4_MemoryByteStream;
+class AP4_SampleDescription;
 namespace mediakit {
 
 //该类用于产生MPEG-TS/MPEG-PS
@@ -62,27 +61,26 @@ protected:
 private:
     void createContext();
     void releaseContext();
-    void onWrite_l(const void *packet, size_t bytes);
-    void flushCache();
-
+    void writeHeader();
 private:
+    bool _write_header = false;
     bool _is_ps = false;
     bool _have_video = false;
     bool _key_pos = false;
-    uint32_t _max_cache_size = 0;
     uint64_t _timestamp = 0;
-    struct mpeg_muxer_t *_context = nullptr;
-    std::unordered_map<int, int/*track_id*/> _codec_to_trackid;
-    FrameMerger _frame_merger{FrameMerger::h264_prefix};
-    toolkit::BufferRaw::Ptr _current_buffer;
-    toolkit::ResourcePool<toolkit::BufferRaw> _buffer_pool;
+    AP4_Mpeg2TsWriter _writer;
+    AP4_MemoryByteStream* _buffer;
+    struct TsStream {
+        AP4_Mpeg2TsWriter::SampleStream* stream;
+        AP4_SampleDescription* desc;
+    };
+    std::unordered_map<int, TsStream> _streams;
+    FrameMerger _frame_merger{FrameMerger::mp4_nal_size};
 };
 
 }//mediakit
 
 #else
-
-#include "Common/MediaSink.h"
 
 namespace mediakit {
 

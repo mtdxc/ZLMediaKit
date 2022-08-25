@@ -15,6 +15,8 @@
 #include "Util/File.h"
 #include "Util/util.h"
 #include "Util/uv_errno.h"
+#include "Util/logger.h"
+#include "Common/config.h"
 #include <float.h>
 #include "Transcode.h"
 #include "Extension/AAC.h"
@@ -60,18 +62,18 @@ static void on_ffmpeg_log(void *ctx, int level, const char *fmt, va_list args) {
     if (!enable_ffmpeg_log) {
         return;
     }
-    LogLevel lev;
+    int lev;
     switch (level) {
         case AV_LOG_FATAL:
-        case AV_LOG_ERROR: lev = LError; break;
-        case AV_LOG_WARNING: lev = LWarn; break;
-        case AV_LOG_INFO: lev = LInfo; break;
+        case AV_LOG_ERROR: lev = LOG_LEVEL_ERROR; break;
+        case AV_LOG_WARNING: lev = LOG_LEVEL_WARN; break;
+        case AV_LOG_INFO: lev = LOG_LEVEL_INFO; break;
         case AV_LOG_VERBOSE:
-        case AV_LOG_DEBUG: lev = LDebug; break;
+        case AV_LOG_DEBUG: lev = LOG_LEVEL_DEBUG; break;
         case AV_LOG_TRACE:
-        default: lev = LTrace; break;
+        default: lev = LOG_LEVEL_DEBUG; break;
     }
-    LoggerWrapper::printLogV(::toolkit::getLogger(), lev, __FILE__, ctx ? av_default_item_name(ctx) : "NULL", level, fmt, args);
+    //logger_print(hlog, lev, __FILE__, ctx ? av_default_item_name(ctx) : "NULL", fmt, args);
 }
 
 static bool setupFFmpeg_l() {

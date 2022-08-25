@@ -68,10 +68,11 @@ public:
         std::lock_guard<std::mutex> lck(_mtx_index);
         if (!_index_file.empty()) {
             cb(_index_file);
-            return;
         }
-        //等待生成m3u8文件
-        _list_cb.emplace_back(std::move(cb));
+        else {
+            // 等待生成m3u8文件
+            _list_cb.emplace_back(std::move(cb));
+        }
     }
 
     /**
@@ -85,6 +86,7 @@ public:
     void onSegmentSize(size_t bytes) { _speed[TrackVideo] += bytes; }
 
 private:
+    // 这个ring只用于计算reader_count，好像没数据流动
     RingType::Ptr _ring;
     std::string _index_file;
     mutable std::mutex _mtx_index;
@@ -99,8 +101,13 @@ public:
     ~HlsCookieData();
 
     void addByteUsage(size_t bytes);
-    void setMediaSource(const HlsMediaSource::Ptr &src);
-    HlsMediaSource::Ptr getMediaSource() const;
+
+    void setMediaSource(const HlsMediaSource::Ptr& src) {
+        _src = src;
+    }
+    HlsMediaSource::Ptr getMediaSource() const {
+        return _src.lock();
+    }
 
 private:
     void addReaderCount();
