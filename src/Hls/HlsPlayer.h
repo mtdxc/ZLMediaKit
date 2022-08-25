@@ -11,10 +11,10 @@
 #ifndef HTTP_HLSPLAYER_H
 #define HTTP_HLSPLAYER_H
 
-#include "Common/Stamp.h"
 #include "Player/PlayerBase.h"
 #include "HttpTSPlayer.h"
 #include "HlsParser.h"
+#include "HttpClient.h"
 #include "Rtp/TSDecoder.h"
 
 #define MIN_TIMEOUT_MULTIPLE 2
@@ -23,13 +23,17 @@
 
 namespace mediakit {
 
-class HlsDemuxer : public MediaSinkInterface , public TrackSource, public std::enable_shared_from_this<HlsDemuxer> {
+class HlsDemuxer : public MediaSinkInterface , public TrackSource, 
+    public std::enable_shared_from_this<HlsDemuxer> {
 public:
     HlsDemuxer() = default;
     ~HlsDemuxer() override { _timer = nullptr; }
 
-    void start(const toolkit::EventPoller::Ptr &poller, TrackListener *listener);
+    // 开启定时器来读取包
+    void start(const toolkit::EventPollerPtr &poller, TrackListener *listener);
+    // 收到包后，先入_frame_cache缓存，等定时器来读取
     bool inputFrame(const Frame::Ptr &frame) override;
+
     bool addTrack(const Track::Ptr &track) override { return _delegate.addTrack(track); }
     void addTrackCompleted() override { _delegate.addTrackCompleted(); }
     void resetTracks() override { ((MediaSink &)_delegate).resetTracks(); }
@@ -38,21 +42,23 @@ public:
 
 private:
     void onTick();
+    // _frame_cache duration
     int64_t getBufferMS();
+
     int64_t getPlayPosition();
     void setPlayPosition(int64_t pos);
 
 private:
     int64_t _ticker_offset = 0;
     toolkit::Ticker _ticker;
-    toolkit::Timer::Ptr _timer;
+    std::shared_ptr<toolkit::Timer> _timer;
     MediaSinkDelegate _delegate;
     std::deque<std::pair<int64_t, std::function<void()> > > _frame_cache;
 };
 
-class HlsPlayer : public  HttpClientImp , public PlayerBase , public HlsParser{
+class HlsPlayer : public HttpClient , public PlayerBase , public HlsParser{
 public:
-    HlsPlayer(const toolkit::EventPoller::Ptr &poller);
+    HlsPlayer(const toolkit::EventPollerPtr &poller);
     ~HlsPlayer() override = default;
 
     /**
@@ -100,8 +106,8 @@ private:
     int64_t _last_sequence = -1;
     std::string _m3u8;
     std::string _play_url;
-    toolkit::Timer::Ptr _timer;
-    toolkit::Timer::Ptr _timer_ts;
+    std::shared_ptr<toolkit::Timer> _timer;
+    std::shared_ptr<toolkit::Timer> _timer_ts;
     std::list<ts_segment> _ts_list;
     std::list<std::string> _ts_url_sort;
     std::set<std::string, UrlComp> _ts_url_cache;
@@ -113,7 +119,7 @@ private:
 class HlsPlayerImp : public PlayerImp<HlsPlayer, PlayerBase>, private TrackListener {
 public:
     typedef std::shared_ptr<HlsPlayerImp> Ptr;
-    HlsPlayerImp(const toolkit::EventPoller::Ptr &poller = nullptr);
+    HlsPlayerImp(const toolkit::EventPollerPtr &poller = nullptr);
     ~HlsPlayerImp() override = default;
 
 private:

@@ -12,7 +12,7 @@
 #define HLSRECORDER_H
 
 #include "HlsMakerImp.h"
-#include "MPEG.h"
+#include "Record/MPEG.h"
 
 namespace mediakit {
 

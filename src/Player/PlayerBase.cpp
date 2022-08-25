@@ -13,10 +13,9 @@
 #include "Common/MediaSource.h"
 #include "Rtsp/RtspPlayerImp.h"
 #include "Rtmp/RtmpPlayerImp.h"
-#if ENABLE_HTTP
 #include "Hls/HlsPlayer.h"
-#include "TS/TsPlayerImp.h"
-#endif
+#include "Hls/TsPlayerImp.h"
+
 using namespace std;
 using namespace toolkit;
 
@@ -52,7 +51,6 @@ PlayerBase::Ptr PlayerBase::createPlayer(const EventPoller::Ptr &poller, const s
     if (strcasecmp("rtmp", prefix.data()) == 0) {
         return PlayerBase::Ptr(new RtmpPlayerImp(poller), releasePlayer);
     }
-#if ENABLE_HTTP    
     if ((strcasecmp("http", prefix.data()) == 0 || strcasecmp("https", prefix.data()) == 0)) {
         if (end_with(url, ".m3u8") || end_with(url_in, ".m3u8")) {
             return PlayerBase::Ptr(new HlsPlayerImp(poller), releasePlayer);
@@ -61,7 +59,6 @@ PlayerBase::Ptr PlayerBase::createPlayer(const EventPoller::Ptr &poller, const s
         }
         return PlayerBase::Ptr(new TsPlayerImp(poller), releasePlayer);
     }
-#endif    
     return PlayerBase::Ptr(new RtspPlayerImp(poller), releasePlayer);
 }
 

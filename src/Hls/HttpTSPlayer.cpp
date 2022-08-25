@@ -16,7 +16,7 @@ using namespace toolkit;
 namespace mediakit {
 
 HttpTSPlayer::HttpTSPlayer(const EventPoller::Ptr &poller) {
-    setPoller(poller ? poller : EventPollerPool::Instance().getPoller());
+    setLoop(poller ? poller : hv::EventLoopThreadPool::Instance()->loop());
 }
 
 void HttpTSPlayer::onResponseHeader(const string &status, const HttpClient::HttpHeader &header) {
@@ -52,7 +52,7 @@ void HttpTSPlayer::setOnComplete(onComplete cb) {
     _on_complete = std::move(cb);
 }
 
-void HttpTSPlayer::setOnPacket(TSSegment::onSegment cb) {
+void HttpTSPlayer::setOnPacket(onSegment cb) {
     _on_segment = std::move(cb);
 }
 

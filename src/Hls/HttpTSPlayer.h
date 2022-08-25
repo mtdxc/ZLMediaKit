@@ -11,19 +11,19 @@
 #ifndef HTTP_HTTPTSPLAYER_H
 #define HTTP_HTTPTSPLAYER_H
 
-#include "Http/HttpDownloader.h"
+#include "HttpClient.h"
 #include "Player/MediaPlayer.h"
-#include "Rtp/TSDecoder.h"
+//#include "Rtp/TSDecoder.h"
 
 namespace mediakit {
 
-//http-ts播发器，未实现ts解复用
-class HttpTSPlayer : public HttpClientImp {
+/// http-ts播发器，未实现ts解复用
+class HttpTSPlayer : public HttpClient {
 public:
     using Ptr = std::shared_ptr<HttpTSPlayer>;
     using onComplete = std::function<void(const toolkit::SockException &)>;
 
-    HttpTSPlayer(const toolkit::EventPoller::Ptr &poller = nullptr);
+    HttpTSPlayer(const toolkit::EventPollerPtr &poller = nullptr);
     ~HttpTSPlayer() override = default;
 
     /**
@@ -34,7 +34,8 @@ public:
     /**
      * 设置接收ts包回调
      */
-    void setOnPacket(TSSegment::onSegment cb);
+    typedef std::function<void(const char *data, size_t len)> onSegment;
+    void setOnPacket(onSegment cb);
 
 protected:
     ///HttpClient override///
@@ -47,7 +48,7 @@ private:
 
 private:
     onComplete _on_complete;
-    TSSegment::onSegment _on_segment;
+    onSegment _on_segment;
 };
 
 }//namespace mediakit
