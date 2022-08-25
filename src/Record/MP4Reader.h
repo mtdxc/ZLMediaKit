@@ -11,13 +11,19 @@
 #ifndef SRC_MEDIAFILE_MEDIAREADER_H_
 #define SRC_MEDIAFILE_MEDIAREADER_H_
 #ifdef ENABLE_MP4
-
-#include "MP4Demuxer.h"
-#include "Common/MultiMediaSourceMuxer.h"
+#include <string>
+#include <memory>
+#include <mutex>
+#include "Common/MediaSource.h"
 
 namespace mediakit {
-
-class MP4Reader : public std::enable_shared_from_this<MP4Reader>, public MediaSourceEvent {
+class MP4Demuxer;
+class MultiMediaSourceMuxer;
+/*
+读取 Mp4File 并转成 MultiMediaSourceMuxer
+Mp4File -> MP4Demuxer(TrackSource) -> MultiMediaSourceMuxer
+*/
+class MP4Reader : public MediaSourceEvent, public std::enable_shared_from_this<MP4Reader> {
 public:
     using Ptr = std::shared_ptr<MP4Reader>;
 
@@ -47,7 +53,7 @@ public:
     /**
      * 获取mp4解复用器
      */
-    const MP4Demuxer::Ptr& getDemuxer() const;
+    const std::shared_ptr<MP4Demuxer>& getDemuxer() const;
 
 private:
     //MediaSourceEvent override
@@ -76,9 +82,9 @@ private:
     std::string _file_path;
     std::recursive_mutex _mtx;
     toolkit::Ticker _seek_ticker;
-    toolkit::Timer::Ptr _timer;
-    MP4Demuxer::Ptr _demuxer;
-    MultiMediaSourceMuxer::Ptr _muxer;
+    std::shared_ptr<toolkit::Timer> _timer;
+    std::shared_ptr<MP4Demuxer> _demuxer;
+    std::shared_ptr<MultiMediaSourceMuxer> _muxer;
     toolkit::EventPollerPtr _poller;
 };
 

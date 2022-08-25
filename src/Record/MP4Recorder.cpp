@@ -12,10 +12,11 @@
 #include <ctime>
 #include <sys/stat.h>
 #include "Util/File.h"
+#include "Util/logger.h"
 #include "Common/config.h"
 #include "MP4Recorder.h"
 #include "EventLoopThreadPool.h"
-
+#include "MP4Muxer.h"
 
 using namespace std;
 using namespace toolkit;
@@ -71,7 +72,7 @@ void MP4Recorder::asyncClose() {
     auto full_path_tmp = _full_path_tmp;
     auto full_path = _full_path;
     auto info = _info;
-    WorkThreadPool::Instance().getExecutor()->async([muxer, full_path_tmp, full_path, info]() mutable {
+    hv::EventLoopThreadPool::Instance()->loop()->async([muxer, full_path_tmp, full_path, info]() mutable {
         info.time_len = muxer->getDuration() / 1000.0f;
         // 关闭mp4可能非常耗时，所以要放在后台线程执行
         muxer->closeMP4();

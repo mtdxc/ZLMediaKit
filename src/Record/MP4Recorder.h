@@ -11,13 +11,12 @@
 #ifndef MP4MAKER_H_
 #define MP4MAKER_H_
 
-#include <mutex>
 #include <memory>
 #include "Common/MediaSink.h"
-#include "MP4Muxer.h"
+#include "Record/Recorder.h"
 
 namespace mediakit {
-
+class MP4Muxer;
 #ifdef ENABLE_MP4
 class MP4Recorder final : public MediaSinkInterface {
 public:
@@ -58,7 +57,7 @@ private:
     std::string _full_path;
     std::string _full_path_tmp;
     RecordInfo _info;
-    MP4Muxer::Ptr _muxer;
+    std::shared_ptr<MP4Muxer> _muxer;
     std::list<Track::Ptr> _tracks;
     uint64_t _last_dts = 0;
 };

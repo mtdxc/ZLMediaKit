@@ -14,14 +14,17 @@
 #ifdef ENABLE_MP4
 
 #include "Common/MediaSink.h"
-#include "Extension/AAC.h"
-#include "Extension/H264.h"
-#include "Extension/H265.h"
 #include "Common/Stamp.h"
-#include "MP4.h"
-
+//#include "MP4.h"
+#include "Ap4.h"
+class AP4_Sample;
+class AP4_ByteStream;
+class AP4_SyntheticSampleTable;
 namespace mediakit{
-
+/*
+Mp4写入基类.
+将MediaSinkInterface写到Mp4文件中
+*/
 class MP4MuxerInterface : public MediaSinkInterface {
 public:
     MP4MuxerInterface() = default;
@@ -29,11 +32,16 @@ public:
 
     /**
      * 添加已经ready状态的track
+     * - mp4_writer_add_audio
+     * - mp4_writer_add_video
      */
     bool addTrack(const Track::Ptr &track) override;
 
     /**
      * 输入帧
+     * - 视频合帧
+     * - 音频时间戳同步
+     * - mp4_writer_write
      */
     bool inputFrame(const Frame::Ptr &frame) override;
 
@@ -51,40 +59,40 @@ public:
      * 是否包含视频
      */
     bool haveVideo() const;
-
-    /**
-     * 保存fmp4分片
-     */
-    void saveSegment();
-
-    /**
-     * 创建新切片
-     */
-    void initSegment();
-
-    /**
-     * 获取mp4时长,单位毫秒
-     */
+    
     uint64_t getDuration() const;
-
-protected:
-    virtual MP4FileIO::Writer createWriter() = 0;
-
 private:
     void stampSync();
 
-private:
+protected:
     bool _started = false;
     bool _have_video = false;
-    MP4FileIO::Writer _mov_writter;
+
     struct track_info {
-        int track_id = -1;
-        Stamp stamp;
+        AP4_SyntheticSampleTable* sample_table = nullptr;
+        Stamp       stamp;
+        uint64_t    last_tsp = 0;
+        CodecId               codec;
+        AP4_UI32              m_TrackId = 0;
+        AP4_UI32              m_Timescale = 1000;
+        AP4_UI64              m_SampleStartNumber = 0;
+        AP4_UI64              m_MediaTimeOrigin = 0;
+        AP4_UI64              m_MediaStartTime = 0;
+        AP4_UI64              m_MediaDuration = 0;
+        AP4_Array<AP4_Sample> m_Samples;
+        int WriteMediaSegment(AP4_ByteStream& stream, unsigned int sequence_number);
+        AP4_Result AddSample(AP4_Sample sample);
     };
     std::unordered_map<int, track_info> _codec_to_trackid;
-    FrameMerger _frame_merger { FrameMerger::mp4_nal_size };
+    
+    AP4_ByteStream* _file_stream = nullptr;
+    FrameMerger _frame_merger{FrameMerger::mp4_nal_size};
 };
 
+/*
+ 写Mp4到文件
+ 正常mp4格式，并可设置faststart
+*/
 class MP4Muxer : public MP4MuxerInterface{
 public:
     typedef std::shared_ptr<MP4Muxer> Ptr;
@@ -108,14 +116,11 @@ public:
      */
     void closeMP4();
 
-protected:
-    MP4FileIO::Writer createWriter() override;
-
 private:
     std::string _file_name;
-    MP4FileDisk::Ptr _mp4_file;
 };
 
+/// 写fmp4到内存
 class MP4MuxerMemory : public MP4MuxerInterface{
 public:
     MP4MuxerMemory();
@@ -128,6 +133,7 @@ public:
 
     /**
      * 输入帧
+     * 最终会导致onSegmentData回调
      */
     bool inputFrame(const Frame::Ptr &frame) override;
 
@@ -138,20 +144,17 @@ public:
 
 protected:
     /**
-     * 输出fmp4切片回调函数
+     * fmp4切片输出回调函数
      * @param std::string 切片内容
      * @param stamp 切片末尾时间戳
      * @param key_frame 是否有关键帧
      */
     virtual void onSegmentData(std::string string, uint64_t stamp, bool key_frame) = 0;
-
-protected:
-    MP4FileIO::Writer createWriter() override;
-
+    
 private:
     bool _key_frame = false;
     std::string _init_segment;
-    MP4FileMemory::Ptr _memory_file;
+    unsigned int _seq_no = 0;
 };
 
 

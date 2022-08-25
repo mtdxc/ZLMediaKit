@@ -11,9 +11,11 @@
 #ifdef ENABLE_MP4
 
 #include "MP4Reader.h"
+#include "MP4Demuxer.h"
 #include "Common/config.h"
+#include "Util/File.h"
 #include "EventLoopThreadPool.h"
-
+#include "Common/MultiMediaSourceMuxer.h"
 
 using namespace std;
 using namespace toolkit;
@@ -22,7 +24,8 @@ namespace mediakit {
 
 MP4Reader::MP4Reader(const string &vhost, const string &app, const string &stream_id, const string &file_path) {
     //读写文件建议放在后台线程
-    _poller = WorkThreadPool::Instance().getPoller();
+    //_poller = WorkThreadPool::Instance().getPoller();
+    _poller = hv::EventLoopThreadPool::Instance()->loop();
     _file_path = file_path;
     if (_file_path.empty()) {
         GET_CONFIG(string, recordPath, Protocol::kMP4SavePath);
@@ -48,7 +51,7 @@ MP4Reader::MP4Reader(const string &vhost, const string &app, const string &strea
     _muxer = std::make_shared<MultiMediaSourceMuxer>(vhost, app, stream_id, _demuxer->getDurationMS() / 1000.0f, option);
     auto tracks = _demuxer->getTracks(false);
     if (tracks.empty()) {
-        throw std::runtime_error(StrPrinter << "该mp4文件没有有效的track:" << _file_path);
+        throw std::runtime_error("Mp4File has no track:" + _file_path);
     }
     for (auto &track : tracks) {
         _muxer->addTrack(track);
@@ -123,6 +126,7 @@ void MP4Reader::startReadMP4(uint64_t sample_ms, bool ref_self, bool file_repeat
     //启动定时器
     if (ref_self) {
         _timer = std::make_shared<Timer>(timer_sec, [strong_self]() {
+            // seek和readsample可能在不同线程，要上锁..
             lock_guard<recursive_mutex> lck(strong_self->_mtx);
             return strong_self->readSample();
         }, _poller);

@@ -10,12 +10,20 @@
 
 #ifndef ZLMEDIAKIT_MP4DEMUXER_H
 #define ZLMEDIAKIT_MP4DEMUXER_H
-#ifdef ENABLE_MP4
-#include "MP4.h"
-#include "Extension/Track.h"
-#include "Util/ResourcePool.h"
-namespace mediakit {
 
+#ifdef ENABLE_MP4
+#include "Extension/Track.h"
+
+class AP4_File;
+class AP4_Track;
+class AP4_DataBuffer;
+class AP4_Sample;
+
+namespace mediakit {
+/*!
+Mp4文件读取类
+Mp4File -> TrackSource
+*/
 class MP4Demuxer : public TrackSource {
 public:
     typedef std::shared_ptr<MP4Demuxer> Ptr;
@@ -67,16 +75,23 @@ public:
 
 private:
     int getAllTracks();
-    void onVideoTrack(uint32_t track_id, uint8_t object, int width, int height, const void *extra, size_t bytes);
-    void onAudioTrack(uint32_t track_id, uint8_t object, int channel_count, int bit_per_sample, int sample_rate, const void *extra, size_t bytes);
     Frame::Ptr makeFrame(uint32_t track_id, const toolkit::Buffer::Ptr &buf, int64_t pts, int64_t dts);
 
 private:
-    MP4FileDisk::Ptr _mp4_file;
-    MP4FileDisk::Reader _mov_reader;
+    AP4_File *_file = nullptr;
     uint64_t _duration_ms = 0;
-    std::map<int, Track::Ptr> _track_to_codec;
-    toolkit::ResourcePool<toolkit::BufferRaw> _buffer_pool;
+    struct Context {
+        Track::Ptr _track;
+        AP4_Track* track;
+
+        bool _eof = false;
+        unsigned int index = 0;
+        std::shared_ptr<AP4_Sample> sample;
+        std::shared_ptr<AP4_DataBuffer> data;
+        bool ReadSample();
+        bool Seek(int64_t stamp_ms);
+    };
+    std::vector<Context> _tracks;
 };
 
 
