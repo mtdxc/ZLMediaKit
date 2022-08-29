@@ -73,8 +73,7 @@ bool RtspDemuxer::inputRtp(const RtpPacket::Ptr &rtp) {
 
 static void setBitRate(const SdpTrack::Ptr &sdp, const Track::Ptr &track) {
     if (!sdp->_b.empty()) {
-        int data_rate = 0;
-        sscanf(sdp->_b.data(), "AS:%d", &data_rate);
+        int data_rate = sdp->getBitRate();
         if (data_rate) {
             track->setBitRate(data_rate * 1024);
         }

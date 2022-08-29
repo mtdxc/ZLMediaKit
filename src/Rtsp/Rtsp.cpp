@@ -13,6 +13,7 @@
 #include "Rtsp.h"
 #include "Common/Parser.h"
 #include "Common/config.h"
+#include "Extension/Track.h"
 #include "Network/Socket.h"
 
 using namespace std;
@@ -78,6 +79,7 @@ static void getAttrSdp(const multimap<string, string> &attr, _StrPrinter &printe
             printer << "a=" << pr.first << ":" << pr.second << "\r\n";
         }
     }
+    // control attr放最后
     if (ptr) {
         printer << "a=" << ptr->first << ":" << ptr->second << "\r\n";
     }
@@ -100,6 +102,19 @@ string SdpTrack::getControlUrl(const string &base_url) const {
     return base_url + "/" + _control;
 }
 
+// 获取bitrate
+int SdpTrack::getBitRate() const {
+    int data_rate = 0;
+    sscanf(_b.data(), "AS:%d", &data_rate);
+    return data_rate * 1024;
+}
+
+void SdpTrack::setBitRate(int bit) {
+    char buf[32];
+    sprintf(buf, "AS:%d", bit / 1024);
+    _b = buf;
+}
+
 string SdpTrack::toString(uint16_t port) const {
     _StrPrinter _printer;
     switch (_type) {
@@ -109,7 +124,7 @@ string SdpTrack::toString(uint16_t port) const {
             break;
         }
         case TrackAudio:
-        case TrackVideo: {
+        case TrackVideo:
             if (_type == TrackAudio) {
                 _printer << "m=audio " << port << " RTP/AVP " << _pt << "\r\n";
             } else {
@@ -120,8 +135,8 @@ string SdpTrack::toString(uint16_t port) const {
             }
             getAttrSdp(_attr, _printer);
             break;
-        }
-        default: break;
+        default: 
+            break;
     }
     return std::move(_printer);
 }
@@ -187,7 +202,9 @@ void SdpParser::load(const string &sdp) {
                     }
                     break;
                 }
-                default: track->_other[opt] = opt_val; break;
+                default: 
+                    track->_other[opt] = opt_val; 
+                    break;
             }
         }
     }
@@ -268,8 +285,9 @@ SdpTrack::Ptr SdpParser::getTrack(TrackType type) const {
     return nullptr;
 }
 
-vector<SdpTrack::Ptr> SdpParser::getAvailableTrack() const {
-    vector<SdpTrack::Ptr> ret;
+std::vector<SdpTrack::Ptr> SdpParser::getAvailableTrack() const {
+    std::vector<SdpTrack::Ptr> ret;
+    // 最多只返回一个video_tracker和audio_tracker
     bool audio_added = false;
     bool video_added = false;
     for (auto &track : _track_vec) {
@@ -339,7 +357,7 @@ public:
         auto &sock1 = pair.second;
         auto sock_pair = getPortPair();
         if (!sock_pair) {
-            throw runtime_error("none reserved port in pool");
+            throw runtime_error("none reserved udp port in pool");
         }
         if (is_udp) {
             if (!sock0->bindUdpSock(2 * *sock_pair, local_ip.data(), re_use_port)) {
@@ -422,7 +440,7 @@ void makeSockPair(std::pair<Socket::Ptr, Socket::Ptr> &pair, const string &local
                 PortManager<1>::Instance().makeSockPair(pair, local_ip, re_use_port, is_udp);
             }
             break;
-        } catch (exception &ex) {
+        } catch (std::exception &ex) {
             if (++try_count == 3) {
                 throw;
             }
@@ -433,11 +451,7 @@ void makeSockPair(std::pair<Socket::Ptr, Socket::Ptr> &pair, const string &local
 
 string printSSRC(uint32_t ui32Ssrc) {
     char tmp[9] = {0};
-    ui32Ssrc = htonl(ui32Ssrc);
-    uint8_t *pSsrc = (uint8_t *) &ui32Ssrc;
-    for (int i = 0; i < 4; i++) {
-        sprintf(tmp + 2 * i, "%02X", pSsrc[i]);
-    }
+    sprintf(tmp, "%08X", ui32Ssrc);
     return tmp;
 }
 
@@ -537,6 +551,13 @@ string RtpHeader::dumpString(size_t rtp_size) const {
     return std::move(printer);
 }
 
+std::string RtpHeader::dump(size_t rtp_size) const {
+    char line[256] = { 0 };
+    int n = sprintf(line, "ssrc:%" PRIu32 " pt:%" PRIu8 " seq:%" PRIu16 " tsp:%" PRIu32 "%c%c len:%zu",
+        ntohl(ssrc), pt, ntohs(seq), ntohl(stamp), mark?'M':' ', ext?'E':' ', rtp_size);
+    return line;
+}
+
 ///////////////////////////////////////////////////////////////////////
 
 RtpHeader *RtpPacket::getHeader() {
@@ -549,7 +570,17 @@ const RtpHeader *RtpPacket::getHeader() const {
 }
 
 string RtpPacket::dumpString() const {
-    return ((RtpPacket *) this)->getHeader()->dumpString(size() - RtpPacket::kRtpTcpHeaderSize);
+    return getHeader()->dumpString(size() - RtpPacket::kRtpTcpHeaderSize);
+}
+
+string RtpPacket::dump(int t) const {
+	char line[256] = { 0 };
+    const RtpHeader* header = getHeader();
+    int n = sprintf(line, "%sRtp %s MS:%" PRIu64 "",
+        getTrackString(type), 
+        header->dump(size() - RtpPacket::kRtpTcpHeaderSize).c_str(),
+        getStampMS(t));
+    return line;
 }
 
 uint16_t RtpPacket::getSeq() const {

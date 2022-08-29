@@ -127,7 +127,7 @@ public:
     ssize_t getPayloadSize(size_t rtp_size) const;
     //打印调试信息
     std::string dumpString(size_t rtp_size) const;
-
+    std::string dump(size_t rtp_size) const;
 private:
     //返回有效负载偏移量
     size_t getPayloadOffset() const;
@@ -139,7 +139,7 @@ private:
 #pragma pack(pop)
 #endif // defined(_WIN32)
 
-//此rtp为rtp over tcp形式，需要忽略前4个字节
+//此类为rtp over tcp格式，需要忽略前4个字节
 class RtpPacket : public toolkit::BufferRaw{
 public:
     using Ptr = std::shared_ptr<RtpPacket>;
@@ -155,7 +155,7 @@ public:
 
     //打印调试信息
     std::string dumpString() const;
-
+    std::string dump(int type = 0) const;
     //主机字节序的seq
     uint16_t getSeq() const;
     uint32_t getStamp() const;
@@ -168,7 +168,8 @@ public:
     //有效负载长度，不包括csrc、ext、padding
     size_t getPayloadSize() const;
 
-    //音视频类型
+    /// 附加数据
+    // 音视频类型
     TrackType type;
     //音频为采样率，视频一般为90000
     uint32_t sample_rate;
@@ -206,6 +207,7 @@ public:
     std::string _b;
     uint16_t _port;
 
+    // load from range attr
     float _duration = 0;
     float _start = 0;
     float _end = 0;
@@ -216,19 +218,27 @@ public:
     std::string toString(uint16_t port = 0) const;
     std::string getName() const;
     std::string getControlUrl(const std::string &base_url) const;
-
+    // 获取bitrate
+    int getBitRate() const;
+    void setBitRate(int bit);
 public:
     int _pt = 0xff;
+    // 以下三字段: 初始值由pt查表获得，并通过解析rtpmap来修正
     int _channel;
     int _samplerate;
     TrackType _type;
+    // rtpmap中获取
     std::string _codec;
+
+    // fmtp attr 空格之后的值
     std::string _fmtp;
+    // control attr的值
     std::string _control;
 
 public:
     bool _inited = false;
     uint8_t _interleaved = 0;
+    // used in @see RtspMediaSource
     uint16_t _seq = 0;
     uint32_t _ssrc = 0;
     //时间戳，单位毫秒
@@ -245,8 +255,10 @@ public:
 
     void load(const std::string &sdp);
     bool available() const;
+
     SdpTrack::Ptr getTrack(TrackType type) const;
     std::vector<SdpTrack::Ptr> getAvailableTrack() const;
+
     std::string toString() const;
 
 private:

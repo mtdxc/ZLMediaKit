@@ -148,6 +148,29 @@ string RtcpHeader::dumpString() const {
     }
 }
 
+std::string RtcpHeader::dump(int len) const
+{
+    RtcpType type = (RtcpType)pt;
+    _StrPrinter printer;
+    printer << rtcpTypeToStr(type) << " ";
+    switch (type) {
+    case RtcpType::RTCP_RTPFB: {
+        printer << rtpfbTypeToStr((RTPFBType)report_count);
+        break;
+    }
+    case RtcpType::RTCP_PSFB: {
+        printer << psfbTypeToStr((PSFBType)report_count);
+        break;
+    }
+    default: {
+        printer << "count:" << report_count;
+        break;
+    }
+    }
+    printer << " len:" << len;
+    return std::move(printer);
+}
+
 size_t RtcpHeader::getSize() const {
     // 加上rtcp头长度
     return (1 + ntohs(length)) << 2;
