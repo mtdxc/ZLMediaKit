@@ -12,14 +12,10 @@
 
 using namespace mediakit;
 
-CommonRtpDecoder::CommonRtpDecoder(CodecId codec, size_t max_frame_size ){
+CommonRtpDecoder::CommonRtpDecoder(CodecId codec, size_t max_frame_size){
     _codec = codec;
     _max_frame_size = max_frame_size;
     obtainFrame();
-}
-
-CodecId CommonRtpDecoder::getCodecId() const {
-    return _codec;
 }
 
 void CommonRtpDecoder::obtainFrame() {
@@ -29,11 +25,6 @@ void CommonRtpDecoder::obtainFrame() {
 
 bool CommonRtpDecoder::inputRtp(const RtpPacket::Ptr &rtp, bool){
     auto payload_size = rtp->getPayloadSize();
-    if (payload_size <= 0) {
-        //无实际负载
-        return false;
-    }
-    auto payload = rtp->getPayload();
     auto stamp = rtp->getStampMS();
     auto seq = rtp->getSeq();
 
@@ -55,8 +46,8 @@ bool CommonRtpDecoder::inputRtp(const RtpPacket::Ptr &rtp, bool){
         _frame->_buffer.clear();
     }
 
-    if (!_drop_flag) {
-        _frame->_buffer.append((char *)payload, payload_size);
+    if (!_drop_flag && payload_size>0) {
+        _frame->_buffer.append((char *)rtp->getPayload(), payload_size);
     }
 
     _last_seq = seq;
@@ -67,7 +58,7 @@ bool CommonRtpDecoder::inputRtp(const RtpPacket::Ptr &rtp, bool){
 
 CommonRtpEncoder::CommonRtpEncoder(CodecId codec, uint32_t ssrc, uint32_t mtu_size,
                                    uint32_t sample_rate,  uint8_t payload_type, uint8_t interleaved)
-        : CommonRtpDecoder(codec), RtpInfo(ssrc, mtu_size, sample_rate, payload_type, interleaved) {
+        : RtpInfo(ssrc, mtu_size, sample_rate, payload_type, interleaved), _codec(codec){
 }
 
 bool CommonRtpEncoder::inputFrame(const Frame::Ptr &frame){

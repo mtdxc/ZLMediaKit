@@ -44,27 +44,30 @@ public:
     }
 
     ~H264FrameHelper() override = default;
-
+    uint8_t nalType() const {
+      return H264_TYPE(this->data()[this->prefixSize()]);
+    }
     bool keyFrame() const override {
-        auto nal_ptr = (uint8_t *) this->data() + this->prefixSize();
-        return H264_TYPE(*nal_ptr) == NAL_IDR && decodeAble();
+        return nalType() == NAL_IDR && decodeAble();
     }
 
     bool configFrame() const override {
-        auto nal_ptr = (uint8_t *) this->data() + this->prefixSize();
-        switch (H264_TYPE(*nal_ptr)) {
+        switch (nalType()) {
             case NAL_SPS:
-            case NAL_PPS: return true;
-            default: return false;
+            case NAL_PPS: 
+              return true;
+            default: 
+              return false;
         }
     }
 
     bool dropAble() const override {
-        auto nal_ptr = (uint8_t *) this->data() + this->prefixSize();
-        switch (H264_TYPE(*nal_ptr)) {
+        switch (nalType()) {
             case NAL_SEI:
-            case NAL_AUD: return true;
-            default: return false;
+            case NAL_AUD: 
+              return true;
+            default:
+              return false;
         }
     }
 
@@ -107,7 +110,7 @@ public:
      * @param sps_prefix_len 264头长度，可以为3个或4个字节，一般为0x00 00 00 01
      * @param pps_prefix_len 264头长度，可以为3个或4个字节，一般为0x00 00 00 01
      */
-    H264Track(const std::string &sps,const std::string &pps,int sps_prefix_len = 4,int pps_prefix_len = 4);
+    H264Track(const std::string &sps,const std::string &pps, int sps_prefix_len = 4, int pps_prefix_len = 4);
 
     /**
      * 构造h264类型的媒体
@@ -119,16 +122,16 @@ public:
     /**
      * 返回不带0x00 00 00 01头的sps/pps
      */
-    const std::string &getSps() const;
-    const std::string &getPps() const;
+    const std::string &getSps() const {return _sps;}
+    const std::string &getPps() const {return _pps;}
 
-    bool ready() override;
-    CodecId getCodecId() const override;
-    int getVideoHeight() const override;
-    int getVideoWidth() const override;
-    float getVideoFps() const override;
+    CodecId getCodecId() const override {return CodecH264;}
+    int getVideoHeight() const override {return _width;}
+    int getVideoWidth() const override {return _height;}
+    float getVideoFps() const override {return _fps;}
+
     bool inputFrame(const Frame::Ptr &frame) override;
-
+    bool ready() override;
 private:
     void onReady();
     Sdp::Ptr getSdp() override;

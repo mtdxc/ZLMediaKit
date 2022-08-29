@@ -11,9 +11,6 @@
 #include <math.h>
 #include "Common/config.h"
 #include "MultiMediaSourceMuxer.h"
-#include "Extension/AAC.h"
-#include "Extension/Opus.h"
-#include "Extension/G711.h"
 #include "Rtp/RtpSender.h"
 #include "Record/HlsRecorder.h"
 #include "Record/HlsMediaSource.h"
@@ -21,7 +18,7 @@
 #include "Rtmp/RtmpMediaSourceMuxer.h"
 #include "TS/TSMediaSourceMuxer.h"
 #include "FMP4/FMP4MediaSourceMuxer.h"
-
+#include "Extension/AAC.h"
 #ifdef ENABLE_FFMPEG
 #include "Codec/Transcode.h"
 #endif

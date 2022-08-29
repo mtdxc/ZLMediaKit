@@ -11,13 +11,12 @@
 #include "AACRtmp.h"
 #include "Rtmp/Rtmp.h"
 
-using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
 
-static string getAacCfg(const RtmpPacket &thiz) {
-    string ret;
+static std::string getAacCfg(const RtmpPacket &thiz) {
+    std::string ret;
     if (thiz.getMediaType() != FLV_CODEC_AAC) {
         return ret;
     }
@@ -38,10 +37,8 @@ void AACRtmpDecoder::inputRtmp(const RtmpPacket::Ptr &pkt) {
         if (!_aac_cfg.empty()) {
             onGetAAC(nullptr, 0, 0);
         }
-        return;
     }
-
-    if (!_aac_cfg.empty()) {
+    else if (!_aac_cfg.empty()) {
         onGetAAC(pkt->buffer.data() + 2, pkt->buffer.size() - 2, pkt->time_stamp);
     }
 }
@@ -76,7 +73,7 @@ void AACRtmpDecoder::onGetAAC(const char* data, size_t len, uint32_t stamp) {
 /////////////////////////////////////////////////////////////////////////////////////
 
 AACRtmpEncoder::AACRtmpEncoder(const Track::Ptr &track) {
-    _track = dynamic_pointer_cast<AACTrack>(track);
+    _track = std::dynamic_pointer_cast<AACTrack>(track);
 }
 
 void AACRtmpEncoder::makeConfigPacket() {

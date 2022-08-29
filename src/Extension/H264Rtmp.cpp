@@ -11,19 +11,12 @@
 #include "Rtmp/utils.h"
 #include "H264Rtmp.h"
 
-using namespace std;
+using std::string;
 using namespace toolkit;
 
 namespace mediakit {
 
 H264RtmpDecoder::H264RtmpDecoder() {
-    _h264frame = obtainFrame();
-}
-
-H264Frame::Ptr H264RtmpDecoder::obtainFrame() {
-    auto frame = FrameImp::create<H264Frame>();
-    frame->_prefix_size = 4;
-    return frame;
 }
 
 /**
@@ -39,17 +32,14 @@ static bool getH264Config(const RtmpPacket &thiz, string &sps, string &pps) {
     if (thiz.buffer.size() < 13) {
         return false;
     }
-    uint16_t sps_size;
-    memcpy(&sps_size, thiz.buffer.data() + 11, 2);
-    sps_size = ntohs(sps_size);
 
+
+    uint16_t sps_size = load_be16(thiz.buffer.data() + 11);
     if ((int) thiz.buffer.size() < 13 + sps_size + 1 + 2) {
         return false;
     }
-    uint16_t pps_size;
-    memcpy(&pps_size, thiz.buffer.data() + 13 + sps_size + 1, 2);
-    pps_size = ntohs(pps_size);
 
+    uint16_t pps_size = load_be16(thiz.buffer.data() + 13 + sps_size + 1);
     if ((int) thiz.buffer.size() < 13 + sps_size + 1 + 2 + pps_size) {
         return false;
     }
@@ -74,12 +64,10 @@ void H264RtmpDecoder::inputRtmp(const RtmpPacket::Ptr &pkt) {
         auto total_len = pkt->buffer.size();
         size_t offset = 5;
         uint8_t *cts_ptr = (uint8_t *) (pkt->buffer.data() + 2);
-        int32_t cts = (((cts_ptr[0] << 16) | (cts_ptr[1] << 8) | (cts_ptr[2])) + 0xff800000) ^ 0xff800000;
+        int32_t cts = (load_be24(cts_ptr) + 0xff800000) ^ 0xff800000;
         auto pts = pkt->time_stamp + cts;
         while (offset + 4 < total_len) {
-            uint32_t frame_len;
-            memcpy(&frame_len, pkt->buffer.data() + offset, 4);
-            frame_len = ntohl(frame_len);
+            uint32_t frame_len = load_be32(pkt->buffer.data() + offset);
             offset += 4;
             if (frame_len + offset > total_len) {
                 break;
@@ -94,20 +82,22 @@ inline void H264RtmpDecoder::onGetH264(const char* data, size_t len, uint32_t dt
     if (!len) {
         return;
     }
-    _h264frame->_dts = dts;
-    _h264frame->_pts = pts;
-    _h264frame->_buffer.assign("\x00\x00\x00\x01", 4);  //添加264头
-    _h264frame->_buffer.append(data, len);
+
+    auto frame = FrameImp::create<H264Frame>();
+    frame->_prefix_size = 4;
+    frame->_dts = dts;
+    frame->_pts = pts;
+    frame->_buffer.assign("\x00\x00\x00\x01", 4);  //添加264头
+    frame->_buffer.append(data, len);
 
     //写入环形缓存
-    RtmpCodec::inputFrame(_h264frame);
-    _h264frame = obtainFrame();
+    RtmpCodec::inputFrame(frame);
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 H264RtmpEncoder::H264RtmpEncoder(const Track::Ptr &track) {
-    _track = dynamic_pointer_cast<H264Track>(track);
+    _track = std::dynamic_pointer_cast<H264Track>(track);
 }
 
 void H264RtmpEncoder::makeConfigPacket(){
@@ -130,26 +120,25 @@ void H264RtmpEncoder::flush() {
 
 bool H264RtmpEncoder::inputFrame(const Frame::Ptr &frame) {
     if (frame) {
-        auto data = frame->data() + frame->prefixSize();
-        auto len = frame->size() - frame->prefixSize();
-        auto type = H264_TYPE(data[0]);
-        switch (type) {
-            case H264Frame::NAL_SPS: {
-                if (!_got_config_frame) {
-                    _sps = string(data, len);
-                    makeConfigPacket();
-                }
-                break;
+    auto data = frame->data() + frame->prefixSize();
+    auto len = frame->size() - frame->prefixSize();
+    switch (H264_TYPE(data[0])) {
+        case H264Frame::NAL_SPS: {
+            if (!_got_config_frame) {
+                _sps = string(data, len);
+                makeConfigPacket();
             }
-            case H264Frame::NAL_PPS: {
-                if (!_got_config_frame) {
-                    _pps = string(data, len);
-                    makeConfigPacket();
-                }
-                break;
-            }
-            default: break;
+            break;
         }
+        case H264Frame::NAL_PPS: {
+            if (!_got_config_frame) {
+                _pps = string(data, len);
+                makeConfigPacket();
+            }
+            break;
+        }
+            default: break;
+    }
     }
 
     if (!_rtmp_packet) {
@@ -165,6 +154,7 @@ bool H264RtmpEncoder::inputFrame(const Frame::Ptr &frame) {
         _rtmp_packet->buffer[1] = true;
         int32_t cts = pts - dts;
         if (cts < 0) {
+            InfoL << "reset cts " << cts;
             cts = 0;
         }
         //cts
@@ -209,8 +199,9 @@ void H264RtmpEncoder::makeVideoConfigPkt() {
     size = htons(size);
     rtmpPkt->buffer.append((char *) &size, 2);
     rtmpPkt->buffer.append(_sps);
-    //pps
+
     rtmpPkt->buffer.push_back(1); // version
+    //pps
     size = (uint16_t)_pps.size();
     size = htons(size);
     rtmpPkt->buffer.append((char *) &size, 2);

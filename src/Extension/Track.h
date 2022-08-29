@@ -14,6 +14,7 @@
 #include <memory>
 #include <string>
 #include "Frame.h"
+// for Sdp
 #include "Rtsp/Rtsp.h"
 
 namespace mediakit{
@@ -24,6 +25,7 @@ namespace mediakit{
 class Track : public FrameDispatcher , public CodecInfo{
 public:
     typedef std::shared_ptr<Track> Ptr;
+
     Track(){}
 
     virtual ~Track(){}
@@ -42,7 +44,7 @@ public:
 
     /**
      * 生成sdp
-     * @return  sdp对象
+     * @return sdp对象
      */
     virtual Sdp::Ptr getSdp() = 0;
 
@@ -116,78 +118,20 @@ public:
     virtual int getAudioChannel() const {return 0;};
 };
 
-class AudioTrackImp : public AudioTrack{
-public:
-    typedef std::shared_ptr<AudioTrackImp> Ptr;
-
-    /**
-     * 构造函数
-     * @param codecId 编码类型
-     * @param sample_rate 采样率(HZ)
-     * @param channels 通道数
-     * @param sample_bit 采样位数，一般为16
-     */
-    AudioTrackImp(CodecId codecId,int sample_rate, int channels, int sample_bit){
-        _codecid = codecId;
-        _sample_rate = sample_rate;
-        _channels = channels;
-        _sample_bit = sample_bit;
-    }
-
-    /**
-     * 返回编码类型
-     */
-    CodecId getCodecId() const override{
-        return _codecid;
-    }
-
-    /**
-     * 是否已经初始化
-     */
-    bool ready() override {
-        return true;
-    }
-
-    /**
-     * 返回音频采样率
-     */
-    int getAudioSampleRate() const override{
-        return _sample_rate;
-    }
-
-    /**
-     * 返回音频采样位数，一般为16或8
-     */
-    int getAudioSampleBit() const override{
-        return _sample_bit;
-    }
-
-    /**
-     * 返回音频通道数
-     */
-    int getAudioChannel() const override{
-        return _channels;
-    }
-private:
-    CodecId _codecid;
-    int _sample_rate;
-    int _channels;
-    int _sample_bit;
-};
-
+// Track容器类
 class TrackSource{
 public:
     TrackSource(){}
     virtual ~TrackSource(){}
 
     /**
-     * 获取全部的Track
-     * @param trackReady 是否获取全部已经准备好的Track
+     * 获取全部Track列表
+     * @param trackReady 是否获取全部ready的Track
      */
     virtual std::vector<Track::Ptr> getTracks(bool trackReady = true) const = 0;
 
     /**
-     * 获取特定Track
+     * 获取特定类型的Track列表
      * @param type track类型
      * @param trackReady 是否获取全部已经准备好的Track
      */

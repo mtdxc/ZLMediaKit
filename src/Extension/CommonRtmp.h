@@ -34,7 +34,7 @@ public:
     /**
      * 返回编码类型ID
      */
-    CodecId getCodecId() const override;
+    CodecId getCodecId() const override { return _codec; }
 
     /**
      * 输入Rtmp并解码
@@ -43,17 +43,13 @@ public:
     void inputRtmp(const RtmpPacket::Ptr &rtmp) override;
 
 private:
-    void obtainFrame();
-
-private:
     CodecId _codec;
-    FrameImp::Ptr _frame;
 };
 
 /**
  * 通用 rtmp编码类
  */
-class CommonRtmpEncoder : public CommonRtmpDecoder {
+class CommonRtmpEncoder : public RtmpCodec {
 public:
     typedef std::shared_ptr<CommonRtmpEncoder> Ptr;
 
@@ -64,9 +60,11 @@ public:
      * 输入帧数据
      */
     bool inputFrame(const Frame::Ptr &frame) override;
-
+    
+    CodecId getCodecId() const override { return _codec; }
 private:
     uint8_t _audio_flv_flags = 0;
+    CodecId _codec;
 };
 
 }//namespace mediakit

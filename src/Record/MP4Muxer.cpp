@@ -12,7 +12,6 @@
 
 #include "MP4Muxer.h"
 #include "Extension/AAC.h"
-#include "Extension/G711.h"
 #include "Extension/H264.h"
 #include "Extension/H265.h"
 #include "Common/config.h"

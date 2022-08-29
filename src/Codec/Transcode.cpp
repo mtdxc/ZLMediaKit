@@ -17,10 +17,8 @@
 #include "Util/uv_errno.h"
 #include <float.h>
 #include "Transcode.h"
-#include "Extension/AAC.h"
 #include "Common/config.h"
-#include "Extension/Opus.h"
-#include "Extension/G711.h"
+#include "Extension/AAC.h"
 #include "Extension/H264.h"
 #include "Extension/H265.h"
 
