@@ -635,21 +635,6 @@ TitleSdp::TitleSdp(float dur_sec, const std::map<string, string>& header, int ve
     _printer << "a=control:*\r\n";
 }
 
-AudioSdp::AudioSdp(AudioTrack * track, int payload_type) :Sdp(track->getAudioSampleRate(), payload_type) {
-    _codecId = track->getCodecId();
-    int bitrate = track->getBitRate() / 1024;
-    _printer << "m=audio 0 RTP/AVP " << payload_type << "\r\n";
-    if (bitrate) {
-        _printer << "b=AS:" << bitrate << "\r\n";
-    }
-    _printer << "a=rtpmap:" << payload_type << " " << getCodecName() << "/" << track->getAudioSampleRate() << "/" << track->getAudioChannel() << "\r\n";
-    //_printer << "a=control:trackID=" << (int)TrackAudio << "\r\n";
-}
-
-string AudioSdp::getSdp() const {
-    return _printer + "a=control:trackID=1\r\n";
-}
-
 }//namespace mediakit
 
 namespace toolkit {

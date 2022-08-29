@@ -352,18 +352,6 @@ private:
     toolkit::_StrPrinter _printer;
 };
 
-class AudioTrack;
-class AudioSdp : public Sdp {
-public:
-    AudioSdp(AudioTrack* track, int payload_type = 98);
-
-    CodecId getCodecId() const override { return _codecId; }
-    std::string getSdp() const override;
-protected:
-    toolkit::_StrPrinter _printer;
-    CodecId _codecId;
-};
-
 //创建rtp over tcp4个字节的头
 toolkit::Buffer::Ptr makeRtpOverTcpPrefix(uint16_t size, uint8_t interleaved);
 //创建rtp-rtcp端口对

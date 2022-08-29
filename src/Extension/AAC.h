@@ -12,7 +12,7 @@
 #define ZLMEDIAKIT_AAC_H
 
 #include "Frame.h"
-#include "Track.h"
+#include "AudioTrack.h"
 #define ADTS_HEADER_LEN 7
 
 namespace mediakit{

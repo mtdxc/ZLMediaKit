@@ -295,7 +295,7 @@ Sdp::Ptr AACTrack::getSdp() {
         WarnL << getCodecName() << " Track未准备好";
         return nullptr;
     }
-    return std::make_shared<AACSdp>(getAacCfg(),this);
+    return std::make_shared<AACSdp>(getAacCfg(), this);
 }
 
 }//namespace mediakit

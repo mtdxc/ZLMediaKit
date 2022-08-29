@@ -14,8 +14,6 @@
 #include "Extension/H264.h"
 #include "Extension/H265.h"
 #include "Extension/AAC.h"
-#include "Extension/G711.h"
-#include "Extension/Opus.h"
 
 #if defined(ENABLE_RTPPROXY) || defined(ENABLE_HLS)
 #include "mpeg-ts.h"
