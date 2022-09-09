@@ -76,15 +76,16 @@ AACRtmpEncoder::AACRtmpEncoder(const Track::Ptr &track) {
     _track = std::dynamic_pointer_cast<AACTrack>(track);
 }
 
-void AACRtmpEncoder::makeConfigPacket() {
+RtmpPacket::Ptr AACRtmpEncoder::makeConfigPacket() {
     if (_track && _track->ready()) {
         //从track中和获取aac配置信息
         _aac_cfg = _track->getAacCfg();
     }
 
     if (!_aac_cfg.empty()) {
-        makeAudioConfigPkt();
+        return makeAudioConfigPkt();
     }
+    return nullptr;
 }
 
 bool AACRtmpEncoder::inputFrame(const Frame::Ptr &frame) {
@@ -117,7 +118,7 @@ bool AACRtmpEncoder::inputFrame(const Frame::Ptr &frame) {
     return true;
 }
 
-void AACRtmpEncoder::makeAudioConfigPkt() {
+RtmpPacket::Ptr AACRtmpEncoder::makeAudioConfigPkt() {
     _audio_flv_flags = getAudioRtmpFlags(std::make_shared<AACTrack>(_aac_cfg));
     auto rtmpPkt = RtmpPacket::create();
 
@@ -133,6 +134,7 @@ void AACRtmpEncoder::makeAudioConfigPkt() {
     rtmpPkt->time_stamp = 0;
     rtmpPkt->type_id = MSG_AUDIO;
     RtmpCodec::inputRtmp(rtmpPkt);
+    return rtmpPkt;
 }
 
 }//namespace mediakit

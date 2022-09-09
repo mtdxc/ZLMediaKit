@@ -100,18 +100,19 @@ H264RtmpEncoder::H264RtmpEncoder(const Track::Ptr &track) {
     _track = std::dynamic_pointer_cast<H264Track>(track);
 }
 
-void H264RtmpEncoder::makeConfigPacket(){
+RtmpPacket::Ptr H264RtmpEncoder::makeConfigPacket(){
     if (_track && _track->ready()) {
         //尝试从track中获取sps pps信息
         _sps = _track->getSps();
         _pps = _track->getPps();
     }
-
+    RtmpPacket::Ptr ret;
     if (!_sps.empty() && !_pps.empty()) {
         //获取到sps/pps
-        makeVideoConfigPkt();
+        ret = makeVideoConfigPkt();
         _got_config_frame = true;
     }
+    return ret;
 }
 
 void H264RtmpEncoder::flush() {
@@ -172,10 +173,10 @@ bool H264RtmpEncoder::inputFrame(const Frame::Ptr &frame) {
     }, &_rtmp_packet->buffer);
 }
 
-void H264RtmpEncoder::makeVideoConfigPkt() {
+RtmpPacket::Ptr H264RtmpEncoder::makeVideoConfigPkt() {
     if (_sps.size() < 4) {
         WarnL << "sps长度不足4字节";
-        return;
+        return nullptr;
     }
     int8_t flags = FLV_CODEC_H264;
     flags |= (FLV_KEY_FRAME << 4);
@@ -214,6 +215,7 @@ void H264RtmpEncoder::makeVideoConfigPkt() {
     rtmpPkt->time_stamp = 0;
     rtmpPkt->type_id = MSG_VIDEO;
     RtmpCodec::inputRtmp(rtmpPkt);
+    return rtmpPkt;
 }
 
 }//namespace mediakit

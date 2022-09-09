@@ -35,7 +35,7 @@ public:
     /**
      * 获取完整的MetaData头部
      */
-    const AMFValue &getMetadata() const ;
+    const AMFValue &getMetadata() const;
 
     /**
      * 获取rtmp环形缓存，用于输出数据
@@ -67,6 +67,20 @@ public:
      * 生成config包
      */
      void makeConfigPacket();
+     /**
+      * 获取所有的config帧
+      */
+     template<typename FUNC>
+     void getConfigFrame(const FUNC &f) {
+         for (auto &pr : _encoder) {
+             if (!pr)
+                 continue;
+             if (auto pkt = pr->makeConfigPacket())
+                f(pkt);
+         }
+     }
+     bool haveAudio() const { return nullptr != _encoder[TrackAudio]; }
+     bool haveVideo() const { return nullptr != _encoder[TrackVideo]; }
 private:
     AMFValue _metadata;
     std::shared_ptr<RtmpCodec> _encoder[TrackMax];

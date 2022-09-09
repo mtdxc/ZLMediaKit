@@ -16,8 +16,8 @@
 #include "Poller/EventPoller.h"
 
 namespace mediakit {
-// 此类将RtmpMediaSource中的RtmpPacket，串行化到onWrite的二进制toolkit::Buffer
-class FlvMuxer {
+class RtmpMuxer;
+class FlvMuxer: public toolkit::RingDelegate<RtmpPacket::Ptr> {
 public:
     using Ptr = std::shared_ptr<FlvMuxer>;
     FlvMuxer();
@@ -26,6 +26,7 @@ public:
     void stop();
 
 protected:
+    void start(RtmpMuxer* muxer);
     // 不同线程延迟2s，写头部，注册帧回调 RingReader.
     void start(const toolkit::EventPoller::Ptr &poller, const RtmpMediaSource::Ptr &media, uint32_t start_pts = 0);
 
@@ -38,8 +39,9 @@ protected:
     virtual std::shared_ptr<FlvMuxer> getSharedPtr() = 0;
 
 private:
-    // 写入Flv 9字节头部，MetaData，config frame
-    void onWriteFlvHeader(const RtmpMediaSource::Ptr &src);
+    void writeFlvHeader(bool hasAudio, bool hasVideo);
+    void onWrite(RtmpPacket::Ptr in, bool is_key = true) override;
+
     // 写Rtmp数据包
     void onWriteRtmp(const RtmpPacket::Ptr &pkt, bool flush);
 
@@ -48,6 +50,7 @@ private:
     toolkit::BufferRaw::Ptr obtainBuffer();
 
 private:
+    bool _wait_key = true;
     toolkit::ResourcePool<toolkit::BufferRaw> _packet_pool;
     RtmpMediaSource::RingType::RingReader::Ptr _ring_reader;
 };
@@ -58,6 +61,7 @@ public:
     FlvRecorder() = default;
     ~FlvRecorder() override = default;
 
+    void startRecord(RtmpMuxer* muxer, const std::string &file_path);
     void startRecord(const toolkit::EventPoller::Ptr &poller, const RtmpMediaSource::Ptr &media, const std::string &file_path);
     void startRecord(const toolkit::EventPoller::Ptr &poller, const std::string &vhost, const std::string &app, const std::string &stream, const std::string &file_path);
 

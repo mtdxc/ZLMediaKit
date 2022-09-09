@@ -61,7 +61,7 @@ public:
     typedef std::shared_ptr<RtmpCodec> Ptr;
     RtmpCodec() = default;
     ~RtmpCodec() override = default;
-    virtual void makeConfigPacket() {};
+    virtual RtmpPacket::Ptr makeConfigPacket() { return nullptr; };
 };
 
 

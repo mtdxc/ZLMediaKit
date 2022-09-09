@@ -76,13 +76,13 @@ public:
     /**
      * 生成config包
      */
-    void makeConfigPacket() override;
+    RtmpPacket::Ptr makeConfigPacket() override;
 
     CodecId getCodecId() const override {
         return CodecH264;
     }
 private:
-    void makeVideoConfigPkt();
+    RtmpPacket::Ptr makeVideoConfigPkt();
     std::string _sps;
     std::string _pps;
     bool _got_config_frame = false;
