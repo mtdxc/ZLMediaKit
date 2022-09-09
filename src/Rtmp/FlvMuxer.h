@@ -16,8 +16,8 @@
 #include "Poller/EventPoller.h"
 
 namespace mediakit {
-
-class FlvMuxer {
+class RtmpMuxer;
+class FlvMuxer: public toolkit::RingDelegate<RtmpPacket::Ptr> {
 public:
     using Ptr = std::shared_ptr<FlvMuxer>;
     FlvMuxer();
@@ -26,13 +26,16 @@ public:
     void stop();
 
 protected:
+    void start(RtmpMuxer* muxer);
     void start(const toolkit::EventPoller::Ptr &poller, const RtmpMediaSource::Ptr &media, uint32_t start_pts = 0);
     virtual void onWrite(const toolkit::Buffer::Ptr &data, bool flush) = 0;
     virtual void onDetach() = 0;
     virtual std::shared_ptr<FlvMuxer> getSharedPtr() = 0;
 
 private:
-    void onWriteFlvHeader(const RtmpMediaSource::Ptr &src);
+    void writeFlvHeader(bool hasAudio, bool hasVideo);
+    void onWrite(RtmpPacket::Ptr in, bool is_key = true) override;
+
     void onWriteRtmp(const RtmpPacket::Ptr &pkt, bool flush);
     void onWriteFlvTag(const RtmpPacket::Ptr &pkt, uint32_t time_stamp, bool flush);
     void onWriteFlvTag(uint8_t type, const toolkit::Buffer::Ptr &buffer, uint32_t time_stamp, bool flush);
@@ -40,6 +43,7 @@ private:
     toolkit::BufferRaw::Ptr obtainBuffer();
 
 private:
+    bool _wait_key = true;
     toolkit::ResourcePool<toolkit::BufferRaw> _packet_pool;
     RtmpMediaSource::RingType::RingReader::Ptr _ring_reader;
 };
@@ -50,6 +54,7 @@ public:
     FlvRecorder() = default;
     ~FlvRecorder() override = default;
 
+    void startRecord(RtmpMuxer* muxer, const std::string &file_path);
     void startRecord(const toolkit::EventPoller::Ptr &poller, const RtmpMediaSource::Ptr &media, const std::string &file_path);
     void startRecord(const toolkit::EventPoller::Ptr &poller, const std::string &vhost, const std::string &app, const std::string &stream, const std::string &file_path);
 

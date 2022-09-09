@@ -115,19 +115,20 @@ H265RtmpEncoder::H265RtmpEncoder(const Track::Ptr &track) {
     _track = std::dynamic_pointer_cast<H265Track>(track);
 }
 
-void H265RtmpEncoder::makeConfigPacket(){
+RtmpPacket::Ptr H265RtmpEncoder::makeConfigPacket(){
     if (_track && _track->ready()) {
         //尝试从track中获取sps pps信息
         _sps = _track->getSps();
         _pps = _track->getPps();
         _vps = _track->getVps();
     }
-
+    RtmpPacket::Ptr ret;
     if (!_sps.empty() && !_pps.empty() && !_vps.empty()) {
         //获取到sps/pps
-        makeVideoConfigPkt();
+        ret = makeVideoConfigPkt();
         _got_config_frame = true;
     }
+    return ret;
 }
 
 void H265RtmpEncoder::flush() {
@@ -194,12 +195,13 @@ bool H265RtmpEncoder::inputFrame(const Frame::Ptr &frame) {
     }, &_rtmp_packet->buffer);
 }
 
-void H265RtmpEncoder::makeVideoConfigPkt() {
+RtmpPacket::Ptr H265RtmpEncoder::makeVideoConfigPkt() {
+    RtmpPacket::Ptr rtmpPkt;
 #ifdef ENABLE_MP4
     int8_t flags = FLV_CODEC_H265;
     flags |= (FLV_KEY_FRAME << 4);
     bool is_config = true;
-    auto rtmpPkt = RtmpPacket::create();
+    rtmpPkt = RtmpPacket::create();
     //header
     rtmpPkt->buffer.push_back(flags);
     rtmpPkt->buffer.push_back(!is_config);
@@ -216,7 +218,7 @@ void H265RtmpEncoder::makeVideoConfigPkt() {
     int extra_data_size = mpeg4_hevc_decoder_configuration_record_save(&hevc, extra_data, sizeof(extra_data));
     if (extra_data_size == -1) {
         WarnL << "生成H265 extra_data 失败";
-        return;
+        return nullptr;
     }
     //HEVCDecoderConfigurationRecord
     rtmpPkt->buffer.append((char *)extra_data, extra_data_size);
@@ -229,6 +231,7 @@ void H265RtmpEncoder::makeVideoConfigPkt() {
 #else
     WarnL << "请开启MP4相关功能并使能\"ENABLE_MP4\",否则对H265-RTMP支持不完善";
 #endif
+    return rtmpPkt;
 }
 
 }//namespace mediakit

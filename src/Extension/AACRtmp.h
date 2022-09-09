@@ -69,13 +69,13 @@ public:
     /**
      * 生成config包
      */
-    void makeConfigPacket() override;
+    RtmpPacket::Ptr makeConfigPacket() override;
 
     CodecId getCodecId() const override {
         return CodecAAC;
     }
 private:
-    void makeAudioConfigPkt();
+    RtmpPacket::Ptr makeAudioConfigPkt();
 
 private:
     uint8_t _audio_flv_flags;
