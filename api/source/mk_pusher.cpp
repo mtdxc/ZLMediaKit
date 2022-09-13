@@ -11,7 +11,7 @@
 #include <assert.h>
 #include "mk_pusher.h"
 #include "Pusher/MediaPusher.h"
-
+#include "Common/MediaSource.h"
 using namespace toolkit;
 using namespace mediakit;
 

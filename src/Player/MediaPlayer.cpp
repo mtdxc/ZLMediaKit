@@ -10,8 +10,6 @@
 
 #include <algorithm>
 #include "MediaPlayer.h"
-#include "Rtmp/RtmpPlayerImp.h"
-#include "Rtsp/RtspPlayerImp.h"
 
 using namespace std;
 using namespace toolkit;
@@ -19,27 +17,12 @@ using namespace toolkit;
 namespace mediakit {
 
 MediaPlayer::MediaPlayer(const EventPoller::Ptr &poller) {
-    _poller = poller ? poller : EventPollerPool::Instance().getPoller();
-}
-
-static void setOnCreateSocket_l(const std::shared_ptr<PlayerBase> &delegate, const Socket::onCreateSocket &cb){
-    auto helper = dynamic_pointer_cast<SocketHelper>(delegate);
-    if (helper) {
-        if (cb) {
-            helper->setOnCreateSocket(cb);
-        } else {
-            //客户端，确保开启互斥锁
-            helper->setOnCreateSocket([](const EventPoller::Ptr &poller) {
-                return Socket::createSocket(poller, true);
-            });
-        }
-    }
+    _poller = poller ? poller : hv::EventLoopThreadPool::Instance()->loop();
 }
 
 void MediaPlayer::play(const string &url) {
     _delegate = PlayerBase::createPlayer(_poller, url);
     assert(_delegate);
-    setOnCreateSocket_l(_delegate, _on_create_socket);
     _delegate->setOnShutdown(_on_shutdown);
     _delegate->setOnPlayResult(_on_play_result);
     _delegate->setOnResume(_on_resume);
@@ -50,11 +33,6 @@ void MediaPlayer::play(const string &url) {
 
 EventPoller::Ptr MediaPlayer::getPoller(){
     return _poller;
-}
-
-void MediaPlayer::setOnCreateSocket(Socket::onCreateSocket cb){
-    setOnCreateSocket_l(_delegate, cb);
-    _on_create_socket = std::move(cb);
 }
 
 } /* namespace mediakit */

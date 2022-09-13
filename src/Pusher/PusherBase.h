@@ -15,19 +15,18 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include "Session.h"
+#include "toolkit.h"
 #include "Util/mini.h"
-#include "Common/MediaSource.h"
 
 namespace mediakit {
-
+class MediaSource;
 class PusherBase : public toolkit::mINI {
 public:
     using Ptr = std::shared_ptr<PusherBase>;
     using Event = std::function<void(const toolkit::SockException &ex)>;
 
     static Ptr createPusher(const toolkit::EventPollerPtr &poller,
-                            const MediaSource::Ptr &src,
+                            const std::shared_ptr<MediaSource> &src,
                             const std::string &strUrl);
 
     PusherBase();
@@ -45,7 +44,7 @@ public:
     virtual void teardown() {};
 
     /**
-     * 摄像推流结果回调
+     * 推流结果回调
      */
     virtual void setOnPublished(const Event &cb) = 0;
 
@@ -88,7 +87,7 @@ public:
     }
 
     /**
-     * 摄像推流结果回调
+     * 推流结果回调
      */
     void setOnPublished(const PusherBase::Event &cb) override {
         if (_delegate) {

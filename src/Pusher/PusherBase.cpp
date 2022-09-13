@@ -12,6 +12,7 @@
 #include "PusherBase.h"
 #include "Rtsp/RtspPusher.h"
 #include "Rtmp/RtmpPusher.h"
+#include "Common/MediaSource.h"
 
 using namespace toolkit;
 
@@ -27,19 +28,19 @@ PusherBase::Ptr PusherBase::createPusher(const EventPoller::Ptr &poller,
         ptr->teardown();
     };
     std::string prefix = FindField(url.data(), NULL, "://");
-
+#ifdef ENABLE_SSL
     if (strcasecmp("rtsps",prefix.data()) == 0) {
         return PusherBase::Ptr(new TcpClientWithSSL<RtspPusherImp>(poller, std::dynamic_pointer_cast<RtspMediaSource>(src)), releasePusher);
     }
-
+#endif
     if (strcasecmp("rtsp",prefix.data()) == 0) {
         return PusherBase::Ptr(new RtspPusherImp(poller, std::dynamic_pointer_cast<RtspMediaSource>(src)), releasePusher);
     }
-
+#ifdef ENABLE_SSL
     if (strcasecmp("rtmps",prefix.data()) == 0) {
         return PusherBase::Ptr(new TcpClientWithSSL<RtmpPusherImp>(poller, std::dynamic_pointer_cast<RtmpMediaSource>(src)), releasePusher);
     }
-
+#endif
     if (strcasecmp("rtmp",prefix.data()) == 0) {
         return PusherBase::Ptr(new RtmpPusherImp(poller, std::dynamic_pointer_cast<RtmpMediaSource>(src)), releasePusher);
     }

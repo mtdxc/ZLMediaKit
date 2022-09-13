@@ -15,16 +15,15 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include "Session.h"
+#include "toolkit.h"
 #include "Util/mini.h"
-#include "Util/RingBuffer.h"
-#include "Common/MediaSource.h"
 #include "Common/MediaSink.h"
 #include "Extension/Frame.h"
 #include "Extension/Track.h"
 
 namespace mediakit {
-
+class MediaSource;
+/// 播放器接口定义
 class PlayerBase : public TrackSource, public toolkit::mINI {
 public:
     using Ptr = std::shared_ptr<PlayerBase>;
@@ -99,7 +98,7 @@ public:
     /**
      * 设置一个MediaSource，直接生产rtsp/rtmp代理
      */
-    virtual void setMediaSource(const MediaSource::Ptr &src) = 0;
+    virtual void setMediaSource(const std::shared_ptr<MediaSource> &src) = 0;
 
     /**
      * 设置异常中断回调
@@ -122,11 +121,17 @@ protected:
     virtual void onPlayResult(const toolkit::SockException &ex) = 0;
 };
 
+/*
+带Delegate拦截的播放器.
+有Delegate就调Delegate，否则调用 Parent 方法
+@note 此类并没有_delegate的get/set方法，子类要想实现拦截必须自己设置_delegate，
+如 MediaPlayer 就在 play 方法设置 _delegate
+*/
 template<typename Parent, typename Delegate>
 class PlayerImp : public Parent {
 public:
     using Ptr = std::shared_ptr<PlayerImp>;
-
+    // 完美转发构造函数 to Parent
     template<typename ...ArgsType>
     PlayerImp(ArgsType &&...args) : Parent(std::forward<ArgsType>(args)...) {}
     ~PlayerImp() override = default;
@@ -179,7 +184,7 @@ public:
         return std::dynamic_pointer_cast<toolkit::SockInfo>(_delegate);
     }
 
-    void setMediaSource(const MediaSource::Ptr &src) override {
+    void setMediaSource(const std::shared_ptr<MediaSource> &src) {
         if (_delegate) {
             _delegate->setMediaSource(src);
         }
@@ -232,7 +237,7 @@ protected:
     std::function<void()> _on_resume;
     PlayerBase::Event _on_shutdown;
     PlayerBase::Event _on_play_result;
-    MediaSource::Ptr _media_src;
+    std::shared_ptr<MediaSource> _media_src;
     std::shared_ptr<Delegate> _delegate;
 };
 
