@@ -11,19 +11,14 @@
 #ifndef SRC_RTSP_RTSPMEDIASOURCE_H_
 #define SRC_RTSP_RTSPMEDIASOURCE_H_
 
-#include <mutex>
 #include <string>
 #include <memory>
 #include <functional>
-#include <unordered_map>
-#include "Common/config.h"
 #include "Common/MediaSource.h"
-#include "RtpCodec.h"
-#include "Util/logger.h"
+#include "Common/PacketCache.h"
 #include "Util/RingBuffer.h"
-#include "Util/TimeTicker.h"
 #include "Util/ResourcePool.h"
-#include "Util/NoticeCenter.h"
+#include "RtpCodec.h"
 
 #define RTP_GOP_SIZE 512
 
@@ -39,7 +34,7 @@ class RtspMediaSource : public MediaSource, public toolkit::RingDelegate<RtpPack
 public:
     using PoolType = toolkit::ResourcePool<RtpPacket>;
     using Ptr = std::shared_ptr<RtspMediaSource>;
-    using RingDataType = std::shared_ptr<toolkit::List<RtpPacket::Ptr> >;
+    using RingDataType = std::shared_ptr<std::list<RtpPacket::Ptr> >;
     using RingType = toolkit::RingBuffer<RingDataType>;
 
     /**
@@ -173,16 +168,12 @@ public:
         }
         if (!_ring) {
             std::weak_ptr<RtspMediaSource> weakSelf = std::dynamic_pointer_cast<RtspMediaSource>(shared_from_this());
-            auto lam = [weakSelf](int size) {
-                auto strongSelf = weakSelf.lock();
-                if (!strongSelf) {
-                    return;
-                }
-                strongSelf->onReaderChanged(size);
-            };
             //GOP默认缓冲512组RTP包，每组RTP包时间戳相同(如果开启合并写了，那么每组为合并写时间内的RTP包),
             //每次遇到关键帧第一个RTP包，则会清空GOP缓存(因为有新的关键帧了，同样可以实现秒开)
-            _ring = std::make_shared<RingType>(_ring_size, std::move(lam));
+            _ring = std::make_shared<RingType>(_ring_size, [weakSelf](int size){
+                if (auto strongSelf = weakSelf.lock())
+                    strongSelf->onReaderChanged(size);
+            });
             if (!_sdp.empty()) {
                 regist();
             }
@@ -202,7 +193,7 @@ private:
      * @param rtp_list rtp包列表
      * @param key_pos 是否包含关键帧
      */
-    void onFlush(std::shared_ptr<toolkit::List<RtpPacket::Ptr> > rtp_list, bool key_pos) override {
+    void onFlush(std::shared_ptr<std::list<RtpPacket::Ptr> > rtp_list, bool key_pos) override {
         //如果不存在视频，那么就没有存在GOP缓存的意义，所以is_key一直为true确保一直清空GOP缓存
         _ring->write(std::move(rtp_list), _have_video ? key_pos : true);
     }

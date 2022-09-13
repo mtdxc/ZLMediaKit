@@ -19,15 +19,9 @@
 #include "amf.h"
 #include "Rtmp.h"
 #include "RtmpDemuxer.h"
-#include "Common/config.h"
-#include "Common/MediaSource.h"
-#include "Util/util.h"
-#include "Util/logger.h"
 #include "Util/RingBuffer.h"
-#include "Util/TimeTicker.h"
-#include "Util/ResourcePool.h"
-#include "Util/NoticeCenter.h"
-
+#include "Common/MediaSource.h"
+#include "Common/PacketCache.h"
 #define RTMP_GOP_SIZE 512
 
 namespace mediakit {
@@ -42,7 +36,7 @@ namespace mediakit {
 class RtmpMediaSource : public MediaSource, public toolkit::RingDelegate<RtmpPacket::Ptr>, private PacketCache<RtmpPacket>{
 public:
     using Ptr = std::shared_ptr<RtmpMediaSource>;
-    using RingDataType = std::shared_ptr<toolkit::List<RtmpPacket::Ptr> >;
+    using RingDataType = std::shared_ptr<std::list<RtmpPacket::Ptr> >;
     using RingType = toolkit::RingBuffer<RingDataType>;
 
     /**
@@ -146,17 +140,13 @@ public:
 
         if (!_ring) {
             std::weak_ptr<RtmpMediaSource> weakSelf = std::dynamic_pointer_cast<RtmpMediaSource>(shared_from_this());
-            auto lam = [weakSelf](int size) {
-                auto strongSelf = weakSelf.lock();
-                if (!strongSelf) {
-                    return;
-                }
-                strongSelf->onReaderChanged(size);
-            };
 
             //GOP默认缓冲512组RTMP包，每组RTMP包时间戳相同(如果开启合并写了，那么每组为合并写时间内的RTMP包),
             //每次遇到关键帧第一个RTMP包，则会清空GOP缓存(因为有新的关键帧了，同样可以实现秒开)
-            _ring = std::make_shared<RingType>(_ring_size,std::move(lam));
+            _ring = std::make_shared<RingType>(_ring_size, [weakSelf](int size){
+                if (auto strongSelf = weakSelf.lock())
+                    strongSelf->onReaderChanged(size);
+            });
             if(_metadata){
                 regist();
             }
@@ -205,7 +195,7 @@ private:
     * @param rtmp_list rtmp包列表
     * @param key_pos 是否包含关键帧
     */
-    void onFlush(std::shared_ptr<toolkit::List<RtmpPacket::Ptr> > rtmp_list, bool key_pos) override {
+    void onFlush(std::shared_ptr<std::list<RtmpPacket::Ptr> > rtmp_list, bool key_pos) override {
         //如果不存在视频，那么就没有存在GOP缓存的意义，所以is_key一直为true确保一直清空GOP缓存
         _ring->write(std::move(rtmp_list), _have_video ? key_pos : true);
     }
@@ -214,9 +204,11 @@ private:
     bool _have_video = false;
     bool _have_audio = false;
     int _ring_size;
+    RingType::Ptr _ring;
+
+    // 记录当前时间戳
     uint32_t _track_stamps[TrackMax] = {0};
     AMFValue _metadata;
-    RingType::Ptr _ring;
 
     mutable std::recursive_mutex _mtx;
     std::unordered_map<int, RtmpPacket::Ptr> _config_frame_map;

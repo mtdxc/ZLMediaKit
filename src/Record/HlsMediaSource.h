@@ -11,9 +11,8 @@
 #ifndef ZLMEDIAKIT_HLSMEDIASOURCE_H
 #define ZLMEDIAKIT_HLSMEDIASOURCE_H
 
-#include "Common/PacketCache.h"
 #include "Common/MediaSource.h"
-#include "Util/TimeTicker.h"
+#include "Util/RingBuffer.h"
 #include <atomic>
 
 namespace mediakit {
@@ -45,14 +44,10 @@ public:
     void setIndexFile(std::string index_file) {
         if (!_ring) {
             std::weak_ptr<HlsMediaSource> weakSelf = std::dynamic_pointer_cast<HlsMediaSource>(shared_from_this());
-            auto lam = [weakSelf](int size) {
-                auto strongSelf = weakSelf.lock();
-                if (!strongSelf) {
-                    return;
-                }
-                strongSelf->onReaderChanged(size);
-            };
-            _ring = std::make_shared<RingType>(0, std::move(lam));
+            _ring = std::make_shared<RingType>(0, [weakSelf](int size) {
+                if (auto strongSelf = weakSelf.lock())
+                    strongSelf->onReaderChanged(size);
+            });
             regist();
         }
 
@@ -61,7 +56,7 @@ public:
         _index_file = std::move(index_file);
 
         if (!_index_file.empty()) {
-            _list_cb.for_each([&](const std::function<void(const std::string &str)> &cb) { cb(_index_file); });
+            for(auto cb : _list_cb) { cb(_index_file); }
             _list_cb.clear();
         }
     }
@@ -93,7 +88,7 @@ private:
     RingType::Ptr _ring;
     std::string _index_file;
     mutable std::mutex _mtx_index;
-    toolkit::List<std::function<void(const std::string &)>> _list_cb;
+    std::list<std::function<void(const std::string &)>> _list_cb;
 };
 
 class HlsCookieData {

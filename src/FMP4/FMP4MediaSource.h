@@ -12,7 +12,8 @@
 #define ZLMEDIAKIT_FMP4MEDIASOURCE_H
 
 #include "Common/MediaSource.h"
-
+#include "Common/PacketCache.h"
+#include "Util/RingBuffer.h"
 #define FMP4_GOP_SIZE 512
 
 namespace mediakit {
@@ -34,7 +35,7 @@ public:
 class FMP4MediaSource final : public MediaSource, public toolkit::RingDelegate<FMP4Packet::Ptr>, private PacketCache<FMP4Packet>{
 public:
     using Ptr = std::shared_ptr<FMP4MediaSource>;
-    using RingDataType = std::shared_ptr<toolkit::List<FMP4Packet::Ptr> >;
+    using RingDataType = std::shared_ptr<std::list<FMP4Packet::Ptr> >;
     using RingType = toolkit::RingBuffer<RingDataType>;
 
     FMP4MediaSource(const std::string &vhost,
@@ -108,11 +109,8 @@ private:
     void createRing(){
         std::weak_ptr<FMP4MediaSource> weak_self = std::dynamic_pointer_cast<FMP4MediaSource>(shared_from_this());
         _ring = std::make_shared<RingType>(_ring_size, [weak_self](int size) {
-            auto strong_self = weak_self.lock();
-            if (!strong_self) {
-                return;
-            }
-            strong_self->onReaderChanged(size);
+            if (auto strong_self = weak_self.lock())
+                strong_self->onReaderChanged(size);
         });
         if (!_init_segment.empty()) {
             regist();
@@ -124,7 +122,7 @@ private:
      * @param packet_list 合并写缓存列队
      * @param key_pos 是否包含关键帧
      */
-    void onFlush(std::shared_ptr<toolkit::List<FMP4Packet::Ptr> > packet_list, bool key_pos) override {
+    void onFlush(std::shared_ptr<std::list<FMP4Packet::Ptr> > packet_list, bool key_pos) override {
         //如果不存在视频，那么就没有存在GOP缓存的意义，所以确保一直清空GOP缓存
         _ring->write(std::move(packet_list), _have_video ? key_pos : true);
     }

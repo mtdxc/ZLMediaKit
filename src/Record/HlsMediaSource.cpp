@@ -9,7 +9,10 @@
  */
 
 #include "HlsMediaSource.h"
-
+#include "Common/config.h"
+#include "Util/logger.h"
+#include "EventLoopThreadPool.h"
+#include "Session.h"
 using namespace toolkit;
 
 namespace mediakit {

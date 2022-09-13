@@ -27,8 +27,7 @@ bool RtpCache::firstKeyReady(bool in) {
     _first_key = in;
     return _first_key;
 }
-
-void RtpCache::onFlush(std::shared_ptr<List<Buffer::Ptr>> rtp_list, bool) {
+void RtpCache::onFlush(std::shared_ptr<std::list<Buffer::Ptr> > rtp_list, bool) {
     _cb(std::move(rtp_list));
 }
 

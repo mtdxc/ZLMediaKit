@@ -7,7 +7,7 @@
 #include <memory>
 #include <stdint.h>
 #include "Common/config.h"
-#include "Util/List.h"
+
 namespace mediakit {
 
 /// 缓存刷新策略类
@@ -30,7 +30,7 @@ private:
 @param policy 刷新缓存策略
 @param packet_list 包缓存类型
 */
-template<typename packet, typename policy = FlushPolicy, typename packet_list = toolkit::List<std::shared_ptr<packet> > >
+template<typename packet, typename policy = FlushPolicy, typename packet_list = std::list<std::shared_ptr<packet> > >
 class PacketCache {
 public:
     PacketCache() { _cache = std::make_shared<packet_list>(); }
