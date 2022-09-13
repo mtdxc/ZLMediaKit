@@ -11,14 +11,14 @@
 #ifndef ZLMEDIAKIT_FRAME_H
 #define ZLMEDIAKIT_FRAME_H
 
+#include <map>
 #include <list>
 #include <mutex>
 #include <functional>
 #include "Buffer.hpp"
-#include "Util/RingBuffer.h"
-#include "Common/Stamp.h"
 
 namespace mediakit {
+class Stamp;
 
 typedef enum {
     TrackInvalid = -1,
@@ -30,16 +30,16 @@ typedef enum {
 } TrackType;
 
 #define CODEC_MAP(XX) \
-    XX(CodecH264,  TrackVideo, 0, "H264", PSI_STREAM_H264)          \
-    XX(CodecH265,  TrackVideo, 1, "H265", PSI_STREAM_H265)          \
-    XX(CodecAAC,   TrackAudio, 2, "mpeg4-generic", PSI_STREAM_AAC)  \
-    XX(CodecG711A, TrackAudio, 3, "PCMA", PSI_STREAM_AUDIO_G711A)   \
-    XX(CodecG711U, TrackAudio, 4, "PCMU", PSI_STREAM_AUDIO_G711U)   \
-    XX(CodecOpus,  TrackAudio, 5, "opus", PSI_STREAM_AUDIO_OPUS)    \
-    XX(CodecL16,   TrackAudio, 6, "L16", PSI_STREAM_RESERVED)       \
-    XX(CodecVP8,   TrackVideo, 7, "VP8", PSI_STREAM_VP8)            \
-    XX(CodecVP9,   TrackVideo, 8, "VP9", PSI_STREAM_VP9)            \
-    XX(CodecAV1,   TrackVideo, 9, "AV1", PSI_STREAM_AV1)
+    XX(CodecH264,  TrackVideo, 0, "H264", 0x1b)          \
+    XX(CodecH265,  TrackVideo, 1, "H265", 0x24)          \
+    XX(CodecAAC,   TrackAudio, 2, "mpeg4-generic", 0x0f)  \
+    XX(CodecG711A, TrackAudio, 3, "PCMA", 0x90)   \
+    XX(CodecG711U, TrackAudio, 4, "PCMU", 0x91)   \
+    XX(CodecOpus,  TrackAudio, 5, "opus", 0x9c)    \
+    XX(CodecL16,   TrackAudio, 6, "L16", 0)       \
+    XX(CodecVP8,   TrackVideo, 7, "VP8", 0x9d)            \
+    XX(CodecVP9,   TrackVideo, 8, "VP9", 0x9e)            \
+    XX(CodecAV1,   TrackVideo, 9, "AV1", 0x9f)
 
 typedef enum {
     CodecInvalid = -1,
@@ -110,6 +110,7 @@ public:
     using Ptr = std::shared_ptr<Frame>;
     virtual ~Frame() = default;
 
+    std::string dump() const;
     /**
      * 返回解码时间戳，单位毫秒
      */
@@ -122,7 +123,7 @@ public:
 
     /**
      * 前缀长度，譬如264前缀为0x00 00 00 01,那么前缀长度就是4
-     * aac前缀则为7个字节
+     * aac前缀则为7个字节的adts头部
      */
     virtual size_t prefixSize() const = 0;
 
@@ -183,10 +184,7 @@ public:
             packet_pool.setSize(1024);
         });
         auto ret = packet_pool.obtain2();
-        ret->_buffer.clear();
-        ret->_prefix_size = 0;
-        ret->_dts = 0;
-        ret->_pts = 0;
+        ret->clear();
         return ret;
 #else
         return std::shared_ptr<C>(new C());
@@ -202,9 +200,17 @@ public:
     bool keyFrame() const override { return false; }
     bool configFrame() const override { return false; }
 
+    void clear() {
+        _buffer.clear();
+        _prefix_size = 0;
+        _dts = _pts = 0;
+        // _codec_id = CodecInvalid;
+    }
+
 // protected:
 //   friend class toolkit::ResourcePool_l<FrameImp>;
     FrameImp() = default;
+
 public:
     CodecId _codec_id = CodecInvalid;
     uint64_t _dts = 0;
@@ -230,6 +236,8 @@ public:
     typedef std::shared_ptr<FrameInternal> Ptr;
     FrameInternal(const Frame::Ptr &parent_frame, char *ptr, size_t size, size_t prefix_size)
         : Parent(ptr, size, parent_frame->dts(), parent_frame->pts(), prefix_size) {
+        // auto copy parent frame codec_type..
+        this->_codec_id = parent_frame->getCodecId();
         _parent_frame = parent_frame;
     }
     bool cacheAble() const override { return _parent_frame->cacheAble(); }
@@ -280,7 +288,7 @@ public:
 };
 
 /**
- * 支持代理转发的帧环形缓存
+ * 帧一对多分发类..
  */
 class FrameDispatcher : public FrameWriterInterface {
 public:
@@ -340,6 +348,8 @@ private:
 
 /**
  * 通过Frame接口包装指针，方便使用者把自己的数据快速接入ZLMediaKit
+ * cacheAble返回false，只能用于函数调用，不可缓存，
+ * 需要时，可通过 Frame::getCacheAbleFrame 转成可缓存帧.
  */
 class FrameFromPtr : public Frame {
 public:
@@ -442,11 +452,7 @@ private:
 class FrameStamp : public Frame {
 public:
     using Ptr = std::shared_ptr<FrameStamp>;
-    FrameStamp(Frame::Ptr frame, Stamp &stamp, bool modify_stamp) {
-        _frame = std::move(frame);
-        //覆盖时间戳
-        stamp.revise(_frame->dts(), _frame->pts(), _dts, _pts, modify_stamp);
-    }
+    FrameStamp(Frame::Ptr frame, Stamp &stamp, bool modify_stamp);
     ~FrameStamp() override {}
 
     uint64_t dts() const override { return (uint64_t)_dts; }
@@ -499,6 +505,7 @@ public:
      */
     FrameWrapper(toolkit::Buffer::Ptr buf, uint64_t dts, uint64_t pts, size_t prefix, size_t offset, CodecId codec)
         : Parent(codec, buf->data() + offset, buf->size() - offset, dts, pts, prefix) {
+        this->_codec_id = codec;
         _buf = std::move(buf);
     }
 
@@ -512,7 +519,9 @@ private:
 };
 
 /**
- * 合并一些时间戳相同的frame
+ * @brief 合并一些时间戳相同的Frame, 并输出Buffer对象
+ * @note 本类不进行丢帧和乱序判断，得保证inputFrame顺序正确且没出现丢包
+ * 不进行丢帧和乱序判断，得保证inputFrame顺序正确且没丢包
  */
 class FrameMerger {
 public:
@@ -520,8 +529,8 @@ public:
     using Ptr = std::shared_ptr<FrameMerger>;
     enum {
         none = 0,
-        h264_prefix,
-        mp4_nal_size,
+        h264_prefix, // 00 00 00 01
+        mp4_nal_size,// 4 byte size
     };
 
     FrameMerger(int type);

@@ -15,14 +15,8 @@
 
 #include <memory>
 #include <string>
-#include "mp4-writer.h"
-#include "mov-writer.h"
-#include "mov-reader.h"
-#include "mpeg4-hevc.h"
-#include "mpeg4-avc.h"
-#include "mpeg4-aac.h"
-#include "mov-buffer.h"
-#include "mov-format.h"
+struct mp4_writer_t;
+struct mov_reader_t;
 
 namespace mediakit {
 

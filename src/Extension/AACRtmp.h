@@ -32,7 +32,7 @@ public:
      */
     void inputRtmp(const RtmpPacket::Ptr &rtmp) override;
 
-    CodecId getCodecId() const override{
+    CodecId getCodecId() const override {
         return CodecAAC;
     }
 
@@ -47,7 +47,7 @@ private:
 /**
  * aac adts转Rtmp类
  */
-class AACRtmpEncoder : public AACRtmpDecoder{
+class AACRtmpEncoder : public RtmpCodec {
 public:
     typedef std::shared_ptr<AACRtmpEncoder> Ptr;
 
@@ -69,10 +69,13 @@ public:
     /**
      * 生成config包
      */
-    void makeConfigPacket() override;
+    RtmpPacket::Ptr makeConfigPacket() override;
 
+    CodecId getCodecId() const override {
+        return CodecAAC;
+    }
 private:
-    void makeAudioConfigPkt();
+    RtmpPacket::Ptr makeAudioConfigPkt();
 
 private:
     uint8_t _audio_flv_flags;

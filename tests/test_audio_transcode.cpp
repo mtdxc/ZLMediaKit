@@ -2,7 +2,6 @@
 #include "Record/MP4Demuxer.h"
 #include "Record/MP4Muxer.h"
 #include "Extension/AAC.h"
-#include "Extension/Opus.h"
 #include "Util/logger.h"
 using namespace mediakit;
 struct TransCtx {

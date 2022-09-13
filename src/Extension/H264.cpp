@@ -11,20 +11,20 @@
 #include "H264.h"
 #include "SPSParser.h"
 #include "Util/logger.h"
+#include "base64.h"
 using namespace toolkit;
-using namespace std;
+using std::string;
 
 namespace mediakit {
 
-static bool getAVCInfo(const char *sps, size_t sps_len, int &iVideoWidth, int &iVideoHeight, float &iVideoFps) {
+static bool getAVCInfo(const char *sps, size_t sps_len, 
+    int &iVideoWidth, int &iVideoHeight, float &iVideoFps) {
     if (sps_len < 4) {
         return false;
     }
-    T_GetBitContext tGetBitBuf;
-    T_SPS tH264SpsInfo;
-    memset(&tGetBitBuf, 0, sizeof(tGetBitBuf));
-    memset(&tH264SpsInfo, 0, sizeof(tH264SpsInfo));
-    tGetBitBuf.pu8Buf = (uint8_t *)sps + 1;
+    T_SPS tH264SpsInfo = {0};
+    T_GetBitContext tGetBitBuf = { 0 };
+    tGetBitBuf.pu8Buf = (uint8_t*)sps + 1;
     tGetBitBuf.iBufSize = (int)(sps_len - 1);
     if (0 != h264DecSeqParameterSet((void *)&tGetBitBuf, &tH264SpsInfo)) {
         return false;
@@ -118,36 +118,11 @@ H264Track::H264Track(const Frame::Ptr &sps, const Frame::Ptr &pps) {
     onReady();
 }
 
-const string &H264Track::getSps() const {
-    return _sps;
-}
-
-const string &H264Track::getPps() const {
-    return _pps;
-}
-
-CodecId H264Track::getCodecId() const {
-    return CodecH264;
-}
-
-int H264Track::getVideoHeight() const {
-    return _height;
-}
-
-int H264Track::getVideoWidth() const {
-    return _width;
-}
-
-float H264Track::getVideoFps() const {
-    return _fps;
-}
-
 bool H264Track::ready() {
     return !_sps.empty() && !_pps.empty();
 }
 
 bool H264Track::inputFrame(const Frame::Ptr &frame) {
-    using H264FrameInternal = FrameInternal<H264FrameNoCacheAble>;
     int type = H264_TYPE(frame->data()[frame->prefixSize()]);
     if ((type == H264Frame::NAL_B_P || type == H264Frame::NAL_IDR) && ready()) {
         return inputFrame_l(frame);
@@ -156,6 +131,7 @@ bool H264Track::inputFrame(const Frame::Ptr &frame) {
     //非I/B/P帧情况下，split一下，防止多个帧粘合在一起
     bool ret = false;
     splitH264(frame->data(), frame->size(), frame->prefixSize(), [&](const char *ptr, size_t len, size_t prefix) {
+        using H264FrameInternal = FrameInternal<H264FrameNoCacheAble>;
         H264FrameInternal::Ptr sub_frame = std::make_shared<H264FrameInternal>(frame, (char *)ptr, len, prefix);
         if (inputFrame_l(sub_frame)) {
             ret = true;
@@ -176,35 +152,35 @@ Track::Ptr H264Track::clone() {
 }
 
 bool H264Track::inputFrame_l(const Frame::Ptr &frame) {
-    int type = H264_TYPE(frame->data()[frame->prefixSize()]);
     bool ret = true;
+    int type = H264_TYPE(frame->data()[frame->prefixSize()]);
     switch (type) {
-        case H264Frame::NAL_SPS: {
-            _sps = string(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
-            _latest_is_config_frame = true;
-            ret = VideoTrack::inputFrame(frame);
-            break;
-        }
-        case H264Frame::NAL_PPS: {
-            _pps = string(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
-            _latest_is_config_frame = true;
-            ret = VideoTrack::inputFrame(frame);
-            break;
-        }
-        default:
-            // 避免识别不出关键帧
-            if (_latest_is_config_frame && !frame->dropAble()) {
-                if (!frame->keyFrame()) {
-                    const_cast<Frame::Ptr &>(frame) = std::make_shared<FrameCacheAble>(frame, true);
-                }
+    case H264Frame::NAL_SPS: {
+        _sps = string(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
+        _latest_is_config_frame = true;
+        ret = VideoTrack::inputFrame(frame);
+        break;
+    }
+    case H264Frame::NAL_PPS: {
+        _pps = string(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
+        _latest_is_config_frame = true;
+        ret = VideoTrack::inputFrame(frame);
+        break;
+    }
+    default:
+        // 避免识别不出关键帧
+        if (_latest_is_config_frame && !frame->dropAble()) {
+            if (!frame->keyFrame()) {
+                const_cast<Frame::Ptr &>(frame) = std::make_shared<FrameCacheAble>(frame, true);
             }
-            // 判断是否是I帧, 并且如果是,那判断前面是否插入过config帧, 如果插入过就不插入了
-            if (frame->keyFrame() && !_latest_is_config_frame) {
-                insertConfigFrame(frame);
-            }
-            _latest_is_config_frame = false;
-            ret = VideoTrack::inputFrame(frame);
-            break;
+        }
+        // 判断是否是I帧, 并且如果是,那判断前面是否插入过config帧, 如果插入过就不插入了
+        if (frame->keyFrame() && !_latest_is_config_frame) {
+            insertConfigFrame(frame);
+        }
+        _latest_is_config_frame = false;
+        ret = VideoTrack::inputFrame(frame);
+        break;
     }
 
     if (_width == 0 && ready()) {
@@ -256,8 +232,8 @@ public:
         snprintf(profile, sizeof(profile), "%06X", profile_level_id);
         _printer << profile;
         _printer << "; sprop-parameter-sets=";
-        _printer << encodeBase64(strSPS) << ",";
-        _printer << encodeBase64(strPPS) << "\r\n";
+        _printer << hv::Base64Encode(strSPS) << ",";
+        _printer << hv::Base64Encode(strPPS) << "\r\n";
         _printer << "a=control:trackID=" << (int)TrackVideo << "\r\n";
     }
 

@@ -14,8 +14,6 @@
 #include "Extension/H265.h"
 #include "Extension/H264.h"
 #include "Extension/AAC.h"
-#include "Extension/G711.h"
-#include "Extension/Opus.h"
 using namespace toolkit;
 using namespace std;
 

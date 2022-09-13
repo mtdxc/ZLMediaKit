@@ -9,7 +9,7 @@
  */
 
 #include "H264Rtp.h"
-
+#include "Common/config.h"
 namespace mediakit{
 
 #if defined(_WIN32)

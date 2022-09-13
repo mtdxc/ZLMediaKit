@@ -13,7 +13,7 @@
 
 #include "Rtmp/RtmpCodec.h"
 #include "Extension/Track.h"
-#include "Util/ResourcePool.h"
+//#include "Util/ResourcePool.h"
 #include "Extension/H265.h"
 
 namespace mediakit{
@@ -40,16 +40,12 @@ public:
 
 protected:
     void onGetH265(const char *pcData, size_t iLen, uint32_t dts,uint32_t pts);
-    H265Frame::Ptr obtainFrame();
-
-protected:
-    H265Frame::Ptr _h265frame;
 };
 
 /**
  * 265 Rtmp打包类
  */
-class H265RtmpEncoder : public H265RtmpDecoder{
+class H265RtmpEncoder : public RtmpCodec {
 public:
     typedef std::shared_ptr<H265RtmpEncoder> Ptr;
 
@@ -76,10 +72,13 @@ public:
     /**
      * 生成config包
      */
-    void makeConfigPacket() override;
+    RtmpPacket::Ptr makeConfigPacket() override;
 
+    CodecId getCodecId() const override {
+        return CodecH265;
+    }
 private:
-    void makeVideoConfigPkt();
+    RtmpPacket::Ptr makeVideoConfigPkt();
 
 private:
     bool _got_config_frame = false;

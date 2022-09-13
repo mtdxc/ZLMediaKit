@@ -10,70 +10,87 @@
 
 #include "Rtmp/utils.h"
 #include "H265Rtmp.h"
-#ifdef ENABLE_MP4
-#include "mpeg4-hevc.h"
-#endif//ENABLE_MP4
+#include "Factory.h"
+#include "Util/logger.h"
 
-using namespace std;
+using std::string;
 using namespace toolkit;
 
 namespace mediakit{
 
 H265RtmpDecoder::H265RtmpDecoder() {
-    _h265frame = obtainFrame();
 }
 
-H265Frame::Ptr H265RtmpDecoder::obtainFrame() {
-    auto frame = FrameImp::create<H265Frame>();
-    frame->_prefix_size = 4;
-    return frame;
-}
-
-#ifdef ENABLE_MP4
 /**
  * 返回不带0x00 00 00 01头的sps
  * @return
  */
-static bool getH265ConfigFrame(const RtmpPacket &thiz,string &frame) {
+static bool getH265ConfigFrame(const RtmpPacket &thiz, string &frame) {
     if (thiz.getMediaType() != FLV_CODEC_H265) {
         return false;
     }
     if (!thiz.isCfgFrame()) {
         return false;
     }
-    if (thiz.buffer.size() < 6) {
+    if (thiz.buffer.size() < 28) {
         WarnL << "bad H265 cfg!";
         return false;
     }
 
-    auto extra = thiz.buffer.data() + 5;
-    auto bytes = thiz.buffer.size() - 5;
+    frame.clear();
+    const char startcode[] = { 0, 0, 0, 1 };
 
-    struct mpeg4_hevc_t hevc;
-    memset(&hevc, 0, sizeof(hevc));
-    if (mpeg4_hevc_decoder_configuration_record_load((uint8_t *) extra, bytes, &hevc) > 0) {
-        uint8_t *config = new uint8_t[bytes * 2];
-        int size = mpeg4_hevc_to_nalu(&hevc, config, bytes * 2);
-        if (size > 4) {
-            frame.assign((char *) config + 4, size - 4);
+    auto extra = (uint8_t*)thiz.buffer.data() + 5;
+    auto bytes = thiz.buffer.size() - 5;
+    auto end = extra + bytes;
+
+    uint8_t numOfArrays = extra[22];
+    uint8_t* p = extra + 23;
+    for (int i = 0; i < numOfArrays; i++)
+    {
+        if (p + 3 > end)
+            return false;
+
+        uint8_t nalutype = p[0];
+        uint16_t n = load_be16(p + 1);
+        p += 3;
+
+        for (int j = 0; j < n; j++)
+        {
+            if (p + 2 > end)
+                return false;
+
+            uint16_t k = load_be16(p);
+            if (p + 2 + k > end)
+            {
+                assert(0);
+                return false;
+            }
+
+            assert((nalutype & 0x3F) == ((p[2] >> 1) & 0x3F));
+            /*
+            hevc->nalu[hevc->numOfArrays].array_completeness = (nalutype >> 7) & 0x01;
+            hevc->nalu[hevc->numOfArrays].type = nalutype & 0x3F;
+            hevc->nalu[hevc->numOfArrays].bytes = k;
+            hevc->nalu[hevc->numOfArrays].data = dst;
+            memcpy(hevc->nalu[hevc->numOfArrays].data, p + 2, k);
+            hevc->numOfArrays++;
+            */
+            frame.append(startcode, 4);
+            frame.append((char*)p+2, k);
+            p += 2 + k;
+            // dst += k;
         }
-        delete [] config;
-        return size > 4;
     }
-    return false;
+    return true;
 }
-#endif
 
 void H265RtmpDecoder::inputRtmp(const RtmpPacket::Ptr &pkt) {
     if (pkt->isCfgFrame()) {
-#ifdef ENABLE_MP4
         string config;
-        if(getH265ConfigFrame(*pkt,config)){
-            onGetH265(config.data(), config.size(), pkt->time_stamp , pkt->time_stamp);
+        if (getH265ConfigFrame(*pkt, config) && config.size()>4) {
+            onGetH265(config.data() + 4, config.size() - 4, pkt->time_stamp , pkt->time_stamp);
         }
-#else
-        WarnL << "请开启MP4相关功能并使能\"ENABLE_MP4\",否则对H265-RTMP支持不完善";
-#endif
         return;
     }
 
@@ -81,12 +98,10 @@ void H265RtmpDecoder::inputRtmp(const RtmpPacket::Ptr &pkt) {
         auto total_len = pkt->buffer.size();
         size_t offset = 5;
         uint8_t *cts_ptr = (uint8_t *) (pkt->buffer.data() + 2);
-        int32_t cts = (((cts_ptr[0] << 16) | (cts_ptr[1] << 8) | (cts_ptr[2])) + 0xff800000) ^ 0xff800000;
+        int32_t cts = (load_be24(cts_ptr) + 0xff800000) ^ 0xff800000;
         auto pts = pkt->time_stamp + cts;
         while (offset + 4 < total_len) {
-            uint32_t frame_len;
-            memcpy(&frame_len, pkt->buffer.data() + offset, 4);
-            frame_len = ntohl(frame_len);
+            uint32_t frame_len = load_be32(pkt->buffer.data() + offset);
             offset += 4;
             if (frame_len + offset > total_len) {
                 break;
@@ -102,17 +117,18 @@ inline void H265RtmpDecoder::onGetH265(const char* pcData, size_t iLen, uint32_t
         return;
     }
 #if 1
-    _h265frame->_dts = dts;
-    _h265frame->_pts = pts;
-    _h265frame->_buffer.assign("\x00\x00\x00\x01", 4);  //添加265头
-    _h265frame->_buffer.append(pcData, iLen);
+    auto frame = FrameImp::create<H265Frame>();
+    frame->_dts = dts;
+    frame->_pts = pts;
+    frame->_buffer.assign("\x00\x00\x00\x01", 4);  //添加265头
+    frame->_prefix_size = 4;
+    frame->_buffer.append(pcData, iLen);
 
     //写入环形缓存
-    RtmpCodec::inputFrame(_h265frame);
-    _h265frame = obtainFrame();
+    RtmpCodec::inputFrame(frame);
 #else
     //防止内存拷贝，这样产生的265帧不会有0x00 00 01头
-    auto frame = std::make_shared<H265FrameNoCacheAble>((char *)pcData,iLen,dts,pts,0);
+    auto frame = std::make_shared<H265FrameNoCacheAble>((char *)pcData, iLen, dts, pts, 0);
     RtmpCodec::inputFrame(frame);
 #endif
 }
@@ -120,22 +136,23 @@ inline void H265RtmpDecoder::onGetH265(const char* pcData, size_t iLen, uint32_t
 ////////////////////////////////////////////////////////////////////////
 
 H265RtmpEncoder::H265RtmpEncoder(const Track::Ptr &track) {
-    _track = dynamic_pointer_cast<H265Track>(track);
+    _track = std::dynamic_pointer_cast<H265Track>(track);
 }
 
-void H265RtmpEncoder::makeConfigPacket(){
+RtmpPacket::Ptr H265RtmpEncoder::makeConfigPacket(){
     if (_track && _track->ready()) {
         //尝试从track中获取sps pps信息
         _sps = _track->getSps();
         _pps = _track->getPps();
         _vps = _track->getVps();
     }
-
+    RtmpPacket::Ptr ret;
     if (!_sps.empty() && !_pps.empty() && !_vps.empty()) {
         //获取到sps/pps
-        makeVideoConfigPkt();
+        ret = makeVideoConfigPkt();
         _got_config_frame = true;
     }
+    return ret;
 }
 
 void H265RtmpEncoder::flush() {
@@ -202,32 +219,23 @@ bool H265RtmpEncoder::inputFrame(const Frame::Ptr &frame) {
         }, &_rtmp_packet->buffer);
 }
 
-void H265RtmpEncoder::makeVideoConfigPkt() {
+RtmpPacket::Ptr H265RtmpEncoder::makeVideoConfigPkt() {
+    RtmpPacket::Ptr rtmpPkt;
 #ifdef ENABLE_MP4
     int8_t flags = FLV_CODEC_H265;
     flags |= (FLV_KEY_FRAME << 4);
     bool is_config = true;
-    auto rtmpPkt = RtmpPacket::create();
+    rtmpPkt = RtmpPacket::create();
     //header
     rtmpPkt->buffer.push_back(flags);
     rtmpPkt->buffer.push_back(!is_config);
     //cts
     rtmpPkt->buffer.append("\x0\x0\x0", 3);
 
-    struct mpeg4_hevc_t hevc;
-    memset(&hevc, 0, sizeof(hevc));
-    string vps_sps_pps = string("\x00\x00\x00\x01", 4) + _vps +
-                         string("\x00\x00\x00\x01", 4) + _sps +
-                         string("\x00\x00\x00\x01", 4) + _pps;
-    h265_annexbtomp4(&hevc, vps_sps_pps.data(), (int)vps_sps_pps.size(), NULL, 0, NULL, NULL);
-    uint8_t extra_data[1024];
-    int extra_data_size = mpeg4_hevc_decoder_configuration_record_save(&hevc, extra_data, sizeof(extra_data));
-    if (extra_data_size == -1) {
-        WarnL << "生成H265 extra_data 失败";
-        return;
-    }
+    Track::Ptr track = std::make_shared<H265Track>(_sps, _pps, _vps, 0, 0, 0);
+    auto extra_data = Factory::getDecodeInfo(track);
     //HEVCDecoderConfigurationRecord
-    rtmpPkt->buffer.append((char *)extra_data, extra_data_size);
+    rtmpPkt->buffer.append((char *)extra_data.data(), extra_data.size());
     rtmpPkt->body_size = rtmpPkt->buffer.size();
     rtmpPkt->chunk_id = CHUNK_VIDEO;
     rtmpPkt->stream_index = STREAM_MEDIA;
@@ -237,6 +245,7 @@ void H265RtmpEncoder::makeVideoConfigPkt() {
 #else
     WarnL << "请开启MP4相关功能并使能\"ENABLE_MP4\",否则对H265-RTMP支持不完善";
 #endif
+    return rtmpPkt;
 }
 
 }//namespace mediakit
