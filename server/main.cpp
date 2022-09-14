@@ -179,6 +179,58 @@ public:
     }
 };
 
+#ifdef WIN32
+class LogviewChannel : public LogChannel {
+public:
+	LogviewChannel(LogLevel level = LTrace) :LogChannel("LogviewChannel", level) {
+	};
+	~LogviewChannel() override = default;
+
+	void write(const Logger &logger, const LogContextPtr &ctx) override {
+		if (_level > ctx->_level) {
+			return;
+		}
+
+		static HWND hWndLogView = NULL;
+		static DWORD nLastTick = 0;
+		long nTickCount = GetTickCount();
+		//static std::mutex csLock;
+		//std::unique_lock<std::mutex> l(csLock);
+		if ((nTickCount - nLastTick) > (30 * 1000)) {
+			hWndLogView = ::FindWindowA("Coobol_LogView", NULL);
+			nLastTick = nTickCount;
+		}
+		if (hWndLogView) {
+            static const char* pLevel = "TDWE";
+			// [09-14 11:43:40.241] [3676] (janus_video_manager.cc:205): ClearVideoName return 0
+			char line[4096];
+			auto tm = getLocalTime(ctx->_tv.tv_sec);
+			int n = snprintf(line, sizeof(line), "[%02d-%02d %02d:%02d:%02d.%03d] [%d-%s] %s(%s:%d %c): %s\n",
+				1 + tm.tm_mon,
+				tm.tm_mday,
+				tm.tm_hour,
+				tm.tm_min,
+				tm.tm_sec,
+				(int)(ctx->_tv.tv_usec / 1000),
+				GetCurrentThreadId(), ctx->_thread_name.c_str(),
+				ctx->_function.c_str(),
+				ctx->_file.c_str(), ctx->_line,
+                pLevel[ctx->_level], 
+				ctx->str().c_str());
+
+			COPYDATASTRUCT Data;
+			Data.dwData = 0;
+			Data.lpData = (void*)line;
+			Data.cbData = n + 1;
+			::SendMessage(hWndLogView, WM_COPYDATA, 0, (LPARAM)&Data);
+			Data.cbData = 0;
+		} else if((nTickCount - nLastTick) > 1000) {
+            hWndLogView = ::FindWindowA("Coobol_LogView", NULL);
+			nLastTick = nTickCount;
+        }
+	}
+};
+#endif
 //全局变量，在WebApi中用于保存配置文件用
 string g_ini_file;
 
@@ -203,6 +255,9 @@ int start_main(int argc,char *argv[]) {
 
         //设置日志
         Logger::Instance().add(std::make_shared<ConsoleChannel>("ConsoleChannel", logLevel));
+#ifdef WIN32
+		Logger::Instance().add(std::make_shared<LogviewChannel>(logLevel));
+#endif
 #ifndef ANDROID
         auto fileChannel = std::make_shared<FileChannel>("FileChannel", exeDir() + "log/", logLevel);
         //日志最多保存天数
