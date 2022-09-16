@@ -73,6 +73,23 @@ public:
         return _option.hls_demand ? (_clear_cache ? true : _enabled) : true;
     }
 
+    void makeSnap(int maxSec, const std::string& dir, SnapCB cb) {
+        _hls->makeSnap(maxSec, dir, cb);
+    }
+    float duration() const {
+        return _hls->duration();
+    }
+
+    static void setMaxCache(int maxSec) {
+        auto& ini = ::toolkit::mINI::Instance();
+        float duration = ini[Hls::kSegmentDuration];
+        int totalSegNum = maxSec / duration - (int)ini[Hls::kSegmentNum] + 1;
+        int retain = ini[Hls::kSegmentRetain];
+        if (retain < totalSegNum) {
+            InfoL << "reset " << Hls::kSegmentRetain << " from " << retain << " to " << totalSegNum;
+            ini[Hls::kSegmentRetain] = totalSegNum;
+        }
+    }
 private:
     void onWrite(std::shared_ptr<toolkit::Buffer> buffer, uint64_t timestamp, bool key_pos) override {
         if (!buffer) {

@@ -12,7 +12,6 @@
 #define HLSMAKER_H
 
 #include <deque>
-#include <tuple>
 #include <string>
 #include <stdint.h>
 
@@ -47,7 +46,7 @@ public:
     /**
      * 是否保留切片文件
      */
-    bool isKeep();
+    bool isKeep() {return _seg_keep;}
 
     /**
      * 清空记录
@@ -55,7 +54,6 @@ public:
      */
     void clear();
 
-protected:
     /**
      * 创建ts切片文件回调
      * @param index 索引
@@ -70,7 +68,7 @@ protected:
     virtual void onDelSegment(uint64_t index) = 0;
 
     /**
-     * 写当前ts切片文件回调
+     * 当前ts文件写通知
      * @param data
      * @param len
      */
@@ -82,14 +80,19 @@ protected:
     virtual void onWriteHls(const std::string &data) = 0;
 
     /**
-     * 上一个 ts 切片写入完成, 可在这里进行通知处理
+     * 当前ts切片写完通知
      * @param duration_ms 上一个 ts 切片的时长, 单位为毫秒
      */
     virtual void onFlushLastSegment(uint64_t duration_ms) {};
 
     /**
-     * 关闭上个ts切片并且写入m3u8索引
+     * 关闭上个ts切片, 并更新m3u8索引
      * @param eof HLS直播是否已结束
+     * - add TsItem
+     * - delOldSegment
+     * - onFlushLastSegment
+     * - makeIndexFile(eof)
+     *   - onWriteHls
      */
     void flushLastSegment(bool eof);
 
@@ -106,22 +109,41 @@ private:
     void delOldSegment();
 
     /**
-     * 添加新的ts切片
+     * 必要时创建新的ts切片,一般在收到关键帧时调用
      * @param timestamp
+     * - flushLastSegment
+     * - onOpenSegment(_file_index++) -> _last_file_name
+     * - update _last_seg_timestamp
      */
     void addNewSegment(uint64_t timestamp);
 
-private:
+protected:
+    uint64_t current_index() const {
+        if (_file_index)
+            return _file_index - 1;
+        return 0;
+    }
+
+    // 单个切片的最大时长s(超过后条件满足就会产生新切片)
     float _seg_duration = 0;
     // 0 点播模式, > 0 live模式(只保留_seg_number个最新的segment)
     uint32_t _seg_number = 0;
+    // 不删除ts文件
     bool _seg_keep = false;
+    // 当前时间戳
     uint64_t _last_timestamp = 0;
+    // 最后切片的开始时间戳, 它减去_last_timestamp就是当前切片时长
     uint64_t _last_seg_timestamp = 0;
+    // 切片索引号，从0开始，不断+1
     uint64_t _file_index = 0;
+    // 当前切片文件名
     std::string _last_file_name;
+    struct TsItem {
+        int duration;
+        std::string filename;
+    };
     // 索引 + 文件名 列表，用于生成m3u8文件
-    std::deque<std::tuple<int,std::string> > _seg_dur_list;
+    std::deque<TsItem> _seg_dur_list;
 };
 
 }//namespace mediakit

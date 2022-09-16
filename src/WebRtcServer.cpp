@@ -20,6 +20,7 @@
 #include <iostream>
 #include "Common/config.h"
 #include "../server/WebHook.h"
+#include "Camera/CameraManager.h"
 
 using namespace std;
 using namespace mediakit;
@@ -216,10 +217,12 @@ void WebRtcServer::start(const char* cfgPath)
 
     startHttp();
     installWebHook();
+    CameraManager::Instance().Init();
 }
 
 void WebRtcServer::stop()
 {
+    CameraManager::Instance().Destroy();
     _rtsp = nullptr;
     _rtmp = nullptr;
     websocket_server_stop(&_http);
@@ -509,6 +512,11 @@ static std::string schema_from_stream(std::string& stream) {
     return schema;
 }
 
+hv::HttpService* getHttpService(){
+    static hv::HttpService http;
+    return &http;
+}
+
 void WebRtcServer::startHttp()
 {
     static WebSocketService ws;
@@ -597,10 +605,10 @@ void WebRtcServer::startHttp()
         channel->setContextPtr(nullptr);
     };
 
-    static HttpService http;
-    http.document_root = mINI::Instance()[Http::kRootPath];
-    InfoL << "www root:" << http.document_root;
-    // http.error_page = mINI::Instance()[Http::kNotFound];
+    auto http = getHttpService();
+    http->document_root = mINI::Instance()[Http::kRootPath];
+    InfoL << "www root:" << http->document_root;
+    // http->error_page = mINI::Instance()[Http::kNotFound];
     _http.port = mINI::Instance()[RTC::kHttpPort];
     _http.https_port = mINI::Instance()[RTC::kHttpsPort];
     if (_http.https_port) {
@@ -615,12 +623,17 @@ void WebRtcServer::startHttp()
             fprintf(stderr, "hssl_ctx_init failed!\n");
         }
     }
-    setupRestApi(http);
+    setupRestApi(*http);
 
-    _http.service = &http;
+    _http.service = http;
     _http.ws = &ws;
     _http.share_pools = EventLoopThreadPool::Instance().get();
     websocket_server_run(&_http, 0);
+}
+
+bool delStreamProxy(const std::string& key){
+    AutoLock lck(s_proxyMapMtx);
+    return (s_proxyMap.erase(key) == 1);
 }
 
 void addStreamProxy(const string& vhost, const string& app, const string& stream,

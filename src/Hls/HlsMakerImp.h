@@ -18,6 +18,30 @@
 #include "HlsMediaSource.h"
 
 namespace mediakit {
+typedef std::function<void (bool, std::string)> SnapCB;
+// 负责将多个TS文件合并成一个大ts文件
+struct SnapTask {
+    typedef std::shared_ptr<SnapTask> Ptr;
+    // 目的ts文件
+    std::string dstFile;
+    // 源TS文件列表
+    std::list<std::string> files;
+    // 完成回调
+	SnapCB cb;
+    /*
+    Task状态
+    0  进行中
+    >0 成功
+    <0 失败
+    */
+    int status = 0;
+    std::string error;
+    void Reset() {status = 0;}
+    // 工作函数：文件合并，并回调结果
+    void DoTask();
+    // 回调结果并设置status
+    void Notify(int code, const char* err);
+};
 
 class HlsMakerImp : public HlsMaker{
 public:
@@ -44,13 +68,20 @@ public:
      */
     HlsMediaSource::Ptr getMediaSource() const;
 
-     /**
-      * 清空缓存
-      */
-     void clearCache();
+    /**
+     * 清空缓存
+     */
+    void clearCache();
 
+    // 新建一个多少s的快照
+    void makeSnap(int maxSec, const std::string& prefix, SnapCB cb);
+    // 获取本地缓存长度
+    float duration() const { return _duration + (_last_timestamp - _last_seg_timestamp)/1000.0f; }
 protected:
-    std::string onOpenSegment(uint64_t index) override ;
+    bool lookupFile(uint64_t index, std::string& file);
+    bool parseFileName(std::string seg_path, time_t& time, int64_t* index);
+
+    std::string onOpenSegment(uint64_t index) override;
     void onDelSegment(uint64_t index) override;
     void onWriteSegment(const char *data, size_t len) override;
     void onWriteHls(const std::string &data) override;
@@ -70,7 +101,8 @@ private:
     std::shared_ptr<char> _file_buf;
     HlsMediaSource::Ptr _media_src;
     toolkit::EventPollerPtr _poller;
-    std::map<uint64_t/*index*/,std::string/*file_path*/> _segment_file_paths;
+    std::map<uint64_t/*index*/, TsItem> _segment_file_paths;
+    float _duration = 0;
 };
 
 }//namespace mediakit
