@@ -19,12 +19,24 @@ INSTANCE_IMP(CameraManager);
 // 缺省截屏时长
 const string kSnapSec = "camera.snapSec";
 const string kSnapExt = "camera.extension";
+const string kSnapPort = "camera.port";
+const string kSnapFreq = "camera.snapFreq";
+const string kSnapType = "camera.snapType";
+const string kSnapExpireDay = "camera.expireDay";
 static onceToken token([]() {
     mINI::Instance()[kSnapSec] = 15;
     mINI::Instance()[kSnapExt] = "mp4";
+    mINI::Instance()[kSnapType] = "Alarm Input";
+    mINI::Instance()[kSnapPort] = 9701;
+    mINI::Instance()[kSnapFreq] = 5;
+    mINI::Instance()[kSnapExpireDay] = 7;
 });
 GET_CONFIG(int, gSnapSec, kSnapSec);
+GET_CONFIG(int, gSnapFreq, kSnapFreq);
+GET_CONFIG(int, gSnapPort, kSnapPort);
+GET_CONFIG(int, gSnapExpireDay, kSnapExpireDay);
 GET_CONFIG(std::string, gSnapExt, kSnapExt);
+GET_CONFIG(std::string, gSnapType, kSnapType);
 
 std::shared_ptr<sqlite3pp::database> getDB() {
     static std::string dbPath = exeDir() + "zlm.db";
@@ -43,6 +55,7 @@ bool Camera::ToJson(hv::Json& val) const
     val["url"] = this->url;
     val["record_url"] = this->record_url;
     val["desc"] = this->desc;
+    val["location"] = this->location;
     return true;
 }
 
@@ -52,13 +65,14 @@ bool Camera::FromJson(hv::Json& val)
     url = val["url"].get<std::string>();
     record_url = val["record_url"].get<std::string>();
     desc = val["desc"].get<std::string>();
+    location = val["location"].get<std::string>();
     return stream.length() && url.length();
 }
 
 std::string Camera::dump() const
 {
     toolkit::_StrPrinter sp;
-    sp << desc << "(" << stream << ") url:" << url << ", nvr:" << record_url;
+    sp << desc << "(" << stream << ") url:" << url << ", nvr:" << record_url << ", loc=" << location;
     return sp;
 }
 
@@ -97,7 +111,7 @@ std::string Camera::snapUrl(std::string path) const
     return path;
 }
 
-void Camera::makeSnap(time_t time, int snapSec, std::function<void (bool, std::string)> cb) {
+void Camera::makeSnap(time_t time, int snapSec, onSnap cb) {
     std::string path = snapPath(time, snapSec);
     std::string dstFile = path;
     if (File::fileExist(dstFile.c_str())) {
@@ -121,7 +135,7 @@ void Camera::makeSnap(time_t time, int snapSec, std::function<void (bool, std::s
     std::string tmpFile = path + "_";
     //InfoL << stream << " path " << dstFile << " from url " << url;
     std::string stream = this->stream;
-    auto snapCb = [dstFile, tmpFile, cb, stream, time](bool result, const string &err_msg) {
+    auto snapCb = [dstFile, tmpFile, cb, stream, time](time_t result, const string &err_msg) {
         if (!result) {
             //生成截图失败，可能残留空文件
             File::delete_file(tmpFile.data());
@@ -150,31 +164,37 @@ void Camera::makeSnap(time_t time, int snapSec, std::function<void (bool, std::s
 void Camera::setSnapPath(time_t key, std::string& path)
 {
     AutoLock l(_snap_lock);
-    if (_snaps.count(key)) {
-        MediaInfo mi(stream);
-        path = snapUrl(path);
-        if (path.length() && _snaps[key].url != path) {
-            InfoL << stream << " setSnapPath " << key << " path " << path;
-            _snaps[key].url = path;
-            _snaps[key].update();
-        }
-        if (path.length()) {
-            auto it = _snaps_tasks.find(key);
-            if (it != _snaps_tasks.end()) {
-                it->second->FireCbs(true, path);
-                _snaps_tasks.erase(it);
-            }
+    MediaInfo mi(stream);
+    path = snapUrl(path);
+    if (path.length()) {
+        InfoL << stream << " setSnapPath " << key << " path " << path;
+        CameraSnap snap;
+        snap.stream = stream;
+        snap.time = key;
+        snap.url = path;
+        snap.update();
+
+        auto it = _snaps_tasks.find(key);
+        if (it != _snaps_tasks.end()) {
+            it->second->FireCbs(key, path);
+            _snaps_tasks.erase(it);
         }
     }
 }
 
-time_t Camera::addSnap(time_t time)
+time_t Camera::addSnap(time_t time, int snapSec, onSnap cb)
 {
+    if (!cb) cb = [](time_t t, std::string msg) {
+        InfoL << "addSnap " << t << " result " << msg;
+    };
+
+    bool current = false;
     if (!time) {
         time = ::time(nullptr);
+        current = true;
         // 限频
-        if (last_snap && time - last_snap < 5) {
-            InfoL << "skip snap for freq limit";
+        if (last_snap && gSnapFreq > 0 && time - last_snap < gSnapFreq) {
+            cb(0, "skip snap for freq limit");
             return 0;
         }
         last_snap = time;
@@ -183,44 +203,96 @@ time_t Camera::addSnap(time_t time)
     CameraSnap snap;
     snap.time = time;
     snap.stream = stream;
-    if (snap.insert()) {
-        AutoLock l(_snap_lock);
-        _snaps[time] = snap;
+    if (!snap.insert()) {
+        cb(0, "db insert error");
+        return 0;
+    }
+
+    if (current) {
+        std::string snapPath = this->snapPath(time, snapSec);
+        std::string key = stream;
+        MediaInfo mi(stream);
+        MediaSource::Ptr source = MediaSource::find(HLS_SCHEMA, mi._vhost, mi._app, mi._streamid);
+        if (source) {
+            // get record from memory
+            HlsMediaSource::Ptr hls = std::dynamic_pointer_cast<HlsMediaSource>(source);
+            HlsRecorder::Ptr record = std::dynamic_pointer_cast<HlsRecorder>(hls->getListener().lock());
+            if (record && record->duration() >= snapSec) {
+                File::create_path(snapPath.data(), 0x777);
+                std::string tmpPath = snapPath + "_";
+                record->makeSnap(snapSec, tmpPath, [cb, key, time, tmpPath, snapPath](bool result, std::string msg) {
+                    if (result) {
+                        File::delete_file(snapPath.data());
+                        rename(tmpPath.data(), snapPath.data());
+                        msg = snapPath;
+                        if (auto cam = CameraManager::Instance().GetCamera(key))
+                            cam->setSnapPath(time, msg);
+                    }
+                    else {
+                        File::delete_file(tmpPath.data());
+                    }
+                    cb(result?time:0, msg);
+                });
+                return time;
+            }
+        }
+    }
+
+    if (record_url.length()) {
+        // nvr预览接口获取不到实时流，得加延迟才能调用, 但此时获取的又不是我们要的视频...
+        // int nvrDelay = 120;
+        makeSnap(time, snapSec);
+        cb(time, "");
     }
     else {
-        time = 0;
+        cb(0, "snap without nvr");
     }
     return time;
 }
 
 bool Camera::delSnap(time_t time)
 {
-    bool ret = false;
-    {
+    auto db = getDB();
+    sqlite3pp::command cmd(*db, "delete from camera_snap where stream=? and time=?");
+    cmd.binder() << stream << (long long int)time;
+    bool ret = SQLITE_OK == cmd.execute();
+    if (ret) {
         AutoLock l(_snap_lock);
-        ret = _snaps.erase(time);
         _snaps_tasks.erase(time);
     }
-    if (ret) {
-        auto db = getDB();
-        sqlite3pp::command cmd(*db, "delete from camera_snap where stream=? and time=?");
-        cmd.binder() << stream << (long long int)time;
-        ret = SQLITE_OK == cmd.execute();
-        //@todo delete files
-    }
+    //@todo delete files
     return ret;
 }
 
-void Camera::loadSnaps()
+void Camera::loadSnapTasks()
 {
     AutoLock l(_snap_lock);
-    _snaps.clear();
     _snaps_tasks.clear();
-    time_t exp = ::time(NULL) + 30;
+    time_t exp = 0;
+    if(gSnapExpireDay >0)
+        exp = ::time(NULL) - 3600 * 24 * gSnapExpireDay;
     auto db = getDB();
-    sqlite3pp::query qry(*db, "select stream, time, url from camera_snap where stream=?");
+    sqlite3pp::query qry(*db, "select stream, time from camera_snap where stream=? and time>? and url=''");
     qry.bind(1, stream, sqlite3pp::copy);
-    
+    qry.bind(2, (long long int)exp);
+    for (auto it : qry) {
+        CameraSnap snap;
+        snap.stream = it.get<std::string>(0);
+        snap.time = it.get<long long int>(1);
+        makeSnap(snap.time, gSnapSec);
+    }
+    if (_snaps_tasks.size()) {
+        InfoL << stream << " load " << _snaps_tasks.size() << " from db";
+    }
+}
+
+int Camera::querySnaps(time_t begin, time_t end, std::list<CameraSnap>& snaps){
+    snaps.clear();
+    auto db = getDB();
+    sqlite3pp::query qry(*db, "select stream, time, url from camera_snap where stream=? and time>? and time<?");
+    qry.bind(1, stream, sqlite3pp::copy);
+    qry.bind(2, (long long int)begin);
+    qry.bind(3, (long long int)end);
     for (auto it : qry) {
         CameraSnap snap;
         snap.stream = it.get<std::string>(0);
@@ -230,20 +302,17 @@ void Camera::loadSnaps()
             snap.url = url;
         else
             snap.url.clear();
-        _snaps[snap.time] = snap;
-        // if (snap.url.empty())
-            makeSnap(snap.time, gSnapSec);
+        snaps.push_back(snap);
     }
-    if (_snaps.size()) {
-        InfoL << stream << " load " << _snaps.size() << " from db, " << _snaps_tasks.size() << " unloaded";
-    }
+    InfoL << stream << " querySnaps " << begin << "->" << end << " return " << snaps.size() << " items";
+    return snaps.size();
 }
 
 bool Camera::insert() const 
 {
     auto db = getDB();
-    sqlite3pp::command cmd(*db, "insert into camera(id, url, record_url, desc) VALUES (?,?,?,?)");
-    cmd.binder() << this->stream << this->url << this->record_url << this->desc;
+    sqlite3pp::command cmd(*db, "insert into camera(id, url, record_url, desc, location) VALUES (?,?,?,?,?)");
+    cmd.binder() << this->stream << this->url << this->record_url << this->desc << this->location;
     int ret = cmd.execute();
     InfoL << "insert camera " << dump() << " return " << ret;
     return SQLITE_OK == ret;
@@ -252,8 +321,8 @@ bool Camera::insert() const
 bool Camera::update() const
 {
     auto db = getDB();
-    sqlite3pp::command update(*db, "update camera set url=?, record_url=?, desc=? where id=?");
-    update.binder() << this->url << this->record_url << this->desc << this->stream;
+    sqlite3pp::command update(*db, "update camera set url=?, record_url=?, desc=?, location=? where id=?");
+    update.binder() << this->url << this->record_url << this->desc << location << this->stream;
     int ret = update.execute();
     InfoL << "update camera " << dump() << " return " << ret;
     return SQLITE_OK == ret;
@@ -264,13 +333,14 @@ bool Camera::update() const
 void CameraManager::loadCameras()
 {
     _cameras.clear();
+    auto db = getDB();
     try {
-        auto db = getDB();
         int dberr = db->execute("create table if not exists camera( \
             id      TEXT NOT NULL, \
             url	    TEXT NOT NULL, \
             record_url  TEXT, \
             desc    TEXT, \
+            location TEXT, \
             PRIMARY KEY(id))");
         if (dberr != SQLITE_OK) {
             WarnL << "create table camera error: " << db->error_msg();
@@ -288,20 +358,26 @@ void CameraManager::loadCameras()
             return;
         }
 
-        sqlite3pp::query qry(*db, "select id, url, record_url, desc from camera");
+        sqlite3pp::query qry(*db, "select id, url, record_url, desc, location from camera");
         for (auto it : qry) {
             Camera::Ptr cam = std::make_shared<Camera>();
             cam->stream = it.get<std::string>(0);
             cam->url = it.get<std::string>(1);
             cam->record_url = it.get<std::string>(2);
             cam->desc = it.get<std::string>(3);
+            const char* loc = it.get<const char*>(4);
+            if(loc && loc[0])
+              cam->location = loc;
             InfoL << "loadCamera " << cam->dump();
-            cam->loadSnaps();
+            cam->loadSnapTasks();
             AddCamera(cam, false);
         }
     }
     catch (std::exception& e) {
         WarnL << "loadCameras sql exception:" << e.what();
+        if (strstr(e.what(), "location")) {
+            db->execute("alter table camera ADD location text");
+        }
     }
 }
 
@@ -320,6 +396,14 @@ void CameraManager::Init() {
     mediakit::HlsRecorder::setMaxCache(gSnapSec);
 
     loadCameras();
+    if (gSnapPort > 0) {
+      _tcp = std::make_shared<hv::TcpServer>();
+      _tcp->onMessage = [](const hv::SocketChannelPtr&, hv::Buffer* buffer){
+        
+      };
+      _tcp->createsocket(gSnapPort);
+      _tcp->start();
+    }
 
     GET_CONFIG(std::string, api_secret, "api.secret");
     auto http = getHttpService();
@@ -367,10 +451,22 @@ void CameraManager::Init() {
         if (!cam) {
             throw SockException(Err_other, "can not find the camera");
         }
-		hv::Json val;
-        for (auto it : cam->_snaps) {
+        time_t start = time(NULL);
+        auto arg = req->GetString("start");
+        if (arg.length()) {
+            start = std::stoi(arg);
+        }
+        time_t end = start + 24 * 3600;
+        arg = arg = req->GetString("end");;
+        if (arg.length()) {
+            end = std::stoi(arg);
+        }
+        std::list<CameraSnap> snaps;
+        cam->querySnaps(start, end, snaps);
+        hv::Json val;
+        for (auto it : snaps) {
             hv::Json snap;
-            it.second.ToJson(snap);
+            it.ToJson(snap);
             val["data"].push_back(snap);
         }
 		return resp->Json(val);
@@ -388,66 +484,25 @@ void CameraManager::Init() {
 			throw SockException(Err_other, "can not find the camera");
 		}
 
-        time_t time = cam->addSnap(0);
-        if (!time) {
-			throw SockException(Err_other, "camera addSnap error");
-        }
-
-        auto cb = [writer, time](bool result, std::string msg) {
+        auto cb = [writer](time_t result, std::string msg) {
             hv::Json val;
-            val["result"] = result;
-            if(result){
+            if (result) {
+                val["result"] = true;
                 val["code"] = API::Success;
                 val["msg"] = "success";
                 val["data"] = msg;
-                val["time"] = (uint64_t)time;
+                val["time"] = (uint64_t)result;
             }
             else{
+                val["result"] = false;
                 val["code"] = API::OtherFailed;
                 val["msg"] = msg;
             }
 			writer->End(val.dump());
         };
 
-        int snapSec = gSnapSec;
-        std::string snapPath = cam->snapPath(time, snapSec);
-        MediaInfo mi(cam->stream);
-        MediaSource::Ptr source = MediaSource::find(HLS_SCHEMA, mi._vhost, mi._app, mi._streamid);
-        if (source) {
-            // get record from memory
-            HlsMediaSource::Ptr hls = std::dynamic_pointer_cast<HlsMediaSource>(source);
-            HlsRecorder::Ptr record = std::dynamic_pointer_cast<HlsRecorder>(hls->getListener().lock());
-            if (record && record->duration() >= snapSec) {
-                File::create_path(snapPath.data(), 0x777);
-                std::string tmpPath = snapPath + "_";
-                record->makeSnap(snapSec, tmpPath, [cb, key, time, tmpPath, snapPath] (bool result, std::string msg) {
-                    if (result) {
-                        File::delete_file(snapPath.data());
-                        rename(tmpPath.data(), snapPath.data());
-                        msg = snapPath;
-                        auto cam = CameraManager::Instance().GetCamera(key);
-                        if(cam)
-                            cam->setSnapPath(time, msg);
-                    }
-                    else {
-                        File::delete_file(tmpPath.data());
-                    }
-                    cb(result, msg);
-                });
-                return 0;
-            }
-        }
-
-        if (cam->record_url.length()) {
-            // nvr预览接口获取不到实时流，得加延迟才能调用, 但此时获取的又不是我们要的视频...
-            // int nvrDelay = 120;
-            cam->makeSnap(time, snapSec);
-            cb(true, "");
-        }
-        else{
-            cb(false, "unsupported method");
-        }
-		return 0;
+        cam->addSnap(0, gSnapSec, cb);
+        return 0;
     });
 
 	http->Any("/index/api/dumpCameraSnap", [](const HttpContextPtr& ctx) -> int {
@@ -462,45 +517,38 @@ void CameraManager::Init() {
 		}
 
         time_t time = req->GetInt("time");
+        /*
         if (!cam->hasSnap(time)) {
             bool add = req->GetBool("add");
             if (!add) {
 				throw SockException(Err_other, "no snap");
             }
-            time = cam->addSnap(time);
-            if(!time)
-				throw SockException(Err_other, "add snap error");
         }
+        */
 
-        auto cb = [writer, key, time](bool result, std::string msg) {
+        auto cb = [writer, key, time](time_t result, std::string msg) {
             hv::Json val;
-            val["result"] = result;
             if (result) {
+                val["result"] = true;
                 val["code"] = API::Success;
                 val["msg"] = "success";
                 val["data"] = msg;
                 val["time"] = (int64_t)time;
             }
             else {
+                val["result"] = false;
                 val["code"] = API::OtherFailed;
                 val["msg"] = msg;
             }
 			writer->End(val.dump());
         };
 
-        if (cam->record_url.empty()) {
-            InfoL << key << " dumpCameraSnap without nvr ***";
-            cb(true, "");
-            return 0;
-        }
-
         int snapSec = gSnapSec;
         auto dur = req->GetString("duration");
         if (dur.length()) {
             snapSec = std::stoi(dur);
         }
-        cam->makeSnap(time, snapSec, cb);
-		return 0;
+        cam->addSnap(time, snapSec, cb);
         return 0;
     });
 
@@ -533,6 +581,7 @@ void CameraManager::Init() {
 		cam->url = req->GetString("url");
         cam->record_url = req->GetString("record_url");
         cam->desc = req->GetString("desc");
+        cam->location = req->GetString("location");
 
         bool ret = CameraManager::Instance().AddCamera(cam);
 		hv::Json val;
@@ -572,10 +621,24 @@ void CameraManager::Init() {
 void CameraManager::Destroy()
 {
     _timer = nullptr;
+    _tcp = nullptr;
     if (hook_tag) {
         NoticeCenter::Instance().delListener(&hook_tag);
         hook_tag = nullptr;
     }
+}
+
+Camera::Ptr CameraManager::findCamera(const std::string& name)
+{
+	Camera::Ptr ret;
+	AutoLock l(_mutex);
+	for (auto it : _cameras) {
+		if (it.second->desc == name) {
+			ret = it.second;
+			break;
+		}
+	}
+	return ret;
 }
 
 Camera::Ptr CameraManager::GetCamera(const std::string& key) {

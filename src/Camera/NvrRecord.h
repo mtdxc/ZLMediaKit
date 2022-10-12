@@ -43,7 +43,7 @@ public:
 class NvrRecord : public FrameWriterInterface,
     public std::enable_shared_from_this<NvrRecord> {
 public:
-    using onSnap = std::function<void(bool success, const std::string &err_msg)>;
+    using onSnap = std::function<void(time_t result, const std::string &err_msg)>;
     // 将url的文件存放到path中，最大长度为maxSec
 	NvrRecord(std::string url, std::string path, int maxSec, onSnap cb);
     ~NvrRecord();
@@ -56,7 +56,7 @@ public:
     }
 	
     void addCbs(onSnap cb) { cbs_.push_back(cb); }
-    void FireCbs(bool val, std::string path) {
+    void FireCbs(time_t val, std::string path) {
         for (auto cb : cbs_) {
             cb(val, path);
         }

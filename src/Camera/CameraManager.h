@@ -7,6 +7,7 @@
 #include "json.hpp"
 #include "toolkit.h"
 #include "NvrRecord.h"
+#include "TcpServer.h"
 
 struct CameraSnap {
     std::string stream;
@@ -28,6 +29,7 @@ struct CameraSnap {
 
 struct Camera {
     typedef std::shared_ptr<Camera> Ptr;
+    using onSnap = mediakit::NvrRecord::onSnap;
     // 发布流id
     std::string stream;
     /*
@@ -48,6 +50,8 @@ struct Camera {
     std::string record_url;
     // 摄像头描述
     std::string desc;
+    // 场馆
+    std::string location;
 
     bool ToJson(nlohmann::json& val) const;
     bool FromJson(nlohmann::json& val);
@@ -59,11 +63,10 @@ struct Camera {
     bool update() const;
     bool insert() const;
 
-    time_t addSnap(time_t time);
+    time_t addSnap(time_t time, int duration, onSnap cb);
     bool delSnap(time_t time);
-    bool hasSnap(time_t key) const { return _snaps.count(key); }
-    void loadSnaps();
-
+    void loadSnapTasks();
+    int querySnaps(time_t begin, time_t end, std::list<CameraSnap>& snaps);
     std::string snapPath(time_t time, int sec) const;
     std::string snapUrl(std::string path) const;
     void setSnapPath(time_t key, std::string &path);
@@ -71,11 +74,9 @@ struct Camera {
     void makeSnap(
         time_t time,   ///< 时间
         int duration, ///< 时长
-        std::function<void (bool, std::string)> cb = nullptr ///< 完成回调
+        onSnap cb = nullptr ///< 完成回调
     );
 
-    // 快照列表
-    std::map<time_t, CameraSnap> _snaps;
 protected:
     // 快照拉去任务列表
     std::map<time_t, std::shared_ptr<mediakit::NvrRecord>> _snaps_tasks;
@@ -91,6 +92,7 @@ class CameraManager
     std::recursive_mutex _mutex;
     std::map<std::string, Camera::Ptr> _cameras;
     std::shared_ptr<toolkit::Timer> _timer;
+    std::shared_ptr<hv::TcpServer> _tcp;
     void loadSnaps();
 public:
     static CameraManager &Instance();
@@ -100,7 +102,7 @@ public:
     void Destroy();
 
     void loadCameras();
-
+    Camera::Ptr findCamera(const std::string& name);
     Camera::Ptr GetCamera(const std::string& key);
     bool AddCamera(Camera::Ptr cam, bool saveDB = true);
     bool DelCamera(const std::string& key);
