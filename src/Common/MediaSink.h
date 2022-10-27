@@ -63,12 +63,19 @@ public:
  
  * [AUTO-TRANSLATED:aa154f71]
  */
-class MuteAudioMaker : public FrameDispatcher {
+class MuteAudioMaker : public FrameDispatcher, public CodecInfo {
 public:
     using Ptr = std::shared_ptr<MuteAudioMaker>;
-    bool inputFrame(const Frame::Ptr &frame) override;
 
+    MuteAudioMaker(CodecId codec = CodecAAC);
+    ~MuteAudioMaker() override = default;
+
+    bool inputFrame(const Frame::Ptr &frame) override;
+    Frame::Ptr makeSlienceFrame(int64_t dts);
+    CodecId getCodecId() const override { return _codec; }
 private:
+    CodecId _codec;
+    int _frame_ms = 0;
     int _track_index = -1;
     uint64_t _audio_idx = 0;
 };
@@ -243,7 +250,7 @@ private:
     bool addMuteAudioTrack();
 
 private:
-    bool _audio_add = false;
+    CodecId _audio_codec = CodecInvalid;
     bool _have_video = false;
     bool _enable_audio = true;
     bool _only_audio = false;
