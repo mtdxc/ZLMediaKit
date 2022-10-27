@@ -22,7 +22,9 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "StunPacket.hpp"
 #include <cstdio>  // std::snprintf()
 #include <cstring> // std::memcmp(), std::memcpy()
-
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
 namespace RTC
 {
     static const uint32_t crc32Table[] =

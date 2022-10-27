@@ -13,11 +13,9 @@
 #define ZLMEDIAKIT_WEBRTCSESSION_H
 
 #include "Network/Session.h"
-#include "IceServer.hpp"
-#include "WebRtcTransport.h"
-
+using namespace toolkit;
 namespace mediakit {
-
+class WebRtcTransportImp;
 class WebRtcSession : public UdpSession {
 public:
     WebRtcSession(const Socket::Ptr &sock);

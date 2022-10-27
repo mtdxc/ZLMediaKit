@@ -35,17 +35,10 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <netinet/tcp.h>
 #endif // defined(_WIN32)
 
-#include <algorithm>// std::transform(), std::find(), std::min(), std::max()
 #include <cinttypes>// PRIu64, etc
 #include <cmath>
 #include <cstddef>// size_t
 #include <cstdint>// uint8_t, etc
-#include <cstring>// std::memcmp(), std::memcpy()
-#include <memory>
-#include <openssl/bio.h>
-#include <openssl/ssl.h>
-#include <openssl/x509.h>
-#include <string>
 
 namespace Utils {
 

@@ -10,12 +10,14 @@
 
 #include "WebRtcSession.h"
 #include "Util/util.h"
+#include "IceServer.hpp"
+#include "WebRtcTransport.h"
 
-using namespace std;
+using namespace toolkit;
 
 namespace mediakit {
 
-static string getUserName(const Buffer::Ptr &buffer) {
+static std::string getUserName(const Buffer::Ptr &buffer) {
     auto buf = buffer->data();
     auto len = buffer->size();
     if (!RTC::StunPacket::IsStun((const uint8_t *) buf, len)) {

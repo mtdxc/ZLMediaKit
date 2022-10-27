@@ -37,6 +37,7 @@ static std::shared_ptr<RtpServer> rtpServer;
 
 #ifdef ENABLE_WEBRTC
 #include "../webrtc/WebRtcSession.h"
+#include "../webrtc/WebRtcTransport.h"
 static std::shared_ptr<UdpServer> rtcServer;
 #endif
 
