@@ -19,6 +19,7 @@
 #include "Network/UdpServer.h"
 #include "Poller/EventPoller.h"
 #include "Common/config.h"
+#include "Common/RedisClient.hpp"
 #include "Rtsp/RtspSession.h"
 #include "Rtmp/RtmpSession.h"
 #include "Shell/ShellSession.h"
@@ -69,6 +70,17 @@ onceToken token1([](){
     mINI::Instance()[kPort] = 9000;
 },nullptr);
 } //namespace Shell
+
+////////////SHELL配置///////////
+namespace Redis {
+#define REDIS_FIELD "redis."
+const string kPort = REDIS_FIELD"port";
+const string kHost = REDIS_FIELD"host";
+onceToken token1([](){
+    mINI::Instance()[kPort] = 6379;
+    mINI::Instance()[kHost] = "127.0.0.1";
+},nullptr);
+} //namespace Redis
 
 ////////////RTSP服务器配置///////////
 namespace Rtsp {
@@ -306,9 +318,13 @@ int start_main(int argc,char *argv[]) {
         uint16_t httpPort = mINI::Instance()[Http::kPort];
         uint16_t httpsPort = mINI::Instance()[Http::kSSLPort];
         uint16_t rtpPort = mINI::Instance()[RtpProxy::kPort];
-
+        uint16_t redisPort = mINI::Instance()[Redis::kPort];
         //设置poller线程数,该函数必须在使用ZLToolKit网络相关对象之前调用才能生效
         EventPollerPool::setPoolSize(threads);
+        if (redisPort) {
+            std::string redisHost = mINI::Instance()[Redis::kHost];
+            RedisClient::ClassInit(redisHost, redisPort);
+        }
 
         //简单的telnet服务器，可用于服务器调试，但是不能使用23端口，否则telnet上了莫名其妙的现象
         //测试方法:telnet 127.0.0.1 9000
@@ -438,6 +454,7 @@ int start_main(int argc,char *argv[]) {
     }
     unInstallWebApi();
     unInstallWebHook();
+    RedisClient::ClassDestory();
     //休眠1秒再退出，防止资源释放顺序错误
     InfoL << "程序退出中,请等待...";
     sleep(1);

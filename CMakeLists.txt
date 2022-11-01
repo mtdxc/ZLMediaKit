@@ -396,6 +396,9 @@ if(X264_FOUND AND ENABLE_X264)
   update_cached_list(MK_LINK_LIBRARIES ${X264_LIBRARIES})
 endif()
 
+add_subdirectory(3rdpart/hiredis)
+update_cached_list(MK_LINK_LIBRARIES hiredis::hiredis_static)
+
 # 查找 faac 是否安装
 find_package(FAAC QUIET)
 if(FAAC_FOUND AND ENABLE_FAAC)

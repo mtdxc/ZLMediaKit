@@ -10,3 +10,6 @@
 [submodule "3rdpart/libsrtp"]
 	path = 3rdpart/libsrtp
 	url = https://github.com/cisco/libsrtp.git
+[submodule "3rdpart/hiredis"]
+	path = 3rdpart/hiredis
+	url = https://github.com/redis/hiredis.git
