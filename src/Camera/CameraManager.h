@@ -52,11 +52,12 @@ struct Camera {
     std::string desc;
     // 场馆
     std::string location;
+    std::string password;
 
     bool ToJson(nlohmann::json& val) const;
     bool FromJson(nlohmann::json& val);
     std::string dump() const;
-
+    bool setId(const std::string& id);
     bool startProxy() const;
     bool stopProxy() const;
 
@@ -93,7 +94,9 @@ class CameraManager
     std::map<std::string, Camera::Ptr> _cameras;
     std::shared_ptr<toolkit::Timer> _timer;
     std::shared_ptr<hv::TcpServer> _tcp;
+    std::string gApiUrl, gApiToken;
     void loadSnaps();
+    void createTable();
 public:
     static CameraManager &Instance();
     CameraManager() = default;
@@ -101,7 +104,10 @@ public:
     void Init();
     void Destroy();
 
-    void loadCameras();
+    void loadDbCamera();
+    void loadApiCamera();
+    void setSnapPath(std::string stream, time_t time, std::string &path);
+
     Camera::Ptr findCamera(const std::string& name);
     Camera::Ptr GetCamera(const std::string& key);
     bool AddCamera(Camera::Ptr cam, bool saveDB = true);
