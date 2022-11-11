@@ -29,7 +29,7 @@ namespace Hook {
 extern const std::string kTimeoutSec;
 }//namespace Hook
 
-void installWebHook();
+void installWebHook(const std::string &prefix);
 void unInstallWebHook();
 /**
  * 触发http hook请求

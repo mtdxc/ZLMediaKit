@@ -17,6 +17,8 @@
 #include "Rtmp/RtmpPlayer.h"
 #include "Rtsp/RtspPlayer.h"
 
+#include "Common/RedisClient.hpp"
+
 using namespace toolkit;
 using namespace std;
 
@@ -35,6 +37,31 @@ PlayerProxy::PlayerProxy(const string &vhost, const string &app, const string &s
     _retry_count = retry_count;
     _on_close = [](const SockException &) {};
     (*this)[Client::kWaitTrackReady] = false;
+    if (auto redis = RedisClient::Instance()) {
+        _redis_key = vhost + "/" + app + "/" + stream_id;
+        // 当切换Url时切换proxy
+        redis->subscribe(_redis_key, [this](const std::string& msg) {
+            // url地址相同, 略过重连
+            if (msg == _pull_url) return ;
+            SockException se(Err_other, "change src");
+            // safeShutDown(se);
+            // 触发短线重连
+            _on_shutdown(se);
+            play_l(msg);
+        });
+    }
+}
+
+PlayerProxy::~PlayerProxy() {
+    _timer.reset();
+    // 避免析构时, 忘记回调api请求
+     if(_on_play) {
+        _on_play(SockException(Err_shutdown, "player proxy close"));
+        _on_play = nullptr;
+    }
+    if (auto redis = RedisClient::Instance()) {
+        redis->unsubscribe(_redis_key);
+    }
 }
 
 void PlayerProxy::setPlayCallbackOnce(const function<void(const SockException &ex)> &cb) {
@@ -149,23 +176,23 @@ void PlayerProxy::setDirectProxy() {
     }
 }
 
-PlayerProxy::~PlayerProxy() {
-    _timer.reset();
-    // 避免析构时, 忘记回调api请求
-     if(_on_play) {
-        _on_play(SockException(Err_shutdown, "player proxy close"));
-        _on_play = nullptr;
-    }
-}
 
 void PlayerProxy::rePlay(const string &strUrl, int iFailedCnt) {
     auto iDelay = MAX(2 * 1000, MIN(iFailedCnt * 3000, 60 * 1000));
     weak_ptr<PlayerProxy> weakSelf = shared_from_this();
     _timer = std::make_shared<Timer>(iDelay / 1000.0f, [weakSelf, strUrl, iFailedCnt]() {
         //播放失败次数越多，则延时越长
-        if (auto strongPlayer = weakSelf.lock()) {
+        if (auto strongSelf = weakSelf.lock()) {
             WarnL << "重试播放[" << iFailedCnt << "]:" << strUrl;
-            strongPlayer->play_l(strUrl);
+            if (auto redis = RedisClient::Instance()) {
+                // 每次都从redis中获取最新的url
+                redis->command([strongSelf](redisReply* r) {
+                    std::string url = ReplyToString(r);
+                    strongSelf->play_l(url);
+                }, "get %s", strongSelf->_redis_key.c_str());
+            } else {
+                strongSelf->play_l(strUrl);
+            }
         }
         return false;
     }, getPoller());

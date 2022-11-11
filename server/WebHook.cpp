@@ -18,6 +18,7 @@
 #include "Network/Session.h"
 #include "Rtsp/RtspSession.h"
 #include "Http/HttpSession.h"
+#include "Common/RedisClient.hpp"
 #include "WebHook.h"
 #include "WebApi.h"
 
@@ -49,6 +50,7 @@ const string kOnSendRtpStopped = HOOK_FIELD"on_send_rtp_stopped";
 const string kOnRtpServerTimeout = HOOK_FIELD"on_rtp_server_timeout";
 const string kAdminParams = HOOK_FIELD"admin_params";
 const string kAliveInterval = HOOK_FIELD"alive_interval";
+const string kStreamInterval = HOOK_FIELD"stream_interval";
 const string kRetry = HOOK_FIELD"retry";
 const string kRetryDelay = HOOK_FIELD"retry_delay";
 
@@ -74,6 +76,7 @@ onceToken token([](){
     mINI::Instance()[kOnRtpServerTimeout] = "";
     mINI::Instance()[kAdminParams] = "secret=035c73f7-bb6b-4889-a715-d9eb2d1925cc";
     mINI::Instance()[kAliveInterval] = 30.0;
+    mINI::Instance()[kStreamInterval] = 30;
     mINI::Instance()[kRetry] = 1;
     mINI::Instance()[kRetryDelay] = 3.0;
 },nullptr);
@@ -309,14 +312,61 @@ static mINI jsonToMini(const Value &obj) {
     return ret;
 }
 
-void installWebHook(){
+// 流发布前缀，用于级联
+std::string stream_prefix;
+// 本服务器发布流列表(shortUrl)
+std::set<std::string> stream_set;
+// 流采用定时器周期刷新其生存期
+static Timer::Ptr g_stream_timer;
+
+void installWebHook(const std::string &prefix) {
     GET_CONFIG(bool,hook_enable,Hook::kEnable);
     GET_CONFIG(string,hook_adminparams,Hook::kAdminParams);
 
+    stream_prefix = prefix;
+    GET_CONFIG(int, stream_interval, Hook::kStreamInterval);
+    if (RedisClient::Instance()) {
+        g_stream_timer = std::make_shared<Timer>(stream_interval / 2, []() {
+            // 再Redis中刷新流生存期
+            auto streams = stream_set;
+            for (auto stream : streams) {
+                MediaInfo mi(stream);
+                if (MediaSource::find(mi)) {
+                    DebugL << "redis updateStream " << stream;
+                    RedisClient::Instance()->command("expire %s %d", mi.shortUrl().c_str(), stream_interval);
+                }
+                else {
+                    InfoL << "redis removeStream " << stream;
+                    stream_set.erase(stream);
+                }
+            }
+            return true;
+        }, nullptr);
+    }
+
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastMediaPublish, [](BroadcastMediaPublishArgs) {
         GET_CONFIG(string,hook_publish,Hook::kOnPublish);
+        auto cb = invoker;
+        if (RedisClient::Instance()) {
+            cb = [invoker, args](const std::string &err, const ProtocolOption &option) {
+                if (err.empty()) {
+                    std::string key = args.shortUrl();
+                    // 删除推流代理
+                    delStreamProxy(key);
+                    // 构造集群访问URL
+                    std::string value = StrPrinter << stream_prefix << "/" << args._app << "/" << args._streamid << "?" << kEdgeServerParam;
+                    // 设置URL并广播
+                    RedisClient::Instance()->command("setex %s %d %s", key.c_str(), stream_interval, value.c_str());
+                    RedisClient::Instance()->command("publish %s %s", key.c_str(), value.c_str());
+                    // 加入流列表，周期刷新key
+                    stream_set.insert(key);
+                    InfoL << "redis addStream " << key << " " << value;
+                }
+                invoker(err, option);
+            };
+        }
         if (!hook_enable || args._param_strs == hook_adminparams || hook_publish.empty() || sender.get_peer_ip() == "127.0.0.1") {
-            invoker("", ProtocolOption());
+            cb("", ProtocolOption());
             return;
         }
         //异步执行该hook api，防止阻塞NoticeCenter
@@ -327,13 +377,13 @@ void installWebHook(){
         body["originType"] = (int) type;
         body["originTypeStr"] = getOriginTypeString(type);
         //执行hook
-        do_http_hook(hook_publish, body, [invoker](const Value &obj, const string &err) mutable {
+        do_http_hook(hook_publish, body, [cb](const Value &obj, const string &err) mutable {
             if (err.empty()) {
                 //推流鉴权成功
-                invoker(err, ProtocolOption(jsonToMini(obj)));
+                cb("", ProtocolOption(jsonToMini(obj)));
             } else {
                 //推流鉴权失败
-                invoker(err, ProtocolOption());
+                cb(err, ProtocolOption());
             }
         });
     });
@@ -471,6 +521,22 @@ void installWebHook(){
             return;
         }
 
+        if (auto redis = RedisClient::Instance()) {
+            // 找不到流则查询redis，并addStreamProxy
+            std::string key = args.shortUrl();
+            RedisClient::Instance()->command([key](redisReply* r) {
+                std::string url = ReplyToString(r);
+                if (url.empty()) return;
+                static auto cb = [](const SockException &ex, const std::string &key) {};
+                MediaInfo info(key);
+                ProtocolOption option;
+                // skip record
+                option.enable_hls = false;// option.enable_hls || (args._schema == HLS_SCHEMA);
+                option.enable_mp4 = false;
+                addStreamProxy(info._vhost, info._app, info._streamid, url, 0, option, 0, 10, cb);
+             }, "get %s", key.c_str());
+        }
+
         GET_CONFIG(string, hook_stream_not_found, Hook::kOnStreamNotFound);
         if (!hook_enable || hook_stream_not_found.empty()) {
             return;
@@ -548,8 +614,10 @@ void installWebHook(){
     });
 
     NoticeCenter::Instance().addListener(&web_hook_tag,Broadcast::kBroadcastStreamNoneReader,[](BroadcastStreamNoneReaderArgs) {
-        if (!origin_urls.empty()) {
+        if (!origin_urls.empty() || RedisClient::Instance()) {
             //边沿站无人观看时立即停止溯源
+            if (!hasStreamProxy(sender.shortUrl()))
+                return ;
             sender.close(false);
             WarnL << "无人观看主动关闭流:" << sender.getOriginUrl();
             return;
@@ -674,5 +742,6 @@ void installWebHook(){
 
 void unInstallWebHook(){
     g_keepalive_timer.reset();
+    g_stream_timer.reset();
     NoticeCenter::Instance().delListener(&web_hook_tag);
 }

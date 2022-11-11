@@ -68,6 +68,7 @@ public:
     WebRtcTransport(const EventPoller::Ptr &poller);
     ~WebRtcTransport() override = default;
 
+    static const std::vector<std::string>& GetExternIPS();
     /**
      * 创建对象
      */

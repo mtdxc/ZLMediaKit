@@ -73,6 +73,19 @@ static void translateIPFromEnv(std::vector<std::string> &v) {
     }
 }
 
+const std::vector<std::string>& WebRtcTransport::GetExternIPS()
+{
+    GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, Rtc::kExternIP, [](string str) {
+        std::vector<std::string> ret;
+        if (str.length()) {
+            ret = split(str, ",");
+        }
+        translateIPFromEnv(ret);
+        return ret;
+    });
+    return extern_ips;
+}
+
 WebRtcTransport::WebRtcTransport(const EventPoller::Ptr &poller) {
     _poller = poller;
     _identifier = "zlm_" + to_string(++s_key);
@@ -529,15 +542,8 @@ void WebRtcTransportImp::onStartWebRTC() {
 }
 
 void WebRtcTransportImp::onCheckAnswer(RtcSession &sdp) {
+    auto extern_ips = GetExternIPS();
     // 修改answer sdp的ip、端口信息
-    GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, Rtc::kExternIP, [](string str) {
-        std::vector<std::string> ret;
-        if (str.length()) {
-            ret = split(str, ",");
-        }
-        translateIPFromEnv(ret);
-        return ret;
-    });
     for (auto &m : sdp.media) {
         m.addr.reset();
         m.addr.address = extern_ips.empty() ? SockUtil::get_local_ip() : extern_ips[0];
@@ -618,14 +624,7 @@ void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
     GET_CONFIG(uint16_t, local_udp_port, Rtc::kPort);
     GET_CONFIG(uint16_t, local_tcp_port, Rtc::kTcpPort);
     // 添加接收端口candidate信息
-    GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, Rtc::kExternIP, [](string str) {
-        std::vector<std::string> ret;
-        if (str.length()) {
-            ret = split(str, ",");
-        }
-        translateIPFromEnv(ret);
-        return ret;
-    });
+    auto extern_ips = GetExternIPS();
     if (extern_ips.empty()) {
         std::string local_ip = SockUtil::get_local_ip();
         if (local_udp_port) { configure.addCandidate(*makeIceCandidate(local_ip, local_udp_port, 120, "udp")); }

@@ -68,6 +68,7 @@ private:
     void play_l(const std::string & strUrl);
 
 private:
+    std::string _redis_key;
     ProtocolOption _option;
     int _retry_count;
     std::string _vhost;

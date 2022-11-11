@@ -516,6 +516,20 @@ void getStatisticJson(const function<void(Value &val)> &cb) {
 #endif
 }
 
+bool hasStreamProxy(const std::string& key) {
+    lock_guard<recursive_mutex> lck(s_proxyMapMtx);
+    return s_proxyMap.count(key) == 1;
+}
+
+bool delStreamProxy(const std::string &key) {
+    lock_guard<recursive_mutex> lck(s_proxyMapMtx);
+    bool ret = s_proxyMap.erase(key) == 1;
+    if (ret) {
+        InfoL << key;
+    }
+    return ret;
+}
+
 void addStreamProxy(const string &vhost, const string &app, const string &stream, const string &url, int retry_count,
                     const ProtocolOption &option, int rtp_type, float timeout_sec,
                     const function<void(const SockException &ex, const string &key)> &cb) {
@@ -523,13 +537,13 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
     lock_guard<recursive_mutex> lck(s_proxyMapMtx);
     if (s_proxyMap.find(key) != s_proxyMap.end()) {
         //已经在拉流了
-        cb(SockException(Err_success), key);
+        if(cb) cb(SockException(Err_success), key);
         return;
     }
     //添加拉流代理
     auto player = std::make_shared<PlayerProxy>(vhost, app, stream, option, retry_count ? retry_count : -1);
     s_proxyMap[key] = player;
-
+    InfoL << key << " url=" << url;
     //指定RTP over TCP(播放rtsp时有效)
     (*player)[Client::kRtpType] = rtp_type;
 
@@ -541,16 +555,14 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
     //开始播放，如果播放失败或者播放中止，将会自动重试若干次，默认一直重试
     player->setPlayCallbackOnce([cb, key](const SockException &ex) {
         if (ex) {
-            lock_guard<recursive_mutex> lck(s_proxyMapMtx);
-            s_proxyMap.erase(key);
+            delStreamProxy(key);
         }
-        cb(ex, key);
+        if(cb) cb(ex, key);
     });
 
     //被主动关闭拉流
     player->setOnClose([key](const SockException &ex) {
-        lock_guard<recursive_mutex> lck(s_proxyMapMtx);
-        s_proxyMap.erase(key);
+        delStreamProxy(key);
     });
     player->play(url);
 };
@@ -1040,7 +1052,7 @@ void installWebApi() {
         CHECK_SECRET();
         CHECK_ARGS("key");
         lock_guard<recursive_mutex> lck(s_proxyMapMtx);
-        val["data"]["flag"] = s_proxyMap.erase(allArgs["key"]) == 1;
+        val["data"]["flag"] = delStreamProxy(allArgs["key"]);
     });
 
     static auto addFFmpegSource = [](const string &ffmpeg_cmd_key,

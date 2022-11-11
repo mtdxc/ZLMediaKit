@@ -239,4 +239,6 @@ void getStatisticJson(const std::function<void(Json::Value &val)> &cb);
 void addStreamProxy(const std::string &vhost, const std::string &app, const std::string &stream, const std::string &url, int retry_count,
                     const mediakit::ProtocolOption &option, int rtp_type, float timeout_sec,
                     const std::function<void(const toolkit::SockException &ex, const std::string &key)> &cb);
+bool delStreamProxy(const std::string& key);
+bool hasStreamProxy(const std::string& key);
 #endif //ZLMEDIAKIT_WEBAPI_H

@@ -321,9 +321,22 @@ int start_main(int argc,char *argv[]) {
         uint16_t redisPort = mINI::Instance()[Redis::kPort];
         //设置poller线程数,该函数必须在使用ZLToolKit网络相关对象之前调用才能生效
         EventPollerPool::setPoolSize(threads);
+        char prefix[128] = {0};
         if (redisPort) {
             std::string redisHost = mINI::Instance()[Redis::kHost];
             RedisClient::ClassInit(redisHost, redisPort);
+            std::string local_ip = SockUtil::get_local_ip();
+#if defined(ENABLE_WEBRTC)
+            auto extern_ips = WebRtcTransport::GetExternIPS();
+            if (extern_ips.size())
+                local_ip = extern_ips[0];
+#endif
+            if (rtspPort) {
+                sprintf(prefix, "rtsp://%s:%d", local_ip.c_str(), rtspPort);
+            } else if(rtmpPort) {
+                // 默认以rtmp级联
+                sprintf(prefix, "rtmp://%s:%d", local_ip.c_str(), rtmpPort);
+            }
         }
 
         //简单的telnet服务器，可用于服务器调试，但是不能使用23端口，否则telnet上了莫名其妙的现象
@@ -436,7 +449,7 @@ int start_main(int argc,char *argv[]) {
 
         installWebApi();
         InfoL << "已启动http api 接口";
-        installWebHook();
+        installWebHook(prefix);
         InfoL << "已启动http hook 接口";
 
         //设置退出信号处理函数
