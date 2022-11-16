@@ -336,8 +336,8 @@ bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
     if (_rtsp && _rtsp->addTrack(track)) {
         ret = true;
     }
-    if (_rtc && _rtc->addTrack(track)) {
-        ret = true;
+    if (_rtc && !isMuteCodec(track->getCodecId())) {
+        ret = _rtc->addTrack(track);
     }
     if (_ts && _ts->addTrack(track)) {
         ret = true;
@@ -440,8 +440,8 @@ bool MultiMediaSourceMuxer::onTrackFrame(const Frame::Ptr &frame_in) {
         ret =  true;
     }
 
-    if (_rtc && _rtc->inputFrame(frame)) {
-        ret = true;
+    if (_rtc && !isMuteCodec(frame_in->getCodecId())) {
+        ret = _rtc->inputFrame(frame);
     }
 
     if (_ts && _ts->inputFrame(frame)) {
