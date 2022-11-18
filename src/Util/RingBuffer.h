@@ -32,10 +32,16 @@ using ReaderInfo = std::shared_ptr<void>;
 template <typename T>
 class RingDelegate {
 public:
-    using Ptr = std::shared_ptr<RingDelegate>;
-    RingDelegate() = default;
+	using Ptr = std::shared_ptr<RingDelegate>;
+	using WriteFunc = std::function<void(T, bool)>;
+	RingDelegate() = default;
+	RingDelegate(WriteFunc f) : _func(f) {}
     virtual ~RingDelegate() = default;
-    virtual void onWrite(T in, bool is_key = true) = 0;
+	virtual void onWrite(T in, bool is_key = true) {
+		if (_func) _func(in, is_key);
+	}
+protected:
+	WriteFunc _func;
 };
 
 template <typename T>
@@ -345,6 +351,7 @@ public:
         _storage->write(std::move(in), is_key);
     }
 
+	void setDelegate(typename RingDelegate<T>::WriteFunc func) { _delegate = std::make_shared<RingDelegate<T>>(func); }
     void setDelegate(const typename RingDelegate<T>::Ptr &delegate) { _delegate = delegate; }
 
     std::shared_ptr<RingReader> attach(const hv::EventLoopPtr &poller, bool use_cache = true) {

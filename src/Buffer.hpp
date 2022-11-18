@@ -14,13 +14,12 @@
 #include <cassert>
 #include <memory>
 #include <string>
-#include <vector>
 #include <stdexcept>
 #include <type_traits>
 #include <functional>
 #include "Util/util.h"
 // use for BufferRaw friend declare
-#include "Util/ResourcePool.h"
+// #include "Util/ResourcePool.h"
 namespace toolkit {
 
 template <typename T> struct is_pointer : public std::false_type {};
@@ -147,8 +146,8 @@ public:
         return _capacity;
     }
 
-protected:
-    friend class toolkit::ResourcePool_l<BufferRaw>;
+//protected:
+    //friend class toolkit::ResourcePool_l<BufferRaw>;
 
     BufferRaw(size_t capacity = 0) {
         if (capacity) {

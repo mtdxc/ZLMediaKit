@@ -30,6 +30,8 @@
 #include <shlwapi.h>
 #pragma comment(lib, "shlwapi.lib")
 extern "C" const IMAGE_DOS_HEADER __ImageBase;
+#else
+#include <sys/time.h>
 #endif // defined(_WIN32)
 
 #if defined(__MACH__) || defined(__APPLE__)
@@ -276,13 +278,6 @@ void usleep(int micro_seconds) {
     std::this_thread::sleep_for(std::chrono::microseconds(micro_seconds));
 }
 
-int gettimeofday(struct timeval *tp, void *tzp) {
-    auto now_stamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    tp->tv_sec = (decltype(tp->tv_sec))(now_stamp / 1000000LL);
-    tp->tv_usec = now_stamp % 1000000LL;
-    return 0;
-}
-
 const char *strcasestr(const char *big, const char *little){
     string big_str = big;
     string little_str = little;
@@ -420,9 +415,16 @@ string getTimeStr(const char *fmt, time_t time) {
         time = ::time(nullptr);
     }
     auto tm = getLocalTime(time);
-    char buffer[64];
-    auto success = std::strftime(buffer, sizeof(buffer), fmt, &tm);
-    return 0 == success ? string(fmt) : buffer;
+    size_t size = strlen(fmt) + 64;
+    string ret(size, 0);
+    size = std::strftime(&ret[0], size, fmt, &tm);
+    if (size > 0) {
+        ret.resize(size);
+    }
+    else{
+        ret = fmt;
+    }
+    return ret;
 }
 
 struct tm getLocalTime(time_t sec) {

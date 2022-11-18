@@ -11,7 +11,9 @@
 #if defined(_WIN32)
 #include <io.h>   
 #include <direct.h>
+#include <windows.h>
 #else
+#include <cassert>
 #include <dirent.h>
 #include <limits.h>
 #endif // WIN32
@@ -26,6 +28,7 @@ using namespace std;
 using namespace toolkit;
 
 #if !defined(_WIN32)
+#include <unistd.h>
 #define    _unlink    unlink
 #define    _rmdir    rmdir
 #define    _access    access

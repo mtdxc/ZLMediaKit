@@ -11,8 +11,8 @@
 #ifndef UTIL_TIMETICKER_H_
 #define UTIL_TIMETICKER_H_
 
+#include <stdint.h>
 #include <cassert>
-#include "logger.h"
 
 namespace toolkit {
 

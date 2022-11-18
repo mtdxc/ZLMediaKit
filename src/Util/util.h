@@ -20,19 +20,10 @@
 #include <vector>
 #include <atomic>
 #include <unordered_map>
-#if defined(_WIN32)
-#undef FD_SETSIZE
-//修改默认64为1024路
-#define FD_SETSIZE 1024
-#include <winsock2.h>
-#pragma comment (lib,"WS2_32")
-#else
+
+#ifndef _WIN32
 #include <unistd.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <cstddef>
-#endif // defined(_WIN32)
+#endif
 
 #if defined(__APPLE__)
 #include "TargetConditionals.h"
@@ -205,15 +196,14 @@ bool end_with(const std::string &str, const std::string &substr, bool ignore_cas
 
 #if defined(ANDROID)
 template <typename T>
-std::string to_string(T value){
-    std::ostringstream os ;
-    os <<  std::forward<T>(value);
-    return os.str() ;
+std::string to_string(T value) {
+    std::ostringstream os;
+    os << std::forward<T>(value);
+    return os.str();
 }
 #endif//ANDROID
 
 #if defined(_WIN32)
-int gettimeofday(struct timeval *tp, void *tzp);
 void usleep(int micro_seconds);
 void sleep(int second);
 int vasprintf(char **strp, const char *fmt, va_list ap);

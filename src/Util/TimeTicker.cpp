@@ -1,5 +1,6 @@
 #include "TimeTicker.h"
 #include "util.h"
+#include "hlog.h"
 using namespace toolkit;
 
 Ticker::Ticker(uint64_t min_ms /*= 0*/)
@@ -11,12 +12,9 @@ Ticker::Ticker(uint64_t min_ms /*= 0*/)
 Ticker::~Ticker()
 {
     uint64_t tm = createdTime();
-    /*
-    if (tm > _min_ms) {
-        _ctx << "tooks " << tm << " ms, more time used";
-    } else {
-        _ctx.clear();
-    }*/
+    if (_min_ms > 0 && tm > _min_ms) {
+        hlogi("tooks %I64u ms, more time used", tm);
+    }
 }
 
 uint64_t Ticker::createdTime() const

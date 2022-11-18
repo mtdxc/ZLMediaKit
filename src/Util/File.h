@@ -40,7 +40,7 @@ typedef struct _dirdesc {
     char    *dd_buf;    /** data buffer */
     int     dd_len;     /** size of data buffer */
     long    dd_seek;    /** magic cookie returned by getdirentries */
-    HANDLE handle;
+    void*   handle;
     struct dirent *index;
 } DIR;
 # define __dirfd(dp)    ((dp)->dd_fd)

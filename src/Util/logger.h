@@ -1,7 +1,9 @@
 ﻿#pragma once
 #include "hlog.h"
 #include <memory>
+#include <sstream>
 #include <stdexcept>
+
 #define PrintLog(level, ...) logger_print(hlog, level, __FILENAME__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
 #define PrintT(...) PrintLog(LOG_LEVEL_DEBUG, ##__VA_ARGS__)
 #define PrintD(...) PrintLog(LOG_LEVEL_DEBUG, ##__VA_ARGS__)
@@ -21,7 +23,6 @@
 #define MS_WARN_TAG(tag, ...) PrintW(__VA_ARGS__)
 #define MS_DEBUG_DEV PrintD
 
-#include <sstream>
 /**
 * 日志上下文
 */

@@ -12,11 +12,8 @@
 #define UTIL_RECYCLEPOOL_H_
 
 #include <atomic>
-#include <deque>
 #include <functional>
 #include <memory>
-#include <mutex>
-#include <unordered_set>
 
 namespace toolkit {
 
@@ -103,7 +100,7 @@ public:
 
     ValuePtr obtain(const std::function<void(C *)> &on_recycle = nullptr) {
         return ValuePtr(getPtr(), _weak_self, std::make_shared<std::atomic_bool>(false), on_recycle);
-            }
+    }
 
     std::shared_ptr<C> obtain2() {
         auto weak_self = _weak_self;
@@ -112,9 +109,10 @@ public:
             if (strongPool) {
                 //放入循环池
                 strongPool->recycle(ptr);
-        } else {
+            }
+            else {
                 delete ptr;
-        }
+            }
         });
     }
 
@@ -145,7 +143,7 @@ private:
             } else {
                 ptr = _objs.back();
                 _objs.pop_back();
-    }
+            }
             _busy.clear();
         } else {
             //未获取到锁
