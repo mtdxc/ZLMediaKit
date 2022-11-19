@@ -11,7 +11,10 @@
 #ifdef ENABLE_HKDEVICE
 #include "DeviceHK.h"
 #include "Util/TimeTicker.h"
-#include "Util/MD5.h"
+#include "Util/onceToken.h"
+#include "Util/logger.h"
+#include "md5.h"
+
 namespace mediakit {
 
 #define HK_APP_NAME  "live"

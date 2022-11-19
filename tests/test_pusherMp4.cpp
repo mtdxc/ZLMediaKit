@@ -12,12 +12,13 @@
 #include <iostream>
 #include "Util/logger.h"
 #include "Util/NoticeCenter.h"
-#include "Poller/EventPoller.h"
+#include "Util/semaphore.h"
 #include "Player/PlayerProxy.h"
 #include "Rtmp/RtmpPusher.h"
 #include "Common/config.h"
 #include "Pusher/MediaPusher.h"
 #include "Record/MP4Reader.h"
+#include "Common/Parser.h"
 
 using namespace std;
 using namespace toolkit;
@@ -101,8 +102,8 @@ void rePushDelay(const EventPoller::Ptr &poller,
 //这里才是真正执行main函数，你可以把函数名(domain)改成main，然后就可以输入自定义url了
 int domain(const string &filePath, const string &pushUrl) {
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
     //循环点播mp4文件
     mINI::Instance()[Record::kFileRepeat] = 1;
     mINI::Instance()[Protocol::kHlsDemand] = 1;
@@ -111,7 +112,7 @@ int domain(const string &filePath, const string &pushUrl) {
     //mINI::Instance()[Protocol::kRtspDemand] = 1;
     //mINI::Instance()[Protocol::kRtmpDemand] = 1;
 
-    auto poller = EventPollerPool::Instance().getPoller();
+    auto poller = hv::EventLoopThreadPool::Instance()->loop();
     //vhost/app/stream可以随便自己填，现在不限制app应用名了
     createPusher(poller, FindField(pushUrl.data(), nullptr, "://").substr(0, 4), DEFAULT_VHOST, "live", "stream", filePath, pushUrl);
     //设置退出信号处理函数

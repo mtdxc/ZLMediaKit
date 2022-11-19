@@ -15,7 +15,7 @@
 #include "Util/util.h"
 #include "Util/logger.h"
 #include "Util/File.h"
-
+#include <iostream>
 using namespace std;
 using namespace toolkit;
 
@@ -128,7 +128,9 @@ int main(int argc, char *argv[]) {
 
     bool no_filter = filter_set.find("*") != filter_set.end();
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
+    
     File::scanDir(path, [&](const string &path, bool isDir) {
         if (isDir) {
             return true;

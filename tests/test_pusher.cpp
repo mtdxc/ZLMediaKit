@@ -12,11 +12,11 @@
 #include <iostream>
 #include "Util/logger.h"
 #include "Util/NoticeCenter.h"
-#include "Poller/EventPoller.h"
 #include "Player/PlayerProxy.h"
 #include "Rtmp/RtmpPusher.h"
 #include "Common/config.h"
 #include "Pusher/MediaPusher.h"
+#include "Util/semaphore.h"
 
 using namespace std;
 using namespace toolkit;
@@ -68,9 +68,9 @@ void rePushDelay(const EventPoller::Ptr &poller,const string &schema,const strin
 //这里才是真正执行main函数，你可以把函数名(domain)改成main，然后就可以输入自定义url了
 int domain(const string &playUrl, const string &pushUrl) {
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
-    auto poller = EventPollerPool::Instance().getPoller();
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
+    auto poller = hv::EventLoopThreadPool::Instance()->loop();
 
     //拉一个流，生成一个RtmpMediaSource，源的名称是"app/stream"
     //你也可以以其他方式生成RtmpMediaSource，比如说MP4文件（请查看test_rtmpPusherMp4.cpp代码）

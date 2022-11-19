@@ -106,7 +106,10 @@ int main(int argc, char *argv[]) {
         printf("usage src.mp4 dst_prefix/codecName\n");
         return 0;
     }
-    toolkit::Logger::Instance().add(std::make_shared<toolkit::ConsoleChannel>());
+    // toolkit::Logger::Instance().add(std::make_shared<toolkit::ConsoleChannel>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
+
     try {
         return TranscodeAudio(argv[1], argv[2]);
     } catch (std::exception e) {

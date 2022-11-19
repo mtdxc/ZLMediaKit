@@ -12,12 +12,13 @@
 #include <signal.h>
 #include <iostream>
 #include "Util/File.h"
-#include "Util/SSLBox.h"
+//#include "Util/SSLBox.h"
 #include "Util/logger.h"
 #include "Util/onceToken.h"
 #include "Util/NoticeCenter.h"
-#include "Network/TcpServer.h"
-#include "Poller/EventPoller.h"
+#include "Util/semaphore.h"
+#include "TcpServer.h"
+//#include "Poller/EventPoller.h"
 #include "Common/config.h"
 #include "Http/WebSocketSession.h"
 
@@ -91,8 +92,8 @@ int main(int argc,char *argv[]){
     signal(SIGINT, [](int) { sem.post(); });// 设置退出信号
 
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
 
     //加载配置文件，如果配置文件不存在就创建一个
     loadIniConfig();

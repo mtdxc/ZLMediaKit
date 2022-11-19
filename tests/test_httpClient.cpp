@@ -11,11 +11,12 @@
 #include <signal.h>
 #include <string>
 #include <iostream>
-#include "Util/MD5.h"
+#include "md5.h"
 #include "Util/File.h"
 #include "Util/logger.h"
 #include "Util/onceToken.h"
-#include "Poller/EventPoller.h"
+#include "Util/semaphore.h"
+//#include "Poller/EventPoller.h"
 #include "Http/HttpRequester.h"
 #include "Http/HttpDownloader.h"
 
@@ -29,8 +30,8 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, [](int) { sem.post(); });// 设置退出信号
 
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
 
     //加载证书，证书包含公钥和私钥
     SSL_Initor::Instance().loadCertificate((exeDir() + "ssl.p12").data());

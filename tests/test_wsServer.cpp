@@ -11,7 +11,6 @@
 #include <signal.h>
 #include <string>
 #include <iostream>
-#include "Util/MD5.h"
 #include "Util/logger.h"
 #include "Http/WebSocketSession.h"
 
@@ -92,8 +91,8 @@ struct EchoSessionCreator {
 
 int main(int argc, char *argv[]) {
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
 
     SSL_Initor::Instance().loadCertificate((exeDir() + "ssl.p12").data());
 

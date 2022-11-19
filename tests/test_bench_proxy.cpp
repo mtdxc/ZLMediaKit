@@ -3,9 +3,10 @@
 #include <iostream>
 #include "Util/CMD.h"
 #include "Util/logger.h"
+#include "Util/semaphore.h"
 #include "Common/config.h"
 #include "Player/PlayerProxy.h"
-#include "Thread/WorkThreadPool.h"
+#include "EventLoopThreadPool.h"
 
 using namespace std;
 using namespace toolkit;
@@ -19,7 +20,7 @@ public:
         (*_parser) << Option('l',/*该选项简称，如果是\x00则说明无简称*/
                              "level",/*该选项全称,每个选项必须有全称；不得为null或空字符串*/
                              Option::ArgRequired,/*该选项后面必须跟值*/
-                             to_string(LTrace).data(),/*该选项默认值*/
+                             to_string(LOG_LEVEL_DEBUG).data(),/*该选项默认值*/
                              false,/*该选项是否必须赋值，如果没有默认值且为ArgRequired时用户必须提供该参数否则将抛异常*/
                              "日志等级,LTrace~LError(0~4)",/*该选项说明文字*/
                              nullptr);
@@ -105,23 +106,19 @@ int main(int argc, char *argv[]) {
         }
 
         int threads = cmd_main["threads"];
-        LogLevel logLevel = (LogLevel) cmd_main["level"].as<int>();
-        logLevel = MIN(MAX(logLevel, LTrace), LError);
+        //设置线程数
+        hv::EventLoopThreadPool::Instance()->setThreadNum(threads);
+
+        int logLevel = cmd_main["level"].as<int>();
+        hlog_set_level(logLevel);
+        hlog_set_handler(stdout_logger);
+
         auto in_url = cmd_main["in"];
         auto rtp_type = cmd_main["rtp"].as<int>();
         auto delay_ms = cmd_main["delay"].as<int>();
         auto proxy_count = cmd_main["count"].as<int>();
         auto merge_ms = cmd_main["merge"].as<int>();
         auto demand = cmd_main["demand"].as<int>();
-
-        //设置日志
-        Logger::Instance().add(std::make_shared<ConsoleChannel>("ConsoleChannel", logLevel));
-        //启动异步日志线程
-        Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
-
-        //设置线程数
-        EventPollerPool::setPoolSize(threads);
-        WorkThreadPool::setPoolSize(threads);
 
         //设置合并写
         mINI::Instance()[General::kMergeWriteMS] = merge_ms;

@@ -12,14 +12,15 @@
 #include <signal.h>
 #include <iostream>
 
-#include "Util/MD5.h"
+#include "md5.h"
 #include "Util/File.h"
 #include "Util/logger.h"
-#include "Util/SSLBox.h"
+//#include "Util/SSLBox.h"
 #include "Util/onceToken.h"
-#include "Network/TcpServer.h"
-#include "Poller/EventPoller.h"
-
+#include "Util/semaphore.h"
+#include "TcpServer.h"
+//#include "Poller/EventPoller.h"
+#include "WebRtcServer.h"
 #include "Common/config.h"
 #include "Rtsp/UDPServer.h"
 #include "Rtsp/RtspSession.h"
@@ -27,8 +28,9 @@
 #include "Shell/ShellSession.h"
 #include "Rtmp/FlvMuxer.h"
 #include "Player/PlayerProxy.h"
+#ifdef ENABLE_HTTP
 #include "Http/WebSocketSession.h"
-
+#endif
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;
@@ -117,7 +119,7 @@ void initEventListener() {
 
             if (user == "test1") {
                 //假设数据库保存的是密文
-                auto encrypted_pwd = MD5(user + ":" + REALM + ":" + "pwd1").hexdigest();
+                auto encrypted_pwd = Md5Str(user + ":" + REALM + ":" + "pwd1");
                 invoker(true, encrypted_pwd);
                 return;
             }
@@ -165,7 +167,7 @@ void initEventListener() {
                     auto path = http_root + "/" + key + "_" + to_string(time(NULL)) + ".flv";
                     FlvRecorder::Ptr recorder(new FlvRecorder);
                     try {
-                        recorder->startRecord(EventPollerPool::Instance().getPoller(),
+                        recorder->startRecord(hv::EventLoopThreadPool::Instance()->loop(),
                                               dynamic_pointer_cast<RtmpMediaSource>(sender.shared_from_this()), path);
                         s_mapFlvRecorder[key] = recorder;
                     } catch (std::exception &ex) {
@@ -204,9 +206,8 @@ void initEventListener() {
 
 int main(int argc,char *argv[]) {
     //设置日志
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
-    Logger::Instance().add(std::make_shared<FileChannel>());
-    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
     //加载配置文件，如果配置文件不存在就创建一个
     loadIniConfig();
     initEventListener();
@@ -249,14 +250,14 @@ int main(int argc,char *argv[]) {
               " http-flv地址 : http://127.0.0.1/live/0.flv\n"
               " rtsp地址 : rtsp://127.0.0.1/live/0\n"
               " rtmp地址 : rtmp://127.0.0.1/live/0";
-
+#if 0
     //加载证书，证书包含公钥和私钥
     SSL_Initor::Instance().loadCertificate((exeDir() + "ssl.p12").data());
     //信任某个自签名证书
     SSL_Initor::Instance().trustCertificate((exeDir() + "ssl.p12").data());
     //不忽略无效证书证书(例如自签名或过期证书)
     SSL_Initor::Instance().ignoreInvalidCertificate(false);
-
+#endif
     uint16_t shellPort = mINI::Instance()[Shell::kPort];
     uint16_t rtspPort = mINI::Instance()[Rtsp::kPort];
     uint16_t rtspsPort = mINI::Instance()[Rtsp::kSSLPort];
@@ -266,14 +267,11 @@ int main(int argc,char *argv[]) {
 
     //简单的telnet服务器，可用于服务器调试，但是不能使用23端口，否则telnet上了莫名其妙的现象
     //测试方法:telnet 127.0.0.1 9000
-    TcpServer::Ptr shellSrv(new TcpServer());
-    TcpServer::Ptr rtspSrv(new TcpServer());
-    TcpServer::Ptr rtmpSrv(new TcpServer());
+    auto shellSrv = WebRtcServer::Instance().newShellServer(shellPort);
+    auto rtspSrv = WebRtcServer::Instance().newRtspServer(rtspPort);//默认554
+    auto rtmpSrv = WebRtcServer::Instance().newRtmpServer(rtmpPort);//默认1935
+#ifdef ENABLE_HTTP
     TcpServer::Ptr httpSrv(new TcpServer());
-
-    shellSrv->start<ShellSession>(shellPort);
-    rtspSrv->start<RtspSession>(rtspPort);//默认554
-    rtmpSrv->start<RtmpSession>(rtmpPort);//默认1935
     //http服务器
     httpSrv->start<HttpSession>(httpPort);//默认80
 
@@ -281,43 +279,46 @@ int main(int argc,char *argv[]) {
     TcpServer::Ptr httpsSrv(new TcpServer());
     //https服务器
     httpsSrv->start<HttpsSession>(httpsPort);//默认443
-
+#endif
     //支持ssl加密的rtsp服务器，可用于诸如亚马逊echo show这样的设备访问
-    TcpServer::Ptr rtspSSLSrv(new TcpServer());
-    rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort);//默认322
+    //TcpServer::Ptr rtspSSLSrv(new TcpServer());
+    //rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort);//默认322
 
     //服务器支持动态切换端口(不影响现有连接)
     NoticeCenter::Instance().addListener(ReloadConfigTag,Broadcast::kBroadcastReloadConfig,[&](BroadcastReloadConfigArgs){
         //重新创建服务器
         if(shellPort != mINI::Instance()[Shell::kPort].as<uint16_t>()){
             shellPort = mINI::Instance()[Shell::kPort];
-            shellSrv->start<ShellSession>(shellPort);
+            shellSrv->closesocket();
+            shellSrv->createsocket(shellPort);
             InfoL << "重启shell服务器:" << shellPort;
         }
         if(rtspPort != mINI::Instance()[Rtsp::kPort].as<uint16_t>()){
             rtspPort = mINI::Instance()[Rtsp::kPort];
-            rtspSrv->start<RtspSession>(rtspPort);
+            rtspSrv->closesocket();
+            rtspSrv->createsocket(rtspPort);
             InfoL << "重启rtsp服务器" << rtspPort;
         }
         if(rtmpPort != mINI::Instance()[Rtmp::kPort].as<uint16_t>()){
             rtmpPort = mINI::Instance()[Rtmp::kPort];
-            rtmpSrv->start<RtmpSession>(rtmpPort);
+            rtmpSrv->closesocket();
+            rtmpSrv->createsocket(rtmpPort);
             InfoL << "重启rtmp服务器" << rtmpPort;
         }
         if(httpPort != mINI::Instance()[Http::kPort].as<uint16_t>()){
             httpPort = mINI::Instance()[Http::kPort];
-            httpSrv->start<HttpSession>(httpPort);
+            //httpSrv->start<HttpSession>(httpPort);
             InfoL << "重启http服务器" << httpPort;
         }
         if(httpsPort != mINI::Instance()[Http::kSSLPort].as<uint16_t>()){
             httpsPort = mINI::Instance()[Http::kSSLPort];
-            httpsSrv->start<HttpsSession>(httpsPort);
+            //httpsSrv->start<HttpsSession>(httpsPort);
             InfoL << "重启https服务器" << httpsPort;
         }
 
         if(rtspsPort != mINI::Instance()[Rtsp::kSSLPort].as<uint16_t>()){
             rtspsPort = mINI::Instance()[Rtsp::kSSLPort];
-            rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort);
+            //rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort);
             InfoL << "重启rtsps服务器" << rtspsPort;
         }
     });

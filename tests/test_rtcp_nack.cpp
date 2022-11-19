@@ -10,6 +10,7 @@
 
 #include <iostream>
 #include "Util/logger.h"
+#include "Util/util.h"
 #include "../webrtc/Nack.h"
 using namespace std;
 using namespace toolkit;
@@ -18,7 +19,8 @@ using namespace mediakit;
 extern void testFCI();
 
 int main() {
-    Logger::Instance().add(std::make_shared<ConsoleChannel>());
+    hlog_set_level(LOG_LEVEL_DEBUG);
+    hlog_set_handler(stdout_logger);
 
     srand((unsigned) time(NULL));
 

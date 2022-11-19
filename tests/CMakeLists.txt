@@ -39,8 +39,21 @@ foreach(TEST_SRC ${TEST_SRC_LIST})
       continue()
     endif ()
   endif ()
-
-  message(STATUS "add test:${TEST_EXE_NAME}")
+  
+  if (NOT ENABLE_HTTP)
+    # 暂时过滤掉依赖 FFMPEG 的测试模块
+    if ("${TEST_EXE_NAME}" MATCHES "test_http*")
+      continue()
+    endif ()
+    if ("${TEST_EXE_NAME}" MATCHES "test_ws*")
+      continue()
+    endif ()
+    if ("${TEST_EXE_NAME}" MATCHES "test_rtp")
+      continue()
+    endif ()	
+  endif ()
+  
+  message(STATUS "add test: ${TEST_EXE_NAME}")
   add_executable(${TEST_EXE_NAME} ${TEST_SRC})
   target_compile_options(${TEST_EXE_NAME}
     PRIVATE ${COMPILE_OPTIONS_DEFAULT})

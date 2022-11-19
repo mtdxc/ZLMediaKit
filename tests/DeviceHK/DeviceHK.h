@@ -15,9 +15,6 @@
 #include "HCNetSDK.h"
 #include "PlayM4.h"
 #include "Device/Device.h"
-#include "Util/onceToken.h"
-#include "Util/logger.h"
-#include "Util/TimeTicker.h"
 
 using namespace toolkit;
 
