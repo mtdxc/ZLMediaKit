@@ -277,9 +277,10 @@ int start_main(int argc,char *argv[]) {
 #endif//defined(ENABLE_RTPPROXY)
 
 #if defined(ENABLE_WEBRTC)
+        auto rtcSrv_tcp = std::make_shared<TcpServer>();
         //webrtc udp服务器
-        auto rtcSrv = std::make_shared<UdpServer>();
-        rtcSrv->setOnCreateSocket([](const EventPoller::Ptr &poller, const Buffer::Ptr &buf, struct sockaddr *, int) {
+        auto rtcSrv_udp = std::make_shared<UdpServer>();
+        rtcSrv_udp->setOnCreateSocket([](const EventPoller::Ptr &poller, const Buffer::Ptr &buf, struct sockaddr *, int) {
             if (!buf) {
                 return Socket::createSocket(poller, false);
             }
@@ -291,6 +292,7 @@ int start_main(int argc,char *argv[]) {
             return Socket::createSocket(new_poller, false);
         });
         uint16_t rtcPort = mINI::Instance()[Rtc::kPort];
+        uint16_t rtcTcpPort = mINI::Instance()[Rtc::kTcpPort];
 #endif//defined(ENABLE_WEBRTC)
 
 
@@ -337,7 +339,10 @@ int start_main(int argc,char *argv[]) {
 
 #if defined(ENABLE_WEBRTC)
             //webrtc udp服务器
-            if (rtcPort) { rtcSrv->start<WebRtcSession>(rtcPort); }
+            if (rtcPort) { rtcSrv_udp->start<WebRtcSession>(rtcPort);}
+
+            if (rtcTcpPort) { rtcSrv_tcp->start<WebRtcSession>(rtcTcpPort);}
+             
 #endif//defined(ENABLE_WEBRTC)
 
 #if defined(ENABLE_SRT)

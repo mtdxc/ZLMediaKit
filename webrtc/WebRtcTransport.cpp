@@ -44,6 +44,8 @@ const string kRembBitRate = RTC_FIELD "rembBitRate";
 // webrtc单端口udp服务器
 const string kPort = RTC_FIELD "port";
 
+const string kTcpPort = RTC_FIELD "tcpPort";
+
 // 设置aac转码比特率
 const string kAacBitRate = RTC_FIELD"aacBitRate";
 // 设置opus转码比特率
@@ -53,6 +55,7 @@ static onceToken token([]() {
     mINI::Instance()[kExternIP] = "";
     mINI::Instance()[kRembBitRate] = 0;
     mINI::Instance()[kPort] = 8000;
+    mINI::Instance()[kTcpPort] = 8000;
     mINI::Instance()[kAacBitRate] = 64000;
     mINI::Instance()[kOpusBitRate] = 64000;
 });
@@ -424,9 +427,21 @@ void WebRtcTransportImp::onSendSockData(Buffer::Ptr buf, bool flush, RTC::Transp
         WarnL << "send data failed:" << buf->size();
         return;
     }
+
     // 一次性发送一帧的rtp数据，提高网络io性能
-    _selected_session->setSendFlushFlag(flush);
+    if (_selected_session->getSock()->sockType() == SockNum::Sock_TCP) {
+        // 增加tcp两字节头
+        auto len = buf->size();
+        char tcp_len[2] = { 0 };
+        tcp_len[0] = (len >> 8) & 0xff;
+        tcp_len[1] = len & 0xff;
+        _selected_session->SockSender::send(tcp_len, 2);
+    }
     _selected_session->send(std::move(buf));
+
+    if (flush) {
+        _selected_session->flushAll();
+    }
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -535,8 +550,9 @@ void WebRtcTransportImp::onCheckAnswer(RtcSession &sdp) {
         m.rtcp_addr.reset();
         m.rtcp_addr.address = m.addr.address;
 
-        GET_CONFIG(uint16_t, local_port, Rtc::kPort);
-        m.rtcp_addr.port = local_port;
+        GET_CONFIG(uint16_t, udp_port, Rtc::kPort);
+        GET_CONFIG(uint16_t, tcp_port, Rtc::kTcpPort);
+        m.rtcp_addr.port = udp_port ? udp_port : tcp_port;
         m.port = m.rtcp_addr.port;
         sdp.origin.address = m.addr.address;
     }
@@ -596,13 +612,17 @@ makeIceCandidate(std::string ip, uint16_t port, uint32_t priority = 100, std::st
     candidate->address = ip;
     candidate->port = port;
     candidate->type = "host";
+    if (proto == "tcp") {
+        candidate->type += " tcptype passive";
+    }
     return candidate;
 }
 
 void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
     WebRtcTransport::onRtcConfigure(configure);
 
-    GET_CONFIG(uint16_t, local_port, Rtc::kPort);
+    GET_CONFIG(uint16_t, local_udp_port, Rtc::kPort);
+    GET_CONFIG(uint16_t, local_tcp_port, Rtc::kTcpPort);
     // 添加接收端口candidate信息
     GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, Rtc::kExternIP, [](string str) {
         std::vector<std::string> ret;
@@ -613,13 +633,15 @@ void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
         return ret;
     });
     if (extern_ips.empty()) {
-        std::string localIp = SockUtil::get_local_ip();
-        configure.addCandidate(*makeIceCandidate(localIp, local_port, 120, "udp"));
+        std::string local_ip = SockUtil::get_local_ip();
+        if (local_udp_port) { configure.addCandidate(*makeIceCandidate(local_ip, local_udp_port, 120, "udp")); }
+        if (local_tcp_port) { configure.addCandidate(*makeIceCandidate(local_ip, local_tcp_port, 110, "tcp")); }
     } else {
         const uint32_t delta = 10;
         uint32_t priority = 100 + delta * extern_ips.size();
         for (auto ip : extern_ips) {
-            configure.addCandidate(*makeIceCandidate(ip, local_port, priority, "udp"));
+            if (local_udp_port) { configure.addCandidate(*makeIceCandidate(ip, local_udp_port, priority + 5, "udp")); }
+            if (local_tcp_port) { configure.addCandidate(*makeIceCandidate(ip, local_tcp_port, priority, "tcp")); }
             priority -= delta;
         }
     }
@@ -1048,6 +1070,7 @@ void WebRtcTransportImp::setSession(Session::Ptr session) {
               << session->get_peer_port() << ", id:" << getIdentifier();
     }
     _selected_session = std::move(session);
+    _selected_session->setSendFlushFlag(false);
     unrefSelf();
 }
 

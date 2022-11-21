@@ -32,6 +32,7 @@ namespace mediakit {
 //RTC配置项目
 namespace Rtc {
 extern const std::string kPort;
+extern const std::string kTcpPort;
 extern const std::string kTimeOutSec;
 extern const std::string kAacBitRate;
 extern const std::string kOpusBitRate;
@@ -181,7 +182,7 @@ private:
     std::shared_ptr<RTC::SrtpSession> _srtp_session_send;
     std::shared_ptr<RTC::SrtpSession> _srtp_session_recv;
     Ticker _ticker;
-    //循环池
+    // 循环池
     ResourcePool<BufferRaw> _packet_pool;
 
 #ifdef ENABLE_SCTP

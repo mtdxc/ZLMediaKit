@@ -23,7 +23,7 @@ const string kPreferredCodecA = RTC_FIELD"preferredCodecA";
 const string kPreferredCodecV = RTC_FIELD"preferredCodecV";
 static onceToken token([]() {
     mINI::Instance()[kPreferredCodecA] = "PCMU,PCMA,opus,mpeg4-generic";
-    mINI::Instance()[kPreferredCodecV] = "H264,H265,AV1X,VP9,VP8";
+    mINI::Instance()[kPreferredCodecV] = "H264,H265,AV1,VP9,VP8";
 });
 }
 
@@ -1204,7 +1204,9 @@ RtcSessionSdp::Ptr RtcSession::toRtcSessionSdp() const{
         }
 
         for (auto &cand : m.candidate) {
-            sdp_media.addAttr(std::make_shared<SdpAttrCandidate>(cand));
+            if (cand.port) {
+                sdp_media.addAttr(std::make_shared<SdpAttrCandidate>(cand));
+            }
         }
     }
     return ret;
