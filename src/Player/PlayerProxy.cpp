@@ -16,7 +16,8 @@
 #include "Extension/AAC.h"
 #include "Rtmp/RtmpMediaSource.h"
 #include "Rtsp/RtspMediaSource.h"
-
+#include "Rtsp/RtspPlayer.h"
+#include "Rtmp/RtmpPlayer.h"
 
 using namespace toolkit;
 using namespace std;

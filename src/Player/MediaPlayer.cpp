@@ -10,8 +10,7 @@
 
 #include <algorithm>
 #include "MediaPlayer.h"
-
-using namespace std;
+#include "EventLoopThreadPool.h"
 using namespace toolkit;
 
 namespace mediakit {
@@ -20,7 +19,7 @@ MediaPlayer::MediaPlayer(const EventPoller::Ptr &poller) {
     _poller = poller ? poller : hv::EventLoopThreadPool::Instance()->loop();
 }
 
-void MediaPlayer::play(const string &url) {
+void MediaPlayer::play(const std::string &url) {
     _delegate = PlayerBase::createPlayer(_poller, url);
     assert(_delegate);
     _delegate->setOnShutdown(_on_shutdown);

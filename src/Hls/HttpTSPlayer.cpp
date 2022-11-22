@@ -9,7 +9,7 @@
  */
 
 #include "HttpTSPlayer.h"
-
+#include "Util/logger.h"
 using namespace std;
 using namespace toolkit;
 

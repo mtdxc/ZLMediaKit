@@ -10,7 +10,7 @@
 
 #include "TsPlayerImp.h"
 #include "Hls/HlsPlayer.h"
-
+#include "Common/config.h"
 using namespace toolkit;
 
 namespace mediakit {

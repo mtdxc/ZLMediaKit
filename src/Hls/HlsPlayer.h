@@ -11,11 +11,13 @@
 #ifndef HTTP_HLSPLAYER_H
 #define HTTP_HLSPLAYER_H
 
+#include <set>
 #include "Player/PlayerBase.h"
 #include "HttpTSPlayer.h"
 #include "HlsParser.h"
 #include "HttpClient.h"
 #include "TS/TSDecoder.h"
+#include "Util/TimeTicker.h"
 
 #define MIN_TIMEOUT_MULTIPLE 2
 #define MAX_TIMEOUT_MULTIPLE 5
