@@ -18,6 +18,7 @@
 #include "Camera/NvrRecord.h"
 #include "TS/Decoder.h"
 #include "EventLoopThreadPool.h"
+#include "HlsMediaSource.h"
 
 #if defined(_WIN32)
 //#include "Util/strptime_win.h"

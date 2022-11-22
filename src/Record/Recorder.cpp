@@ -9,9 +9,8 @@
  */
 
 #include "Recorder.h"
-#include "Common/config.h"
-#include "Common/MediaSource.h"
 #include "Util/File.h"
+#include "Common/config.h"
 #include "MP4Recorder.h"
 #include "Hls/HlsRecorder.h"
 

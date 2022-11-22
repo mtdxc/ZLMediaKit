@@ -14,10 +14,14 @@
 #include <memory>
 #include <string>
 #include <stdlib.h>
+#include <list>
+#include <map>
+#include "Record/Recorder.h"
 #include "HlsMaker.h"
-#include "HlsMediaSource.h"
+#include "toolkit.h"
 
 namespace mediakit {
+class HlsMediaSource;
 typedef std::function<void (bool, std::string)> SnapCB;
 // 负责将多个TS文件合并成一个大ts文件
 struct SnapTask {
@@ -66,7 +70,7 @@ public:
      * 获取MediaSource
      * @return
      */
-    HlsMediaSource::Ptr getMediaSource() const;
+    std::shared_ptr<HlsMediaSource> getMediaSource() const;
 
     /**
      * 清空缓存
@@ -99,7 +103,7 @@ private:
     RecordInfo _info;
     std::shared_ptr<FILE> _file;
     std::shared_ptr<char> _file_buf;
-    HlsMediaSource::Ptr _media_src;
+    std::shared_ptr<HlsMediaSource> _media_src;
     toolkit::EventPollerPtr _poller;
     std::map<uint64_t/*index*/, TsItem> _segment_file_paths;
     float _duration = 0;
