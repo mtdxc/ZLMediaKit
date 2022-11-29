@@ -11,9 +11,6 @@
 #include <math.h>
 #include "Common/config.h"
 #include "MultiMediaSourceMuxer.h"
-#include "Extension/AAC.h"
-#include "Extension/Opus.h"
-#include "Extension/G711.h"
 #include "Rtp/RtpSender.h"
 #include "Record/HlsRecorder.h"
 #include "Record/HlsMediaSource.h"
@@ -21,9 +18,8 @@
 #include "Rtmp/RtmpMediaSourceMuxer.h"
 #include "TS/TSMediaSourceMuxer.h"
 #include "FMP4/FMP4MediaSourceMuxer.h"
-
-#ifdef ENABLE_FFMPEG
-#include "Codec/Transcode.h"
+#if defined(ENABLE_WEBRTC)
+#include "webrtc/RtcMediaSource.h"
 #endif
 using namespace std;
 using namespace toolkit;
@@ -142,7 +138,7 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const string &vhost, const string &
     }
     if (option.enable_rtc) {
 #if defined(ENABLE_WEBRTC)
-        _rtc = std::make_shared<RtspMediaSourceMuxer>(vhost, app, stream, option, std::make_shared<TitleSdp>(dur_sec), RTC_SCHEMA);
+        _rtc = std::make_shared<RtcMediaSourceMuxer>(vhost, app, stream, option, std::make_shared<TitleSdp>(dur_sec));
 #endif
     }
     if (option.enable_hls) {
@@ -153,14 +149,6 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const string &vhost, const string &
     }
     if (option.enable_ts) {
         _ts = std::make_shared<TSMediaSourceMuxer>(vhost, app, stream, option);
-    }
-    if (option.audio_transcode) {
-#if defined(ENABLE_FFMPEG)
-        _audio_transcode = option.audio_transcode;
-        InfoL << "enable audio_transcode";
-#else
-        InfoL << "without ffmpeg disable audio_transcode";
-#endif
     }
 #if defined(ENABLE_MP4)
     if (option.enable_fmp4) {
@@ -376,68 +364,9 @@ EventPoller::Ptr MultiMediaSourceMuxer::getOwnerPoller(MediaSource &sender) {
 bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
 
     bool ret = false;
-    auto rtmp = _rtmp;
-    auto rtc = _rtc;
-#if defined(ENABLE_FFMPEG)
-    if (_audio_transcode) {
-        if (track->getCodecId() == CodecAAC) {
-            if (rtmp) {
-                rtmp->addTrack(track);
-                rtmp = nullptr;
-            }
-            _audio_dec = nullptr;
-            _audio_enc = nullptr;
-            if (rtc) {
-                Track::Ptr newTrack(new OpusTrack());
-                GET_CONFIG(int, bitrate, General::kOpusBitrate);
-                newTrack->setBitRate(bitrate);
-                rtc->addTrack(newTrack);
-                rtc = nullptr;
-
-                // aac to opus
-                _audio_dec.reset(new FFmpegDecoder(track));
-                _audio_enc.reset(new FFmpegEncoder(newTrack));
-                _audio_dec->setOnDecode([this](const FFmpegFrame::Ptr & frame) {
-                    _audio_enc->inputFrame(frame, false);
-                });
-                _audio_enc->setOnEncode([this](const Frame::Ptr& frame) {
-                    // fill data to _rtc
-                    if (_rtc && _rtc->isEnabled())
-                        _rtc->inputFrame(frame);
-                });
-            }
-        }
-        else if (track->getTrackType() == TrackAudio) {
-            if (rtc) {
-                rtc->addTrack(track);
-                rtc = nullptr;
-            }
-            _audio_dec = nullptr;
-            _audio_enc = nullptr;
-            if (rtmp) {
-                Track::Ptr newTrack(new AACTrack(44100, std::dynamic_pointer_cast<AudioTrack>(track)->getAudioChannel()));
-                GET_CONFIG(int, bitrate, General::kAacBitrate);
-                newTrack->setBitRate(bitrate);
-                rtmp->addTrack(newTrack);
-                rtmp = nullptr;
-
-                _audio_dec.reset(new FFmpegDecoder(track));
-                _audio_enc.reset(new FFmpegEncoder(newTrack));
-                _audio_dec->setOnDecode([this](const FFmpegFrame::Ptr & frame) {
-                    _audio_enc->inputFrame(frame, false);
-                });
-                _audio_enc->setOnEncode([this](const Frame::Ptr& frame) {
-                    // fill aac frame to rtmp
-                    if (_rtmp && _rtmp->isEnabled())
-                        _rtmp->inputFrame(frame);
-                });
-            }
-        }
-    }
-#endif
-    if (rtc && rtc->addTrack(track))
-        ret = true;
-    if (rtmp && rtmp->addTrack(track))
+    if (_rtc && !isMuteCodec(track->getCodecId()))
+        ret = _rtc->addTrack(track);
+    if (_rtmp && _rtmp->addTrack(track))
         ret = true;
     if (_rtsp && _rtsp->addTrack(track))
         ret = true;
@@ -502,10 +431,6 @@ void MultiMediaSourceMuxer::resetTracks() {
     if (_rtc) {
         _rtc->resetTracks();
     }
-#if defined(ENABLE_FFMPEG)
-    _audio_dec = nullptr;
-    _audio_dec = nullptr;
-#endif
 #if defined(ENABLE_MP4)
     if (_fmp4) {
         _fmp4->resetTracks();
@@ -538,34 +463,10 @@ bool MultiMediaSourceMuxer::onTrackFrame(const Frame::Ptr &frame_in) {
     }
 
     bool ret = false;
-    RtspMediaSourceMuxer::Ptr rtc;
-    RtmpMediaSourceMuxer::Ptr rtmp;
-    if (_rtc && _rtc->isEnabled())
-        rtc = _rtc;
-    if (_rtmp && _rtmp->isEnabled())
-        rtmp = _rtmp;
-#if defined(ENABLE_FFMPEG)
-    if (_audio_transcode) {
-        if (frame->getCodecId() == CodecAAC) {
-            if (rtc) {
-                if (_audio_dec && rtc->readerCount())
-                    _audio_dec->inputFrame(frame, true, false, false);
-                rtc = nullptr;
-            }
-        }
-        else if (frame->getTrackType() == TrackAudio) {
-            if (rtmp) {
-                if (_audio_dec && rtmp->readerCount())
-                    _audio_dec->inputFrame(frame, true, false, false);
-                rtmp = nullptr;
-            }
-        }
-    }
-#endif
-    if (rtc && rtc->inputFrame(frame))
-      ret = true;
+    if (_rtc && !isMuteCodec(frame->getCodecId()))
+      ret = _rtc->inputFrame(frame);
 
-    if (rtmp && rtmp->inputFrame(frame))
+    if (_rtmp && _rtmp->inputFrame(frame))
       ret = true;
 
     if (_rtsp && _rtsp->inputFrame(frame))

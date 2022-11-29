@@ -17,7 +17,7 @@
 #include "Rtcp/RtcpContext.h"
 #include "Rtsp/RtpReceiver.h"
 #include "WebRtcTransport.h"
-
+#include "RtcMediaSource.h"
 #include "WebRtcEchoTest.h"
 #include "WebRtcPlayer.h"
 #include "WebRtcPusher.h"
@@ -42,6 +42,9 @@ const string kTimeOutSec = RTC_FIELD "timeoutSec";
 const string kExternIP = RTC_FIELD "externIP";
 // 设置remb比特率，非0时关闭twcc并开启remb。该设置在rtc推流时有效，可以控制推流画质
 const string kRembBitRate = RTC_FIELD "rembBitRate";
+// 是否转码G711音频，做到: 出rtc将g711转成aac，入rtc将g711转成opus
+const string kTranscodeG711 = RTC_FIELD "transcodeG711";
+
 // webrtc单端口udp服务器
 const string kPort = RTC_FIELD "port";
 
@@ -53,6 +56,7 @@ static onceToken token([]() {
     mINI::Instance()[kRembBitRate] = 0;
     mINI::Instance()[kPort] = 8000;
     mINI::Instance()[kTcpPort] = 8000;
+    mINI::Instance()[kTranscodeG711] = 0;
 });
 
 } // namespace RTC
@@ -1162,7 +1166,7 @@ void push_plugin(Session &sender, const WebRtcArgs &args, const WebRtcPluginMana
             return;
         }
 
-        auto push_src = std::make_shared<RtspMediaSourceImp>(info._vhost, info._app, info._streamid, RTC_SCHEMA);
+        auto push_src = std::make_shared<RtcMediaSourceImp>(info._vhost, info._app, info._streamid);
         auto push_src_ownership = push_src->getOwnership();
         if (!push_src->setProtocolOption(option)) {
             cb(WebRtcException(SockException(Err_other, "already publishing")));
