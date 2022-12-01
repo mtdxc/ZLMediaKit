@@ -106,13 +106,10 @@ void PlayerProxy::play(const string &strUrlTmp) {
 }
 
 void PlayerProxy::setDirectProxy() {
+    if (!_option.direct_proxy) return;
     MediaSource::Ptr mediaSource;
     if (dynamic_pointer_cast<RtspPlayer>(_delegate)) {
-        //rtsp拉流
-        GET_CONFIG(bool, directProxy, Rtsp::kDirectProxy);
-        if (directProxy) {
-            mediaSource = std::make_shared<RtspMediaSource>(_vhost, _app, _stream_id);
-        }
+        mediaSource = std::make_shared<RtspMediaSource>(_vhost, _app, _stream_id);
     } else if (dynamic_pointer_cast<RtmpPlayer>(_delegate)) {
         //rtmp拉流,rtmp强制直接代理
         mediaSource = std::make_shared<RtmpMediaSource>(_vhost, _app, _stream_id);

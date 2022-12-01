@@ -51,7 +51,7 @@ public:
     /**
      * 设置协议转换选项
      */
-    void setProtocolOption(const ProtocolOption &option);
+    bool setProtocolOption(const ProtocolOption &option);
 
     const ProtocolOption &getProtocolOption() const {
         return _option;

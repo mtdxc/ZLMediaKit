@@ -85,7 +85,8 @@ void RtmpMediaSourceImp::onWrite(RtmpPacket::Ptr pkt, bool /*= true*/)
         //未获取到所有Track后，或者开启转协议，那么需要解复用rtmp
         _demuxer->inputRtmp(pkt);
     }
-    RtmpMediaSource::onWrite(std::move(pkt));
+    if (_option.direct_proxy)
+        RtmpMediaSource::onWrite(std::move(pkt));
 }
 
 int RtmpMediaSourceImp::totalReaderCount()
@@ -93,12 +94,13 @@ int RtmpMediaSourceImp::totalReaderCount()
     return readerCount() + (_muxer ? _muxer->totalReaderCount() : 0);
 }
 
-void RtmpMediaSourceImp::setProtocolOption(const ProtocolOption &option)
+bool RtmpMediaSourceImp::setProtocolOption(const ProtocolOption &option)
 {
     //不重复生成rtmp
     _option = option;
     //不重复生成rtmp协议
-    _option.enable_rtmp = false;
+    if (_option.direct_proxy)
+        _option.enable_rtmp = false;
     _muxer = std::make_shared<MultiMediaSourceMuxer>(getVhost(), getApp(), getId(), _demuxer->getDuration(), _option);
     _muxer->setMediaListener(getListener());
     _muxer->setTrackListener(std::static_pointer_cast<RtmpMediaSourceImp>(shared_from_this()));
@@ -109,6 +111,7 @@ void RtmpMediaSourceImp::setProtocolOption(const ProtocolOption &option)
         _muxer->addTrack(track);
         track->addDelegate(_muxer);
     }
+    return true;
 }
 
 bool RtmpMediaSourceImp::addTrack(const Track::Ptr &track)

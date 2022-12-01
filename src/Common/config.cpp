@@ -29,6 +29,7 @@ bool loadIniConfig(const char *ini_path) {
         ini = exePath() + ".ini";
     }
     try {
+        InfoL << ini;
         mINI::Instance().parseFile(ini);
         NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastReloadConfig);
         return true;
@@ -99,6 +100,7 @@ static onceToken token([]() {
 
 namespace Protocol {
 #define PROTOCOL_FIELD "protocol."
+const string kDirectProxy = PROTOCOL_FIELD "direct_proxy";
 const string kModifyStamp = PROTOCOL_FIELD "modify_stamp";
 const string kEnableAudio = PROTOCOL_FIELD "enable_audio";
 const string kAddMuteAudio = PROTOCOL_FIELD "add_mute_audio";
@@ -127,6 +129,7 @@ const string kTSDemand = PROTOCOL_FIELD "ts_demand";
 const string kFMP4Demand = PROTOCOL_FIELD "fmp4_demand";
 
 static onceToken token([]() {
+    mINI::Instance()[kDirectProxy] = 1;
     mINI::Instance()[kModifyStamp] = 0;
     mINI::Instance()[kEnableAudio] = 1;
     mINI::Instance()[kAddMuteAudio] = 1;
@@ -214,7 +217,6 @@ namespace Rtsp {
 const string kAuthBasic = RTSP_FIELD "authBasic";
 const string kHandshakeSecond = RTSP_FIELD "handshakeSecond";
 const string kKeepAliveSecond = RTSP_FIELD "keepAliveSecond";
-const string kDirectProxy = RTSP_FIELD "directProxy";
 const string kLowLatency = RTSP_FIELD"lowLatency";
 
 static onceToken token([]() {
@@ -222,7 +224,6 @@ static onceToken token([]() {
     mINI::Instance()[kAuthBasic] = 0;
     mINI::Instance()[kHandshakeSecond] = 15;
     mINI::Instance()[kKeepAliveSecond] = 15;
-    mINI::Instance()[kDirectProxy] = 1;
     mINI::Instance()[kLowLatency] = 0;
 });
 } // namespace Rtsp
