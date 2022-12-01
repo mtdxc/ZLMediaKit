@@ -186,6 +186,13 @@ extern const std::string kAacBitrate;
 } // namespace General
 
 namespace Protocol {
+// 是否直接代理
+// 直接代理后支持任意编码格式，但是会导致GOP缓存无法定位到I帧，可能会导致开播花屏
+// 并且如果是tcp方式拉流，如果rtp大于mtu会导致无法使用udp方式代理
+// 假定您的拉流源地址不是264或265或AAC，那么你可以使用直接代理的方式来支持rtsp代理
+// 默认开启rtsp直接代理，rtmp由于没有这些问题，是强制开启直接代理的
+extern const std::string kDirectProxy;
+
 //时间戳修复这一路流标志位
 extern const std::string kModifyStamp;
 //转协议是否开启音频
@@ -266,13 +273,6 @@ extern const std::string kAuthBasic;
 extern const std::string kHandshakeSecond;
 // 维持链接超时时间，默认15秒
 extern const std::string kKeepAliveSecond;
-
-// rtsp拉流代理是否直接代理
-// 直接代理后支持任意编码格式，但是会导致GOP缓存无法定位到I帧，可能会导致开播花屏
-// 并且如果是tcp方式拉流，如果rtp大于mtu会导致无法使用udp方式代理
-// 假定您的拉流源地址不是264或265或AAC，那么你可以使用直接代理的方式来支持rtsp代理
-// 默认开启rtsp直接代理，rtmp由于没有这些问题，是强制开启直接代理的
-extern const std::string kDirectProxy;
 
 // rtsp 转发是否使用低延迟模式，当开启时，不会缓存rtp包，来提高并发，可以降低一帧的延迟
 extern const std::string kLowLatency;

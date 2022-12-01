@@ -53,6 +53,7 @@ string getOriginTypeString(MediaOriginType type){
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ProtocolOption::ProtocolOption() {
+    GET_CONFIG(bool, s_direct_proxy, Protocol::kDirectProxy);
     GET_CONFIG(bool, s_modify_stamp, Protocol::kModifyStamp);
     GET_CONFIG(bool, s_enabel_audio, Protocol::kEnableAudio);
     GET_CONFIG(bool, s_add_mute_audio, Protocol::kAddMuteAudio);
@@ -78,12 +79,16 @@ ProtocolOption::ProtocolOption() {
     GET_CONFIG(string, s_mp4_save_path, Protocol::kMP4SavePath);
 
     GET_CONFIG(string, s_hls_save_path, Protocol::kHlsSavePath);
+    if (s_continue_push_ms >0 && s_direct_proxy) {
+        InfoL << "reset direct_proxy for continue_push";
+        s_direct_proxy = false;
+    }
 
+    direct_proxy = s_direct_proxy;
     modify_stamp = s_modify_stamp;
     enable_audio = s_enabel_audio;
     add_mute_audio = s_add_mute_audio;
     continue_push_ms = s_continue_push_ms;
-
     enable_hls = s_enable_hls;
     enable_mp4 = s_enable_mp4;
     enable_rtsp = s_enable_rtsp;

@@ -132,7 +132,7 @@ private:
 class ProtocolOption {
 public:
     ProtocolOption();
-
+    bool direct_proxy;
     //时间戳修复这一路流标志位
     bool modify_stamp;
     //转协议是否开启音频
@@ -183,6 +183,7 @@ public:
     template <typename MAP>
     ProtocolOption(const MAP &allArgs) : ProtocolOption() {
 #define GET_OPT_VALUE(key) getArgsValue(allArgs, #key, key)
+        GET_OPT_VALUE(direct_proxy);
         GET_OPT_VALUE(modify_stamp);
         GET_OPT_VALUE(enable_audio);
         GET_OPT_VALUE(add_mute_audio);

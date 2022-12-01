@@ -100,20 +100,18 @@ void RtspMediaSourceImp::onWrite(RtpPacket::Ptr rtp, bool key_pos)
         //需要解复用rtp
         key_pos = _demuxer->inputRtp(rtp);
     }
-    GET_CONFIG(bool, directProxy, Rtsp::kDirectProxy);
-    if (directProxy) {
+    if (_option.direct_proxy) {
         //直接代理模式才直接使用原始rtp
         RtspMediaSource::onWrite(std::move(rtp), key_pos);
     }
 }
 
-void RtspMediaSourceImp::setProtocolOption(const ProtocolOption &option)
+bool RtspMediaSourceImp::setProtocolOption(const ProtocolOption &option)
 {
-    GET_CONFIG(bool, direct_proxy, Rtsp::kDirectProxy);
     //开启直接代理模式时，rtsp直接代理，不重复产生；但是有些rtsp推流端，由于sdp中已有sps pps，rtp中就不再包括sps pps,
     //导致rtc无法播放，所以在rtsp推流rtc播放时，建议关闭直接代理模式
     _option = option;
-    if (direct_proxy) {
+    if (option.direct_proxy) {
 		if (getSchema() == RTC_SCHEMA)
              _option.enable_rtc = false;
 		if (getSchema() == RTSP_SCHEMA)
@@ -129,6 +127,7 @@ void RtspMediaSourceImp::setProtocolOption(const ProtocolOption &option)
         _muxer->addTrack(track);
         track->addDelegate(_muxer);
     }
+    return true;
 }
 
 
