@@ -86,10 +86,44 @@ const std::string &MultiMediaSourceMuxer::getStreamId() const {
 
 std::string MultiMediaSourceMuxer::shortUrl() const {
     auto ret = getOriginUrl(MediaSource::NullMediaSource());
-    if (!ret.empty()) {
-        return ret;
+    if (ret.empty()) {
+        ret = key();
     }
+    return ret;
+}
+
+std::string MultiMediaSourceMuxer::key() const {
     return _vhost + "/" + _app + "/" + _stream_id;
+}
+
+MultiMediaSourceMuxer::Ptr MultiMediaSourceMuxer::obtain(const std::string &vhost, const std::string &app, const std::string &stream, float dur_sec, const ProtocolOption &option) {
+    static std::mutex ptrLock;
+    static std::map<std::string, std::weak_ptr<MultiMediaSourceMuxer>> ptrMap;
+    std::string key = vhost + "/" + app + "/" + stream;
+    std::unique_lock<decltype(ptrLock)> l(ptrLock);
+    MultiMediaSourceMuxer::Ptr ptr;
+    auto it = ptrMap.find(key);
+    if (it != ptrMap.end()) {
+        ptr = it->second.lock();
+    }
+    
+    if (!ptr) {
+        ptr = std::make_shared<MultiMediaSourceMuxer>(vhost, app, stream, dur_sec, option);
+        ptrMap[key] = ptr;
+    }
+
+    return MultiMediaSourceMuxer::Ptr(ptr.get(), [ptr](MultiMediaSourceMuxer*) {
+        if (ptr.use_count()>1) return;
+        if (ptr->_option.continue_push_ms) {
+            ptr->getOwnerPoller(MediaSource::NullMediaSource())->doDelayTask(ptr->_option.continue_push_ms, [ptr](){
+                if (1 == ptr.use_count()) {
+                    std::unique_lock<decltype(ptrLock)> l(ptrLock);
+                    ptrMap.erase(ptr->key());
+                }
+                return 0;
+            });
+        }
+    });
 }
 
 MultiMediaSourceMuxer::MultiMediaSourceMuxer(const string &vhost, const string &app, const string &stream, float dur_sec, const ProtocolOption &option) {
@@ -453,6 +487,7 @@ void MultiMediaSourceMuxer::onAllTrackReady() {
 }
 
 void MultiMediaSourceMuxer::resetTracks() {
+    InfoL << shortUrl();
     MediaSink::resetTracks();
 
     if (_rtmp) {

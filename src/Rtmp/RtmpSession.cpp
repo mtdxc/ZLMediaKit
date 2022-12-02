@@ -28,7 +28,7 @@ RtmpSession::~RtmpSession() {
 }
 
 void RtmpSession::onError(const SockException& err) {
-    bool is_player = !_push_src_ownership;
+    bool is_player = !_push_src;
     uint64_t duration = _ticker.createdTime() / 1000;
     WarnP(this) << (is_player ? "RTMP播放器(" : "RTMP推流器(")
                 << _media_info.shortUrl()
@@ -42,14 +42,7 @@ void RtmpSession::onError(const SockException& err) {
         NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastFlowReport, _media_info, _total_bytes, duration, is_player, static_cast<SockInfo &>(*this));
     }
 
-    //如果是主动关闭的，那么不延迟注销
-    if (_push_src && _continue_push_ms && err.getErrCode() != Err_shutdown) {
-        //取消所有权
-        _push_src_ownership = nullptr;
-        //延时10秒注销流
-        auto push_src = std::move(_push_src);
-        getPoller()->doDelayTask(_continue_push_ms, [push_src]() { return 0; });
-    }
+    _push_src = nullptr;
 }
 
 void RtmpSession::onManager() {
@@ -145,28 +138,8 @@ void RtmpSession::onCmd_publish(AMFDecoder &dec) {
         }
 
         assert(!_push_src);
-        auto src = MediaSource::find(RTMP_SCHEMA, _media_info._vhost, _media_info._app, _media_info._streamid);
-        auto push_failed = (bool)src;
-
-        while (src) {
-            //尝试断连后继续推流
-            auto rtmp_src = dynamic_pointer_cast<RtmpMediaSourceImp>(src);
-            if (!rtmp_src) {
-                //源不是rtmp推流产生的
-                break;
-            }
-            auto ownership = rtmp_src->getOwnership();
-            if (!ownership) {
-                //获取推流源所有权失败
-                break;
-            }
-            _push_src = std::move(rtmp_src);
-            _push_src_ownership = std::move(ownership);
-            push_failed = false;
-            break;
-        }
-
-        if (push_failed) {
+        _push_src = std::make_shared<RtmpMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
+        if (!_push_src->setProtocolOption(option)) {
             sendStatus({"level", "error",
                         "code", "NetStream.Publish.BadName",
                         "description", "Already publishing.",
@@ -175,15 +148,7 @@ void RtmpSession::onCmd_publish(AMFDecoder &dec) {
             return;
         }
 
-        if (!_push_src) {
-            _push_src = std::make_shared<RtmpMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
-            //获取所有权
-            _push_src_ownership = _push_src->getOwnership();
-            _push_src->setProtocolOption(option);
-        }
-
         _push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
-        _continue_push_ms = option.continue_push_ms;
         sendStatus({"level", "status",
                     "code", "NetStream.Publish.Start",
                     "description", "Started publishing stream.",

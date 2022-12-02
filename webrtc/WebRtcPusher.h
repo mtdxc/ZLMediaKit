@@ -56,8 +56,6 @@ private:
 
 private:
     bool _simulcast = false;
-    //断连续推延时
-    uint32_t _continue_push_ms = 0;
     //媒体相关元数据
     MediaInfo _media_info;
     //推流的rtsp源

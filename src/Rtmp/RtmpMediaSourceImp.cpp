@@ -101,7 +101,11 @@ bool RtmpMediaSourceImp::setProtocolOption(const ProtocolOption &option)
     //不重复生成rtmp协议
     if (_option.direct_proxy)
         _option.enable_rtmp = false;
-    _muxer = std::make_shared<MultiMediaSourceMuxer>(getVhost(), getApp(), getId(), _demuxer->getDuration(), _option);
+    auto muxer = MultiMediaSourceMuxer::obtain(getVhost(), getApp(), getId(), _demuxer->getDuration(), _option);
+    if(muxer->getDelegate())
+        return false;
+    muxer->resetTracks();
+    _muxer = muxer;
     _muxer->setMediaListener(getListener());
     _muxer->setTrackListener(std::static_pointer_cast<RtmpMediaSourceImp>(shared_from_this()));
     //让_muxer对象拦截一部分事件(比如说录像相关事件)
