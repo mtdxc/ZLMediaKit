@@ -1161,39 +1161,11 @@ void push_plugin(Session &sender, const WebRtcArgs &args, const WebRtcPluginMana
             cb(WebRtcException(SockException(Err_other, err)));
             return;
         }
-        std::string schema = RTC_SCHEMA;
-        RtspMediaSourceImp::Ptr push_src;
-        std::shared_ptr<void> push_src_ownership;
-        auto src = MediaSource::find(schema, info._vhost, info._app, info._streamid);
-        auto push_failed = (bool)src;
 
-        while (src) {
-            // 尝试断连后继续推流
-            auto rtsp_src = dynamic_pointer_cast<RtspMediaSourceImp>(src);
-            if (!rtsp_src) {
-                // 源不是rtsp推流产生的
-                break;
-            }
-            auto ownership = rtsp_src->getOwnership();
-            if (!ownership) {
-                // 获取推流源所有权失败
-                break;
-            }
-            push_src = std::move(rtsp_src);
-            push_src_ownership = std::move(ownership);
-            push_failed = false;
-            break;
-        }
-
-        if (push_failed) {
+        auto push_src = std::make_shared<RtspMediaSourceImp>(info._vhost, info._app, info._streamid, RTC_SCHEMA);
+        auto push_src_ownership = push_src->getOwnership();
+        if (!push_src->setProtocolOption(option)) {
             cb(WebRtcException(SockException(Err_other, "already publishing")));
-            return;
-        }
-
-        if (!push_src) {
-            push_src = std::make_shared<RtspMediaSourceImp>(info._vhost, info._app, info._streamid, schema);
-            push_src_ownership = push_src->getOwnership();
-            push_src->setProtocolOption(option);
         }
         auto rtc = WebRtcPusher::create(EventPollerPool::Instance().getPoller(), push_src, push_src_ownership, info, option, perferred_tcp);
         push_src->setListener(rtc);

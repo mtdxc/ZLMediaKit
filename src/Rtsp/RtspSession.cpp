@@ -62,7 +62,7 @@ RtspSession::~RtspSession() {
 }
 
 void RtspSession::onError(const SockException &err) {
-    bool is_player = !_push_src_ownership;
+    bool is_player = !_push_src;
     uint64_t duration = _alive_ticker.createdTime() / 1000;
     WarnP(this) << (is_player ? "RTSP播放器(" : "RTSP推流器(")
                 << _media_info.shortUrl()
@@ -86,14 +86,7 @@ void RtspSession::onError(const SockException &err) {
         NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastFlowReport, _media_info, _bytes_usage, duration, is_player, static_cast<SockInfo &>(*this));
     }
 
-    //如果是主动关闭的，那么不延迟注销
-    if (_push_src && _continue_push_ms  && err.getErrCode() != Err_shutdown) {
-        //取消所有权
-        _push_src_ownership = nullptr;
-        //延时10秒注销流
-        auto push_src = std::move(_push_src);
-        getPoller()->doDelayTask(_continue_push_ms, [push_src]() { return 0; });
-    }
+    _push_src = nullptr;
 }
 
 void RtspSession::onManager() {
@@ -226,33 +219,6 @@ void RtspSession::handleReq_ANNOUNCE(const Parser &parser) {
         }
 
         assert(!_push_src);
-        auto src = MediaSource::find(RTSP_SCHEMA, _media_info._vhost, _media_info._app, _media_info._streamid);
-        auto push_failed = (bool)src;
-
-        while (src) {
-            //尝试断连后继续推流
-            auto rtsp_src = dynamic_pointer_cast<RtspMediaSourceImp>(src);
-            if (!rtsp_src) {
-                //源不是rtsp推流产生的
-                break;
-            }
-            auto ownership = rtsp_src->getOwnership();
-            if (!ownership) {
-                //获取推流源所有权失败
-                break;
-            }
-            _push_src = std::move(rtsp_src);
-            _push_src_ownership = std::move(ownership);
-            push_failed = false;
-            break;
-        }
-
-        if (push_failed) {
-            sendRtspResponse("406 Not Acceptable", { "Content-Type", "text/plain" }, "Already publishing.");
-            string err = StrPrinter << "ANNOUNCE: Already publishing:" << _media_info.shortUrl() << endl;
-            throw SockException(Err_shutdown, err);
-        }
-
         SdpParser sdpParser(parser.Content());
         _sessionid = makeRandStr(12);
         _sdp_track = sdpParser.getAvailableTrack();
@@ -268,16 +234,14 @@ void RtspSession::handleReq_ANNOUNCE(const Parser &parser) {
             _rtcp_context.emplace_back(std::make_shared<RtcpContextForRecv>());
         }
 
-        if (!_push_src) {
-            _push_src = std::make_shared<RtspMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
-            //获取所有权
-            _push_src_ownership = _push_src->getOwnership();
-            _push_src->setProtocolOption(option);
-            _push_src->setSdp(parser.Content());
+        _push_src = std::make_shared<RtspMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
+        if (!_push_src->setProtocolOption(option)) {
+            sendRtspResponse("406 Not Acceptable", { "Content-Type", "text/plain" }, "Already publishing.");
+            string err = StrPrinter << "ANNOUNCE: Already publishing:" << _media_info.shortUrl() << endl;
+            throw SockException(Err_shutdown, err);
         }
-
+        _push_src->setSdp(parser.Content());
         _push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
-        _continue_push_ms = option.continue_push_ms;
         sendRtspResponse("200 OK");
     };
 

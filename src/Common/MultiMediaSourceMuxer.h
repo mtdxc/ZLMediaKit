@@ -40,7 +40,7 @@ public:
 
     MultiMediaSourceMuxer(const std::string &vhost, const std::string &app, const std::string &stream, float dur_sec = 0.0,const ProtocolOption &option = ProtocolOption());
     ~MultiMediaSourceMuxer() override = default;
-
+    static Ptr obtain(const std::string &vhost, const std::string &app, const std::string &stream, float dur_sec = 0.0,const ProtocolOption &option = ProtocolOption());
     /**
      * 设置事件监听器
      * @param listener 监听器
@@ -131,7 +131,7 @@ public:
     const std::string& getApp() const;
     const std::string& getStreamId() const;
     std::string shortUrl() const;
-
+    std::string key() const;
 protected:
     /////////////////////////////////MediaSink override/////////////////////////////////
 

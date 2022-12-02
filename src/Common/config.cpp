@@ -86,7 +86,7 @@ static onceToken token([]() {
     mINI::Instance()[kEnableVhost] = 0;
     mINI::Instance()[kOpusBitrate] = 64000;
     mINI::Instance()[kAacBitrate] = 64000;
-    mINI::Instance()[kResetWhenRePlay] = 1;
+    mINI::Instance()[kResetWhenRePlay] = 0;
     mINI::Instance()[kMergeWriteMS] = 0;
     mINI::Instance()[kMediaServerId] = makeRandStr(16);
     mINI::Instance()[kCheckNvidiaDev] = 1;

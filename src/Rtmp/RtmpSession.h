@@ -88,8 +88,6 @@ private:
 private:
     bool _set_meta_data = false;
     double _recv_req_id = 0;
-    //断连续推延时
-    uint32_t _continue_push_ms = 0;
     //消耗的总流量
     uint64_t _total_bytes = 0;
     std::string _tc_url;
@@ -99,7 +97,6 @@ private:
     std::weak_ptr<RtmpMediaSource> _play_src;
     AMFValue _push_metadata;
     RtmpMediaSourceImp::Ptr _push_src;
-    std::shared_ptr<void> _push_src_ownership;
     RtmpMediaSource::RingType::RingReader::Ptr _ring_reader;
 };
 

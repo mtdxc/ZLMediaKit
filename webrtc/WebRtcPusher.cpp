@@ -38,7 +38,6 @@ WebRtcPusher::WebRtcPusher(const EventPoller::Ptr &poller,
     _media_info = info;
     _push_src = src;
     _push_src_ownership = ownership;
-    _continue_push_ms = option.continue_push_ms;
     CHECK(_push_src);
 }
 
@@ -62,7 +61,9 @@ int WebRtcPusher::totalReaderCount(MediaSource &sender) {
     for (auto &src : _push_src_sim) {
         total_count += src.second->totalReaderCount();
     }
-    return total_count + _push_src->totalReaderCount();
+    if (_push_src)
+        total_count += _push_src->totalReaderCount();
+    return total_count;
 }
 
 MediaOriginType WebRtcPusher::getOriginType(MediaSource &sender) const {
@@ -126,22 +127,16 @@ void WebRtcPusher::onDestory() {
     GET_CONFIG(uint32_t, iFlowThreshold, General::kFlowThreshold);
 
     if (getSession()) {
-        WarnL << "RTC推流器("
-              << _media_info.shortUrl()
-              << ")结束推流,耗时(s):" << duration;
+        WarnL << "RTC推流器(" << _media_info.shortUrl() << ")结束推流,耗时(s):" << duration;
         if (bytes_usage >= iFlowThreshold * 1024) {
             NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastFlowReport, _media_info, bytes_usage, duration,
                                                false, static_cast<SockInfo &>(*getSession()));
         }
     }
 
-    if (_push_src && _continue_push_ms) {
-        //取消所有权
-        _push_src_ownership = nullptr;
-        //延时10秒注销流
-        auto push_src = std::move(_push_src);
-        getPoller()->doDelayTask(_continue_push_ms, [push_src]() { return 0; });
-    }
+    _push_src = nullptr;
+    //取消所有权
+    _push_src_ownership = nullptr;
 }
 
 void WebRtcPusher::onRtcConfigure(RtcConfigure &configure) const {

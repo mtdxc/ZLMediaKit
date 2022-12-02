@@ -140,8 +140,7 @@ private:
     //是否已经触发on_play事件
     bool _emit_on_play = false;
     bool _send_sr_rtcp[2] = {true, true};
-    //断连续推延时
-    uint32_t _continue_push_ms = 0;
+
     //推流或拉流客户端采用的rtp传输方式
     Rtsp::eRtpType _rtp_type = Rtsp::RTP_Invalid;
     //收到的seq，回复时一致
@@ -163,8 +162,6 @@ private:
     MediaInfo _media_info;
     //rtsp推流相关绑定的源
     RtspMediaSourceImp::Ptr _push_src;
-    //推流器所有权
-    std::shared_ptr<void> _push_src_ownership;
     //rtsp播放器绑定的直播源
     std::weak_ptr<RtspMediaSource> _play_src;
     //直播源读取器

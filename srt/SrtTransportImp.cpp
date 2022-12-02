@@ -157,10 +157,14 @@ void SrtTransportImp::emitOnPublish() {
                 return;
             }
             if (err.empty()) {
-                strong_self->_muxer = std::make_shared<MultiMediaSourceMuxer>(strong_self->_media_info._vhost,
-                                                                              strong_self->_media_info._app,
-                                                                              strong_self->_media_info._streamid,0.0f,
-                                                                              option);
+                auto mi = strong_self->_media_info;
+                auto muxer = MultiMediaSourceMuxer::obtain(mi._vhost, mi._app, mi._streamid, 0.0f, option);
+                if (muxer->getDelegate()) {
+                    strong_self->onShutdown(SockException(Err_refused, "流已存在"));
+                    return;
+                }
+                muxer->resetTracks();
+                strong_self->_muxer = muxer;
                 strong_self->_muxer->setMediaListener(strong_self);
                 strong_self->doCachedFunc();
                 InfoP(strong_self) << "允许 srt 推流";
