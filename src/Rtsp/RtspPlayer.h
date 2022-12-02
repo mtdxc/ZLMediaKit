@@ -20,7 +20,9 @@
 #include "Network/TcpClient.h"
 #include "RtspSplitter.h"
 #include "RtpReceiver.h"
-
+#ifdef _WIN32
+#define strncasecmp _strnicmp
+#endif
 namespace mediakit {
 class RtcpContext;
 //实现了rtsp播放器协议部分的功能，及数据接收功能
@@ -36,7 +38,7 @@ public:
     void speed(float speed) override;
     void teardown() override;
     float getPacketLossRate(TrackType type) const override;
-
+    bool isRtc() const {return 0==strncasecmp(_play_url.c_str(), "rtc", 3);}
 protected:
     //派生类回调函数
     virtual bool onCheckSDP(const std::string &sdp) = 0;

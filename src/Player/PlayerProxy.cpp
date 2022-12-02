@@ -14,6 +14,9 @@
 #include "Util/logger.h"
 #include "Rtmp/RtmpMediaSourceImp.h"
 #include "Rtsp/RtspMediaSourceImp.h"
+#ifdef ENABLE_WEBRTC
+#include "../webrtc/RtcMediaSource.h"
+#endif
 #include "Rtmp/RtmpPlayer.h"
 #include "Rtsp/RtspPlayer.h"
 
@@ -120,10 +123,10 @@ void PlayerProxy::play_l(const std::string & newUrl)
 
 void PlayerProxy::setupMediaSource() {
     if (_media_src) return;
-    if (dynamic_pointer_cast<RtspPlayer>(_delegate)) {
-        auto p = std::make_shared<RtspMediaSourceImp>(_vhost, _app, _stream_id);
-        if (p->setProtocolOption(_option))
-            setMediaSource(p);
+    if (auto p = dynamic_pointer_cast<RtspPlayer>(_delegate)) {
+        RtspMediaSourceImp::Ptr s = p->isRtc() ? std::make_shared<RtcMediaSourceImp>(_vhost, _app, _stream_id) : std::make_shared<RtspMediaSourceImp>(_vhost, _app, _stream_id);
+        if (s->setProtocolOption(_option))
+            setMediaSource(s);
     } else if (dynamic_pointer_cast<RtmpPlayer>(_delegate)) {
         auto p = std::make_shared<RtmpMediaSourceImp>(_vhost, _app, _stream_id);
         if (p->setProtocolOption(_option))

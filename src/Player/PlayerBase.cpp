@@ -42,6 +42,10 @@ PlayerBase::Ptr PlayerBase::createPlayer(const EventPoller::Ptr &poller, const s
     if (strcasecmp("rtsp", prefix.data()) == 0) {
         return PlayerBase::Ptr(new RtspPlayerImp(poller), releasePlayer);
     }
+    // rtc采用rtsp来拉
+    if (strcasecmp("rtc", prefix.data()) == 0) {
+        return PlayerBase::Ptr(new RtspPlayerImp(poller), releasePlayer);
+    }
 
     if (strcasecmp("rtmps", prefix.data()) == 0) {
         return PlayerBase::Ptr(new TcpClientWithSSL<RtmpPlayerImp>(poller), releasePlayer);

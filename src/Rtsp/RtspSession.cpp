@@ -129,7 +129,7 @@ void RtspSession::onWholeRtspPacket(Parser &parser) {
     if (_content_base.empty() && method != "GET") {
         _content_base = parser.Url();
         _media_info.parse(parser.FullUrl());
-        _media_info._schema = RTSP_SCHEMA;
+        // _media_info._schema = RTSP_SCHEMA;
     }
 
     using rtsp_request_handler = void (RtspSession::*)(const Parser &parser);
@@ -376,7 +376,7 @@ void RtspSession::onAuthSuccess() {
         if(!strong_self){
             return;
         }
-        auto rtsp_src = dynamic_pointer_cast<RtspMediaSource>(src);
+        auto rtsp_src = std::dynamic_pointer_cast<RtspMediaSource>(src);
         if (!rtsp_src) {
             //未找到相应的MediaSource
             string err = StrPrinter << "no such stream:" << strong_self->_media_info.shortUrl();
