@@ -292,8 +292,24 @@ string RtpExt::dumpString() const {
             printer << "toffset:" << getTransmissionOffset();
             break;
         }
+        case RtpExtType::framemarking07 : 
         case RtpExtType::framemarking : {
-            printer << "framemarking tid:" << (int)getFramemarkingTID();
+            // S|E|I|D|B| TID |   LID         |    TL0PICIDX
+            FrameMarking* mark = (FrameMarking*)data();
+            if (_size>0) {
+                printer << "framemarking: "
+                    << (mark->start ? "S" : " ")
+                    << (mark->end ? "E" : " ")
+                    << (mark->independent ? "I" : " ")
+                    << (mark->discardable ? "D" : " ")
+                    << (mark->base ? "B" : " ")
+                    << ", tid=" << (int)mark->tid;
+                if (_size > 1)
+                    printer << ", lid=" << (int)mark->tid;
+                if (_size > 2)
+                    printer << ", tl0picidx=" << mark->tl0picidx;
+            }
+            //printer << "framemarking tid:" << (int)getFramemarkingTID();
             break;
         }
         default: {
@@ -517,8 +533,21 @@ uint32_t RtpExt::getTransmissionOffset() const {
 //	   |  ID=? |  L=2  |S|E|I|D|B| TID |   LID         |    TL0PICIDX  |
 //	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 uint8_t RtpExt::getFramemarkingTID() const {
-    CHECK(_type == RtpExtType::framemarking && size() >= 3);
+    CHECK(size() >= 1);
     return (*this)[0] & 0x07;
+}
+
+int RtpExt::getFramemarking(FrameMarking& mark) const {
+    CHECK(size() >= 1);
+    char* p = (char*)&mark;
+    if (size()<sizeof(mark)) {
+        memcpy(p, data(), size());
+        memset(p + size(), 0, sizeof(mark) - size());
+    }
+    else{
+        memcpy(p, data(), sizeof(mark));
+    }
+    return size();
 }
 
 void RtpExt::setExtId(uint8_t ext_id) {
@@ -590,6 +619,7 @@ RtpExt RtpExtContext::changeRtpExtId(const RtpHeader *header, bool is_recv, stri
             pr.second.setType(it->second);
             //重新赋值ext id为 ext type，作为后面处理ext的统一中间类型
             pr.second.setExtId((uint8_t) it->second);
+            // InfoL << "rtp " << header->dump(12) << " ext:" << pr.second.dumpString();
             switch (it->second) {
                 case RtpExtType::sdes_rtp_stream_id : rid = pr.second.getRtpStreamId(); break;
                 case RtpExtType::sdes_repaired_rtp_stream_id : repaired_rid = pr.second.getRepairedRtpStreamId(); break;

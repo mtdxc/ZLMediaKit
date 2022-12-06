@@ -29,7 +29,8 @@ namespace mediakit {
     XX(video_timing,                "http://www.webrtc.org/experiments/rtp-hdrext/video-timing") \
     XX(color_space,                 "http://www.webrtc.org/experiments/rtp-hdrext/color-space") \
     XX(csrc_audio_level,            "urn:ietf:params:rtp-hdrext:csrc-audio-level") \
-    XX(framemarking,                "http://tools.ietf.org/html/draft-ietf-avtext-framemarking-07") \
+    XX(framemarking07,              "http://tools.ietf.org/html/draft-ietf-avtext-framemarking-07") \
+    XX(framemarking,                "urn:ietf:params:rtp-hdrext:framemarking") \
     XX(video_content_type,          "http://www.webrtc.org/experiments/rtp-hdrext/video-content-type") \
     XX(playout_delay,               "http://www.webrtc.org/experiments/rtp-hdrext/playout-delay") \
     XX(video_orientation,           "urn:3gpp:video-orientation") \
@@ -45,6 +46,33 @@ enum class RtpExtType : uint8_t {
 };
 
 class RtcMedia;
+
+#if defined(_WIN32)
+#pragma pack(push, 1)
+#endif // defined(_WIN32)
+struct FrameMarking
+{
+#if __BYTE_ORDER == __BIG_ENDIAN
+    uint8_t start : 1;
+    uint8_t end : 1;
+    uint8_t independent : 1;
+    uint8_t discardable : 1;
+    uint8_t base : 1;
+    uint8_t tid : 3;
+#else
+    uint8_t tid : 3;
+    uint8_t base : 1;
+    uint8_t discardable : 1;
+    uint8_t independent : 1;
+    uint8_t end : 1;
+    uint8_t start : 1;
+#endif
+    uint8_t lid;
+    uint8_t tl0picidx;
+};
+#if defined(_WIN32)
+#pragma pack(pop)
+#endif // defined(_WIN32)
 
 //使用次对象的方法前需保证RtpHeader内存未释放
 class RtpExt {
@@ -90,7 +118,8 @@ public:
     uint32_t getTransmissionOffset() const;
 
     uint8_t getFramemarkingTID() const;
-
+    int getFramemarking(FrameMarking& mark) const;
+    
     void setExtId(uint8_t ext_id);
     void clearExt();
     operator bool () const;
