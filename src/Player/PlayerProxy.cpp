@@ -11,11 +11,9 @@
 #include "Common/config.h"
 #include "PlayerProxy.h"
 #include "Util/mini.h"
-#include "Util/MD5.h"
 #include "Util/logger.h"
-#include "Extension/AAC.h"
-#include "Rtmp/RtmpMediaSource.h"
-#include "Rtsp/RtspMediaSource.h"
+#include "Rtmp/RtmpMediaSourceImp.h"
+#include "Rtsp/RtspMediaSourceImp.h"
 #include "Rtmp/RtmpPlayer.h"
 #include "Rtsp/RtspPlayer.h"
 
@@ -23,9 +21,14 @@ using namespace toolkit;
 using namespace std;
 
 namespace mediakit {
+const string kProxySource = "general.proxySource";
+static onceToken token([]() {
+    mINI::Instance()[kProxySource] = 1;
+});
 
 PlayerProxy::PlayerProxy(const string &vhost, const string &app, const string &stream_id, const ProtocolOption &option,
                          int retry_count, const EventPoller::Ptr &poller) : MediaPlayer(poller) , _option(option) {
+    _proxy_source = mINI::Instance()[kProxySource];
     _vhost = vhost;
     _app = app;
     _stream_id = stream_id;
@@ -43,7 +46,7 @@ void PlayerProxy::setOnClose(const function<void(const SockException &ex)> &cb) 
 }
 
 void PlayerProxy::play(const string &strUrlTmp) {
-    weak_ptr<PlayerProxy> weakSelf = shared_from_this();
+    std::weak_ptr<PlayerProxy> weakSelf = shared_from_this();
     std::shared_ptr<int> piFailedCnt(new int(0)); //连续播放失败次数
     setOnPlayResult([weakSelf, strUrlTmp, piFailedCnt](const SockException &err) {
         auto strongSelf = weakSelf.lock();
@@ -76,9 +79,6 @@ void PlayerProxy::play(const string &strUrlTmp) {
             return;
         }
 
-        //注销直接拉流代理产生的流：#532
-        strongSelf->setMediaSource(nullptr);
-
         if (strongSelf->_muxer) {
             auto tracks = strongSelf->MediaPlayer::getTracks(false);
             for (auto &track : tracks) {
@@ -92,6 +92,10 @@ void PlayerProxy::play(const string &strUrlTmp) {
                 strongSelf->_muxer->resetTracks();
             }
         }
+
+        //注销直接拉流代理产生的流：#532
+        strongSelf->setMediaSource(nullptr);
+
         //播放异常中断，延时重试播放
         if (*piFailedCnt < strongSelf->_retry_count || strongSelf->_retry_count < 0) {
             strongSelf->rePlay(strUrlTmp, (*piFailedCnt)++);
@@ -100,9 +104,35 @@ void PlayerProxy::play(const string &strUrlTmp) {
             strongSelf->_on_close(err);
         }
     });
-    MediaPlayer::play(strUrlTmp);
-    _pull_url = strUrlTmp;
-    setDirectProxy();
+    play_l(strUrlTmp);
+}
+
+void PlayerProxy::play_l(const std::string & newUrl)
+{
+    if(newUrl.length())
+        _pull_url = newUrl;
+    MediaPlayer::play(_pull_url);
+    if (_proxy_source)
+        setupMediaSource();
+    else
+        setDirectProxy();
+}
+
+void PlayerProxy::setupMediaSource() {
+    if (_media_src) return;
+    if (dynamic_pointer_cast<RtspPlayer>(_delegate)) {
+        auto p = std::make_shared<RtspMediaSourceImp>(_vhost, _app, _stream_id);
+        if (p->setProtocolOption(_option)) {
+            setMediaSource(p);
+            p->setListener(shared_from_this());
+        }
+    } else if (dynamic_pointer_cast<RtmpPlayer>(_delegate)) {
+        auto p = std::make_shared<RtmpMediaSourceImp>(_vhost, _app, _stream_id);
+        if (p->setProtocolOption(_option)){
+            setMediaSource(p);
+            p->setListener(shared_from_this());
+        }
+    }
 }
 
 void PlayerProxy::setDirectProxy() {
@@ -133,13 +163,10 @@ void PlayerProxy::rePlay(const string &strUrl, int iFailedCnt) {
     weak_ptr<PlayerProxy> weakSelf = shared_from_this();
     _timer = std::make_shared<Timer>(iDelay / 1000.0f, [weakSelf, strUrl, iFailedCnt]() {
         //播放失败次数越多，则延时越长
-        auto strongPlayer = weakSelf.lock();
-        if (!strongPlayer) {
-            return false;
+        if (auto strongPlayer = weakSelf.lock()) {
+            WarnL << "重试播放[" << iFailedCnt << "]:" << strUrl;
+            strongPlayer->play_l(strUrl);
         }
-        WarnL << "重试播放[" << iFailedCnt << "]:" << strUrl;
-        strongPlayer->MediaPlayer::play(strUrl);
-        strongPlayer->setDirectProxy();
         return false;
     }, getPoller());
 }
@@ -162,7 +189,12 @@ bool PlayerProxy::close(MediaSource &sender) {
 }
 
 int PlayerProxy::totalReaderCount() {
-    return (_muxer ? _muxer->totalReaderCount() : 0) + (_media_src ? _media_src->readerCount() : 0);
+    if(_proxy_source)
+        return _media_src ? _media_src->totalReaderCount() : 0;
+    int ret = 0;
+    if (_muxer) ret += _muxer->totalReaderCount();
+    if (_media_src) ret += _media_src->readerCount();
+    return ret;
 }
 
 int PlayerProxy::totalReaderCount(MediaSource &sender) {
@@ -186,14 +218,16 @@ float PlayerProxy::getLossRate(MediaSource &sender, TrackType type) {
 }
 
 void PlayerProxy::onPlaySuccess() {
+    // _muxer已经在MediaSourceImp中创建了，这里略过
+    if (_proxy_source) return;
     GET_CONFIG(bool, reset_when_replay, General::kResetWhenRePlay);
-    if (dynamic_pointer_cast<RtspMediaSource>(_media_src)) {
+    if (std::dynamic_pointer_cast<RtspMediaSource>(_media_src)) {
         //rtsp拉流代理
         if (reset_when_replay || !_muxer) {
             _option.enable_rtsp = false;
             _muxer = std::make_shared<MultiMediaSourceMuxer>(_vhost, _app, _stream_id, getDuration(), _option);
         }
-    } else if (dynamic_pointer_cast<RtmpMediaSource>(_media_src)) {
+    } else if (std::dynamic_pointer_cast<RtmpMediaSource>(_media_src)) {
         //rtmp拉流代理
         if (reset_when_replay || !_muxer) {
             _option.enable_rtmp = false;
@@ -201,9 +235,8 @@ void PlayerProxy::onPlaySuccess() {
         }
     } else {
         //其他拉流代理
-        if (reset_when_replay || !_muxer) {
-            _muxer = std::make_shared<MultiMediaSourceMuxer>(_vhost, _app, _stream_id, getDuration(), _option);
-        }
+        _muxer = MultiMediaSourceMuxer::obtain(_vhost, _app, _stream_id, getDuration(), _option);
+        _muxer->resetTracks();
     }
     _muxer->setMediaListener(shared_from_this());
 

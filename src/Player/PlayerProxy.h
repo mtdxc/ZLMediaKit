@@ -64,6 +64,9 @@ private:
     void onPlaySuccess();
     void setDirectProxy();
 
+    void setupMediaSource();
+    void play_l(const std::string & strUrl);
+
 private:
     ProtocolOption _option;
     int _retry_count;
@@ -75,6 +78,7 @@ private:
     std::function<void(const toolkit::SockException &ex)> _on_close;
     std::function<void(const toolkit::SockException &ex)> _on_play;
     MultiMediaSourceMuxer::Ptr _muxer;
+    bool _proxy_source;
 };
 
 } /* namespace mediakit */
