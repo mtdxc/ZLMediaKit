@@ -15,7 +15,7 @@
 #include "Rtsp/RtspMediaSource.h"
 
 namespace mediakit {
-
+class HlsMediaSource;
 class WebRtcPusher : public WebRtcTransportImp, public MediaSourceEvent {
 public:
     using Ptr = std::shared_ptr<WebRtcPusher>;
@@ -76,8 +76,9 @@ private:
     // 推流所有权  [AUTO-TRANSLATED:d0ddf5c7]
     // Stream ownership
     std::shared_ptr<void> _push_src_ownership;
-    // 推流的rtsp源,支持simulcast  [AUTO-TRANSLATED:44be9120]
-    // Rtsp source of the stream, supports simulcast
+    std::shared_ptr<HlsMediaSource> _hls_index;
+    ProtocolOption _option;
+    //推流的rtsp源,支持simulcast
     std::recursive_mutex _mtx;
     std::unordered_map<std::string/*rid*/, RtspMediaSource::Ptr> _push_src_sim;
     std::unordered_map<std::string/*rid*/, std::shared_ptr<void> > _push_src_sim_ownership;

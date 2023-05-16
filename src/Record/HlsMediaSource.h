@@ -26,6 +26,7 @@ public:
     using Ptr = std::shared_ptr<HlsMediaSource>;
 
     HlsMediaSource(const std::string &schema, const MediaTuple &tuple) : MediaSource(schema, tuple) {}
+    ~HlsMediaSource() override;
 
     /**
      * 	获取媒体源的环形缓冲
@@ -50,6 +51,15 @@ public:
      * [AUTO-TRANSLATED:71db921d]
      */
     void setIndexFile(std::string index_file);
+    struct M3u8Item {
+        std::string id;
+        int width = 0;
+        int height = 0; 
+        int bitrate = 0;
+    };
+    std::string _index_m3u8;
+    void removeIndexFile();
+    void makeM3u8Index(const std::list<M3u8Item>& substeam, const std::string& hls_save_path = "");
 
     /**
      * 异步获取m3u8文件

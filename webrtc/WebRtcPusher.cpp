@@ -11,7 +11,7 @@
 #include "WebRtcPusher.h"
 #include "Common/config.h"
 #include "Rtsp/RtspMediaSourceImp.h"
-
+#include "Record/HlsMediaSource.h"
 using namespace std;
 
 namespace mediakit {
@@ -35,6 +35,7 @@ WebRtcPusher::WebRtcPusher(const EventPoller::Ptr &poller,
                            const MediaInfo &info,
                            const ProtocolOption &option) : WebRtcTransportImp(poller) {
     _media_info = info;
+    _option = option;
     _push_src = src;
     _push_src_ownership = ownership;
     _continue_push_ms = option.continue_push_ms;
@@ -93,24 +94,44 @@ void WebRtcPusher::onRecvRtp(MediaTrack &track, const string &rid, RtpPacket::Pt
     }
 
     if (rtp->type == TrackAudio) {
-        // 音频  [AUTO-TRANSLATED:a577d8e1]
-        // Audio
+        //音频
         for (auto &pr : _push_src_sim) {
             pr.second->onWrite(rtp, false);
         }
     } else {
-        // 视频  [AUTO-TRANSLATED:904730ac]
-        // Video
+        std::string stream;
         std::lock_guard<std::recursive_mutex> lock(_mtx);
         auto &src = _push_src_sim[rid];
         if (!src) {
-            const auto& stream = _push_src->getMediaTuple().stream;
+            stream = _push_src->getMediaTuple().stream;
             auto src_imp = _push_src->clone(rid.empty() ? stream : stream + '_' + rid);
             _push_src_sim_ownership[rid] = src_imp->getOwnership();
             src_imp->setListener(static_pointer_cast<WebRtcPusher>(shared_from_this()));
             src = src_imp;
         }
         src->onWrite(std::move(rtp), false);
+
+#if defined(ENABLE_HLS)
+        if (stream.length() && _option.enable_hls) {
+            std::list<HlsMediaSource::M3u8Item> files;
+            for (auto it = _push_src_sim.begin(); it != _push_src_sim.end(); it++) {
+                RtspMediaSource::Ptr src = it->second;
+                auto video = std::dynamic_pointer_cast<VideoTrack>(src->getTrack(TrackVideo));
+                if (!video) continue;
+
+                HlsMediaSource::M3u8Item mi;
+                mi.id = src->getMediaTuple().stream;
+                mi.bitrate = video->getBitRate();
+                mi.width = video->getVideoHeight();
+                mi.height = video->getVideoHeight();
+                files.push_back(mi);
+            }
+            // 生成hls主索引文件
+            if (!_hls_index)
+                _hls_index = std::make_shared<HlsMediaSource>(HLS_SCHEMA, _push_src->getMediaTuple());
+            _hls_index->makeM3u8Index(files, _option.hls_save_path);
+        }
+#endif
     }
 }
 
