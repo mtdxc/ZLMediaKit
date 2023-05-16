@@ -549,6 +549,14 @@ extern const std::string kDeleteDelaySec;
 // 如果设置为1，则第一个切片长度强制设置为1个GOP  [AUTO-TRANSLATED:fbbb651d]
 // If set to 1, the length of the first slice is forced to be 1 GOP
 extern const std::string kFastRegister;
+/* 索引文件个数
+之前HLS URL逻辑为 http://vhost/app/stream/hls.m3u8;
+当kIndexCount>0后，会在http://vhost/app/stream.m3u8下生成支持多流切换的m3u8索引文件
+具体生成多少个流，由baseWidth和indexCount决定
+*/
+extern const std::string kIndexCount;
+// 基准宽度, 大于此宽度的Hls流会生成indexCount个hls子流
+extern const std::string kBaseWidth;
 // fmp4 HLS切片文件的扩展名(例如 .mp4 或 .m4s)；mpegts切片始终为.ts
 // File extension for fMP4 HLS segment files (e.g. .mp4 or .m4s); mpegts segments are always .ts
 extern const std::string kFmp4SegExt;

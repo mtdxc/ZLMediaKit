@@ -370,6 +370,8 @@ const string kFileBufSize = HLS_FIELD "fileBufSize";
 const string kBroadcastRecordTs = HLS_FIELD "broadcastRecordTs";
 const string kDeleteDelaySec = HLS_FIELD "deleteDelaySec";
 const string kFastRegister = HLS_FIELD "fastRegister";
+const string kIndexCount = HLS_FIELD "indexCount";
+const string kBaseWidth = HLS_FIELD "baseWidth";
 const string kFmp4SegExt = HLS_FIELD "fmp4SegExt";
 
 static onceToken token([]() {
@@ -382,6 +384,8 @@ static onceToken token([]() {
     mINI::Instance()[kBroadcastRecordTs] = false;
     mINI::Instance()[kDeleteDelaySec] = 10;
     mINI::Instance()[kFastRegister] = false;
+    mINI::Instance()[kIndexCount] = 2;
+    mINI::Instance()[kBaseWidth] = 640;
     mINI::Instance()[kFmp4SegExt] = ".mp4";
 });
 } // namespace Hls
