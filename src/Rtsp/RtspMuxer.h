@@ -125,7 +125,7 @@ private:
         uint64_t ntp_stamp { 0 };
         RtpCodec::Ptr encoder;
     };
-
+    std::unordered_map<int, uint16_t> _seqs;
     std::unordered_map<int, TrackInfo> _tracks;
     RtpRing::RingType::Ptr _rtpRing;
     RtpRing::RingType::Ptr _rtpInterceptor;
