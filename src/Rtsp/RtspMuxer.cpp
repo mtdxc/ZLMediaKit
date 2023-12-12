@@ -20,6 +20,7 @@ namespace mediakit {
 void RtspMuxer::onRtp(RtpPacket::Ptr in, bool is_key) {
     if (_live) {
         auto &ref = _tracks[in->track_index];
+        _seqs[in->track_index] = in->getSeq();
         if (ref.rtp_stamp != in->getHeader()->stamp) {
             // rtp时间戳变化才计算ntp，节省cpu资源  [AUTO-TRANSLATED:729d54f2]
             // Only calculate NTP when the RTP timestamp changes, saving CPU resources
@@ -113,6 +114,7 @@ bool RtspMuxer::addTrack(const Track::Ptr &track) {
         GET_CONFIG(uint32_t, video_mtu, Rtp::kVideoMtuSize);
         auto mtu = track->getTrackType() == TrackVideo ? video_mtu : audio_mtu;
         encoder->setRtpInfo(ssrc, mtu, sdp->getSampleRate(), sdp->getPayloadType(), 2 * track->getTrackType(), track->getIndex());
+        encoder->getRtpInfo().setSeq(_seqs[track->getIndex()] + 1);
     }
 
     // 设置rtp输出环形缓存  [AUTO-TRANSLATED:5ac7e24a]

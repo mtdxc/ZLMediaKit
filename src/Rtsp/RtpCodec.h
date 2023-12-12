@@ -82,6 +82,9 @@ public:
         return _mtu_size - RtpPacket::kRtpHeaderSize;
     }
 
+    int16_t getSeq() const {return _seq;}
+    void setSeq(int16_t seq) {_seq = seq;}
+
     RtpPacket::Ptr makeRtp(TrackType type,const void *data, size_t len, bool mark, uint64_t stamp);
 
 private:
