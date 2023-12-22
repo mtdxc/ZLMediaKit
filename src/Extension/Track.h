@@ -17,14 +17,28 @@
 #include "Rtsp/Rtsp.h"
 
 namespace mediakit{
-
+#ifdef ENABLE_FFMPEG
+class FFmpegDecoder;
+class FFmpegEncoder;
+class FFmpegFrame;
+// 裸帧回调接口
+class RawFrameInterface {
+public:
+    using Ptr = std::shared_ptr<RawFrameInterface>;
+    virtual void inputRawFrame(const std::shared_ptr<FFmpegFrame>& frame) = 0;
+};
+#endif
 /**
  * 媒体通道描述类，也支持帧输入输出
  * Media channel description class, also supports frame input and output
  
  * [AUTO-TRANSLATED:a3acd089]
  */
-class Track : public FrameDispatcher, public CodecInfo {
+class Track : public FrameDispatcher, public CodecInfo, 
+#ifdef ENABLE_FFMPEG
+      public RawFrameInterface, 
+#endif
+    public std::enable_shared_from_this<Track> {
 public:
     using Ptr = std::shared_ptr<Track>;
 
@@ -44,7 +58,7 @@ public:
      
      * [AUTO-TRANSLATED:308e6502]
      */
-    Track(const Track &that) {
+    Track(const Track &that) : std::enable_shared_from_this<Track>(that) {
         _bit_rate = that._bit_rate;
         setIndex(that.getIndex());
     }
@@ -86,7 +100,8 @@ public:
      * [AUTO-TRANSLATED:3ab2fd30]
      */
     virtual Sdp::Ptr getSdp(uint8_t payload_type) const = 0;
-
+    // 获取描述信息 codec[parma]
+    virtual std::string getInfo() const = 0;
     /**
      * 获取extra data, 一般用于rtmp/mp4生成
      * Get extra data, generally used for rtmp/mp4 generation
@@ -122,7 +137,50 @@ public:
      * [AUTO-TRANSLATED:77a43064]
      */
     virtual void setBitRate(int bit_rate) { _bit_rate = bit_rate; }
+    /*
+     获取转码Track
+    返回的Track可通过FrameDispatcher::addDelegate来获取转码后的数据包
+    - arg1 音频：采样率 视频: 宽度
+    - arg2 音频：通道数 视频: 高度
+    - bitrate 比特率
+    */
+    Ptr getTransodeTrack(CodecId code, int arg1, int arg2, int bitrate);
+#ifdef ENABLE_FFMPEG
+    // 转码个数
+    int trans_size();
+    ~Track();
 
+    // 注册原始帧(RawFrame)回调，注册后就会启动解码器，具体使用详见test_player.cpp实现
+    RawFrameInterface *addRawDelegate(std::function<void(const std::shared_ptr<FFmpegFrame> &frame)> cb);
+    RawFrameInterface* addRawDelegate(RawFrameInterface::Ptr cb);
+    bool delRawDelegate(RawFrameInterface* cb);
+    // 输入帧，分发帧，当_raw_cbs>0时，解码，并回调onRawFrame
+    virtual bool inputFrame(const Frame::Ptr &frame);
+    // 输入裸帧：没有则创建编码器，编码，并回调inputFrame
+    virtual void inputRawFrame(const std::shared_ptr<FFmpegFrame>& frame);
+    // 设置编码参数
+    void setupEncoder(int arg1, int arg2, int arg3, int bitrate);
+protected:
+    // addRawDelegate/delRawDelegate with parent
+    virtual void onSizeChange(size_t size);
+    // for_each(_raw_cbs, call inputRawFrame)
+    void onRawFrame(const std::shared_ptr<FFmpegFrame>& frame);
+
+protected:
+    std::recursive_mutex _trans_mutex;
+    // 原始帧回调, 它的大小决定是否要解码
+    std::map<RawFrameInterface*, RawFrameInterface::Ptr> _raw_cbs;
+    // 转码Map(getInfo -> Ptr), 缓存用于复用对象
+    std::map<std::string, Ptr> _trans_tracks;
+    // 指向转码的父Track
+    Track* _parent = nullptr;
+    // 编码配置项
+    Ptr _enc_cfg;
+    // 父Track维护的解码器
+    std::shared_ptr<FFmpegDecoder> _decoder;
+    // 子Track维护的编码器
+    std::shared_ptr<FFmpegEncoder> _encoder;
+#endif
 private:
     int _bit_rate = 0;
 };
@@ -168,6 +226,12 @@ public:
      * [AUTO-TRANSLATED:30fc4f63]
      */
     virtual std::vector<Frame::Ptr> getConfigFrames() const { return std::vector<Frame::Ptr>{}; }
+
+    std::string getInfo() const override {
+        char buff[256];
+        snprintf(buff, sizeof(buff), "%s[%dx%d@%d]", getCodecName(), getVideoWidth(), getVideoHeight(), (int)getVideoFps());
+        return buff;
+    }
 };
 
 class VideoTrackImp : public VideoTrack {
@@ -192,7 +256,7 @@ public:
         _codec_id = codec_id;
         _width = width;
         _height = height;
-        _fps = fps;
+        _fps = (float)fps;
     }
 
     int getVideoWidth() const override { return _width; }
@@ -227,7 +291,7 @@ public:
      
      * [AUTO-TRANSLATED:9af5a0a4]
      */
-    virtual int getAudioSampleRate() const  {return 0;};
+    virtual int getAudioSampleRate() const  {return 0;}
 
     /**
      * 返回音频采样位数，一般为16或8
@@ -235,7 +299,7 @@ public:
      
      * [AUTO-TRANSLATED:5fedc65d]
      */
-    virtual int getAudioSampleBit() const {return 0;};
+    virtual int getAudioSampleBit() const {return 0;}
 
     /**
      * 返回音频通道数
@@ -243,10 +307,16 @@ public:
      
      * [AUTO-TRANSLATED:2613b317]
      */
-    virtual int getAudioChannel() const {return 0;};
+    virtual int getAudioChannel() const {return 0;}
+
+    std::string getInfo() const override {
+        char buff[256];
+        snprintf(buff, sizeof(buff), "%s[%dx%d@%d]", getCodecName(), getAudioSampleRate(), getAudioChannel(), getAudioSampleBit());
+        return buff;
+    }
 };
 
-class AudioTrackImp : public AudioTrack{
+class AudioTrackImp : public AudioTrack {
 public:
     using Ptr = std::shared_ptr<AudioTrackImp>;
 

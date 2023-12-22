@@ -351,8 +351,64 @@ private:
     onWriteFrame _callback;
 };
 
-FrameWriterInterface* FrameDispatcher::addDelegate(std::function<bool(const Frame::Ptr &frame)> cb) {
+FrameWriterInterface *FrameDispatcher::addDelegate(FrameWriterInterface::Ptr delegate) {
+    FrameWriterInterface *ret = delegate.get();
+    std::lock_guard<std::recursive_mutex> lck(_mtx);
+    if (_delegates.find(ret) == _delegates.end()) {
+        _delegates[ret] = delegate;
+        onSizeChange(_delegates.size());
+    } else {
+        _delegates[ret] = delegate;
+    }
+    return ret;
+}
+
+FrameWriterInterface *FrameDispatcher::addDelegate(std::function<bool(const Frame::Ptr &frame)> cb) {
     return addDelegate(std::make_shared<FrameWriterInterfaceHelper>(std::move(cb)));
+}
+
+void FrameDispatcher::delDelegate(FrameWriterInterface *ptr) {
+    std::lock_guard<std::recursive_mutex> lck(_mtx);
+    _delegates.erase(ptr);
+    onSizeChange(_delegates.size());
+}
+
+bool FrameDispatcher::inputFrame(const Frame::Ptr &frame) {
+    std::lock_guard<std::recursive_mutex> lck(_mtx);
+    doStatistics(frame);
+    bool ret = false;
+    for (auto &pr : _delegates) {
+        if (pr.second->inputFrame(frame)) {
+            ret = true;
+        }
+    }
+    return ret;
+}
+
+float FrameDispatcher::getFps() const {
+    float fps = 0.0f;
+    std::lock_guard<std::recursive_mutex> lck(_mtx);
+    if (_gop_interval_ms) {
+        fps = _gop_size * 1000.0f / _gop_interval_ms;
+    }
+    return fps;
+}
+
+void FrameDispatcher::doStatistics(const Frame::Ptr &frame) {
+    _last_pts = frame->pts();
+    if (!frame->configFrame() && !frame->dropAble()) {
+        // Ignore configuration frames and discardable frames
+        ++_frames;
+        if (frame->keyFrame() && frame->getTrackType() == TrackVideo) {
+            // do statistics when got keyframes
+            ++_video_key_frames;
+            _gop_size = _frames - _last_frames;
+            _gop_interval_ms = _ticker.elapsedTime();
+            
+            _last_frames = _frames;
+            _ticker.resetTime();
+        }
+    }
 }
 
 }//namespace mediakit

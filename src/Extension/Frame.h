@@ -708,10 +708,7 @@ public:
      
      * [AUTO-TRANSLATED:0be3c076]
      */
-    FrameWriterInterface* addDelegate(FrameWriterInterface::Ptr delegate) {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
-        return _delegates.emplace(delegate.get(), std::move(delegate)).first->second.get();
-    }
+    FrameWriterInterface *addDelegate(FrameWriterInterface::Ptr delegate);
 
     FrameWriterInterface* addDelegate(std::function<bool(const Frame::Ptr &frame)> cb);
 
@@ -721,10 +718,7 @@ public:
      
      * [AUTO-TRANSLATED:c2c915aa]
      */
-    void delDelegate(FrameWriterInterface *ptr) {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
-        _delegates.erase(ptr);
-    }
+    void delDelegate(FrameWriterInterface *ptr);
 
     /**
      * 写入帧并派发
@@ -732,17 +726,7 @@ public:
      
      * [AUTO-TRANSLATED:a3e7e6db]
      */
-    bool inputFrame(const Frame::Ptr &frame) override {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
-        doStatistics(frame);
-        bool ret = false;
-        for (auto &pr : _delegates) {
-            if (pr.second->inputFrame(frame)) {
-                ret = true;
-            }
-        }
-        return ret;
-    }
+    bool inputFrame(const Frame::Ptr &frame) override;
 
     /**
      * 返回代理个数
@@ -797,30 +781,19 @@ public:
         return _stamp.getRelativeStamp();
     }
 
+    float getFps() const;
+    uint64_t getLastPts() const { return _last_pts; }
+
+protected:
+    virtual void onSizeChange(size_t size) {}
 private:
-    void doStatistics(const Frame::Ptr &frame) {
-        if (!frame->configFrame() && !frame->dropAble()) {
-            // 忽略配置帧与可丢弃的帧  [AUTO-TRANSLATED:da4ff7ac]
-            // Ignore configuration frames and discardable frames
-            ++_frames;
-            int64_t out;
-            _stamp.revise(frame->dts(), frame->pts(), out, out);
-            if (frame->keyFrame() && frame->getTrackType() == TrackVideo) {
-                // 遇视频关键帧时统计  [AUTO-TRANSLATED:72b0e569]
-                // Statistics when encountering video keyframes
-                ++_video_key_frames;
-                _gop_size = _frames - _last_frames;
-                _gop_interval_ms = _ticker.elapsedTime();
-                _last_frames = _frames;
-                _ticker.resetTime();
-            }
-        }
-    }
+    void doStatistics(const Frame::Ptr &frame);
 
 private:
     toolkit::Ticker _ticker;
     size_t _gop_interval_ms = 0;
     size_t _gop_size = 0;
+    uint64_t _last_pts = 0;
     uint64_t _last_frames = 0;
     uint64_t _frames = 0;
     uint64_t _video_key_frames = 0;
