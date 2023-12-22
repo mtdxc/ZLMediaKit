@@ -16,7 +16,7 @@ using namespace std;
 using namespace toolkit;
 using namespace mediakit;
 
-class VideoTrackForC : public VideoTrack, public std::enable_shared_from_this<VideoTrackForC> {
+class VideoTrackForC : public VideoTrack {
 public:
     VideoTrackForC(int codec_id, codec_args *args) {
         _codec_id = (CodecId) codec_id;
@@ -61,7 +61,7 @@ private:
     codec_args _args;
 };
 
-class AudioTrackForC : public AudioTrackImp, public std::enable_shared_from_this<AudioTrackForC> {
+class AudioTrackForC : public AudioTrackImp {
 public:
     AudioTrackForC(int codec_id, codec_args *args) :
         AudioTrackImp((CodecId) codec_id, args->audio.sample_rate, args->audio.channels, 16) {}
