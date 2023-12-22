@@ -28,7 +28,7 @@ using namespace mediakit;
 
 extern int __argc;
 extern TCHAR** __targv;
-
+#define USE_RENDER 1
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstanc, LPSTR lpCmdLine, int nShowCmd) {
     int argc = __argc;
     char **argv = __targv;
@@ -77,25 +77,35 @@ int main(int argc, char *argv[]) {
             auto audioTrack = dynamic_pointer_cast<AudioTrack>(strongPlayer->getTrack(TrackAudio, false));
 
             if (videoTrack) {
+#if USE_RENDER
+                videoTrack->addRawDelegate(
+#else
                 auto decoder = std::make_shared<FFmpegDecoder>(videoTrack);
-                decoder->setOnDecode([displayer](const FFmpegFrame::Ptr &yuv) {
+                videoTrack->addDelegate([decoder](const Frame::Ptr &frame) { return decoder->inputFrame(frame, false, true); });
+                decoder->setOnDecode(
+#endif
+                [displayer](const FFmpegFrame::Ptr &yuv) {
                     SDLDisplayerHelper::Instance().doTask([yuv, displayer]() {
                         // sdl要求在main线程渲染
                         displayer->displayYUV(yuv->get());
                         return true;
                     });
                 });
-                videoTrack->addDelegate([decoder](const Frame::Ptr &frame) { return decoder->inputFrame(frame, false, true); });
             }
 
             if (audioTrack) {
-                auto decoder = std::make_shared<FFmpegDecoder>(audioTrack);
                 auto audio_player = std::make_shared<AudioPlayer>();
-                // FFmpeg解码时已经统一转换为16位整型pcm
+                //FFmpeg解码时已经统一转换为16位整型pcm
                 audio_player->setup(audioTrack->getAudioSampleRate(), audioTrack->getAudioChannel(), AUDIO_S16);
                 FFmpegSwr::Ptr swr;
-
-                decoder->setOnDecode([audio_player, swr](const FFmpegFrame::Ptr &frame) mutable {
+#if USE_RENDER
+                audioTrack->addRawDelegate(
+#else
+                auto decoder = std::make_shared<FFmpegDecoder>(audioTrack);
+                audioTrack->addDelegate([decoder](const Frame::Ptr &frame) { return decoder->inputFrame(frame, false, true); });
+                decoder->setOnDecode(
+#endif
+                 [audio_player, swr](const FFmpegFrame::Ptr &frame) mutable {
                     if (!swr) {
                         swr = std::make_shared<FFmpegSwr>(AV_SAMPLE_FMT_S16, frame->get()->channels, frame->get()->channel_layout, frame->get()->sample_rate);
                     }
@@ -103,7 +113,6 @@ int main(int argc, char *argv[]) {
                     auto len = pcm->get()->nb_samples * pcm->get()->channels * av_get_bytes_per_sample((enum AVSampleFormat)pcm->get()->format);
                     audio_player->playPCM((const char *)(pcm->get()->data[0]), MIN(len, frame->get()->linesize[0]));
                 });
-                audioTrack->addDelegate([decoder](const Frame::Ptr &frame) { return decoder->inputFrame(frame, false, true); });
             }
         });
 

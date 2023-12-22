@@ -696,8 +696,16 @@ public:
      * [AUTO-TRANSLATED:0be3c076]
      */
     FrameWriterInterface* addDelegate(FrameWriterInterface::Ptr delegate) {
+        FrameWriterInterface* ret = delegate.get();
         std::lock_guard<std::recursive_mutex> lck(_mtx);
-        return _delegates.emplace(delegate.get(), std::move(delegate)).first->second.get();
+        if (_delegates.find(ret)==_delegates.end()) {
+            _delegates[ret] = delegate;
+            onSizeChange(_delegates.size());
+        }
+        else {
+            _delegates[ret] = delegate;
+        }
+        return ret;
     }
 
     FrameWriterInterface* addDelegate(std::function<bool(const Frame::Ptr &frame)> cb);
@@ -711,6 +719,7 @@ public:
     void delDelegate(FrameWriterInterface *ptr) {
         std::lock_guard<std::recursive_mutex> lck(_mtx);
         _delegates.erase(ptr);
+        onSizeChange(_delegates.size());
     }
 
     /**
@@ -783,7 +792,8 @@ public:
         std::lock_guard<std::recursive_mutex> lck(_mtx);
         return _stamp.getRelativeStamp();
     }
-
+protected:
+    virtual void onSizeChange(size_t size) {}
 private:
     void doStatistics(const Frame::Ptr &frame) {
         if (!frame->configFrame() && !frame->dropAble()) {
