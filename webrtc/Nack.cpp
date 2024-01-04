@@ -10,6 +10,7 @@
 
 #include "Nack.h"
 #include "Common/config.h"
+#include <algorithm>
 
 using namespace std;
 using namespace toolkit;

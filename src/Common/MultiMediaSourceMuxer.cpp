@@ -11,6 +11,14 @@
 #include <math.h>
 #include "Common/config.h"
 #include "MultiMediaSourceMuxer.h"
+#include "Rtp/RtpSender.h"
+#include "Record/HlsRecorder.h"
+#include "Record/HlsMediaSource.h"
+#include "Rtsp/RtspMediaSourceMuxer.h"
+#include "Rtmp/RtmpMediaSourceMuxer.h"
+#include "TS/TSMediaSourceMuxer.h"
+#include "FMP4/FMP4MediaSourceMuxer.h"
+#include "webrtc/RtcMediaSource.h"
 
 using namespace std;
 using namespace toolkit;
@@ -136,28 +144,7 @@ static string getTrackInfoStr(const TrackSource *track_src){
     auto tracks = track_src->getTracks(true);
     for (auto &track : tracks) {
         track->update();
-        auto codec_type = track->getTrackType();
-        codec_info << track->getCodecName();
-        switch (codec_type) {
-            case TrackAudio : {
-                auto audio_track = dynamic_pointer_cast<AudioTrack>(track);
-                codec_info << "["
-                           << audio_track->getAudioSampleRate() << "/"
-                           << audio_track->getAudioChannel() << "/"
-                           << audio_track->getAudioSampleBit() << "] ";
-                break;
-            }
-            case TrackVideo : {
-                auto video_track = dynamic_pointer_cast<VideoTrack>(track);
-                codec_info << "["
-                           << video_track->getVideoWidth() << "/"
-                           << video_track->getVideoHeight() << "/"
-                           << round(video_track->getVideoFps()) << "] ";
-                break;
-            }
-            default:
-                break;
-        }
+        codec_info << track->getInfo() << " ";
     }
     return std::move(codec_info);
 }
@@ -171,10 +158,12 @@ const MediaTuple &MultiMediaSourceMuxer::getMediaTuple() const {
 }
 
 std::string MultiMediaSourceMuxer::shortUrl() const {
+#if 0
     auto ret = getOriginUrl(MediaSource::NullMediaSource());
     if (!ret.empty()) {
         return ret;
     }
+#endif
     return _tuple.shortUrl();
 }
 
@@ -193,29 +182,42 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const MediaTuple& tuple, float dur_
     _poller = EventPollerPool::Instance().getPoller();
     _create_in_poller = _poller->isCurrentThread();
     _option = option;
+    if (option.audio_transcode) {
+#if defined(ENABLE_FFMPEG)
+        InfoL << "enable audio_transcode";
+#else
+        InfoL << "without ffmpeg disable audio_transcode";
+        _option.audio_transcode = false;
+#endif
+    }
     _dur_sec = dur_sec;
     setMaxTrackCount(option.max_track);
 
     if (option.enable_rtmp) {
-        _rtmp = std::make_shared<RtmpMediaSourceMuxer>(_tuple, option, std::make_shared<TitleMeta>(dur_sec));
+        _rtmp = std::make_shared<RtmpMediaSourceMuxer>(_tuple, _option, std::make_shared<TitleMeta>(dur_sec));
     }
     if (option.enable_rtsp) {
-        _rtsp = std::make_shared<RtspMediaSourceMuxer>(_tuple, option, std::make_shared<TitleSdp>(dur_sec));
+        _rtsp = std::make_shared<RtspMediaSourceMuxer>(_tuple, _option, std::make_shared<TitleSdp>(dur_sec));
+    }
+    if (option.enable_rtc) {
+#if defined(ENABLE_WEBRTC)
+        _rtc = std::make_shared<RtcMediaSourceMuxer>(_tuple, _option, std::make_shared<TitleSdp>(dur_sec));
+#endif
     }
     if (option.enable_hls) {
-        _hls = dynamic_pointer_cast<HlsRecorder>(Recorder::createRecorder(Recorder::type_hls, _tuple, option));
+        _hls = dynamic_pointer_cast<HlsRecorder>(Recorder::createRecorder(Recorder::type_hls, _tuple, _option));
     }
     if (option.enable_hls_fmp4) {
-        _hls_fmp4 = dynamic_pointer_cast<HlsFMP4Recorder>(Recorder::createRecorder(Recorder::type_hls_fmp4, _tuple, option));
+        _hls_fmp4 = dynamic_pointer_cast<HlsFMP4Recorder>(Recorder::createRecorder(Recorder::type_hls_fmp4, _tuple, _option));
     }
     if (option.enable_mp4) {
-        _mp4 = Recorder::createRecorder(Recorder::type_mp4, _tuple, option);
+        _mp4 = Recorder::createRecorder(Recorder::type_mp4, _tuple, _option);
     }
     if (option.enable_ts) {
-        _ts = dynamic_pointer_cast<TSMediaSourceMuxer>(Recorder::createRecorder(Recorder::type_ts, _tuple, option));
+        _ts = dynamic_pointer_cast<TSMediaSourceMuxer>(Recorder::createRecorder(Recorder::type_ts, _tuple, _option));
     }
     if (option.enable_fmp4) {
-        _fmp4 = dynamic_pointer_cast<FMP4MediaSourceMuxer>(Recorder::createRecorder(Recorder::type_fmp4, _tuple, option));
+        _fmp4 = dynamic_pointer_cast<FMP4MediaSourceMuxer>(Recorder::createRecorder(Recorder::type_fmp4, _tuple, _option));
     }
 
     // 音频相关设置  [AUTO-TRANSLATED:6ee58d57]
@@ -239,6 +241,9 @@ void MultiMediaSourceMuxer::setMediaListener(const std::weak_ptr<MediaSourceEven
     if (_ts) {
         _ts->setListener(self);
     }
+    if (_rtc) {
+        _rtc->setListener(self);
+    }
     if (_fmp4) {
         _fmp4->setListener(self);
     }
@@ -256,6 +261,7 @@ void MultiMediaSourceMuxer::setTrackListener(const std::weak_ptr<Listener> &list
 
 int MultiMediaSourceMuxer::totalReaderCount() const {
     return (_rtsp ? _rtsp->readerCount() : 0) +
+           (_rtc ? _rtc->readerCount() : 0) +
            (_rtmp ? _rtmp->readerCount() : 0) +
            (_ts ? _ts->readerCount() : 0) +
            (_fmp4 ? _fmp4->readerCount() : 0) +
@@ -508,6 +514,9 @@ bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
     if (_rtmp) {
         ret = _rtmp->addTrack(track) ? true : ret;
     }
+    if (_rtc) {
+        ret = _rtc->addTrack(track) ? true : ret;
+    }
     if (_rtsp) {
         ret = _rtsp->addTrack(track) ? true : ret;
     }
@@ -551,6 +560,9 @@ void MultiMediaSourceMuxer::onAllTrackReady() {
     }
     if (_ts) {
         _ts->addTrackCompleted();
+    }
+    if (_rtc) {
+      _rtc->addTrackCompleted();
     }
     if (_mp4) {
         _mp4->addTrackCompleted();
@@ -617,6 +629,9 @@ void MultiMediaSourceMuxer::resetTracks() {
     if (_ts) {
         _ts->resetTracks();
     }
+    if (_rtc) {
+        _rtc->resetTracks();
+    }
     if (_fmp4) {
         _fmp4->resetTracks();
     }
@@ -646,6 +661,9 @@ bool MultiMediaSourceMuxer::onTrackFrame_l(const Frame::Ptr &frame_in) {
     bool ret = false;
     if (_rtmp) {
         ret = _rtmp->inputFrame(frame) ? true : ret;
+    }
+    if (_rtc) {
+        ret = _rtc->inputFrame(frame) ? true : ret;
     }
     if (_rtsp) {
         ret = _rtsp->inputFrame(frame) ? true : ret;
@@ -699,6 +717,7 @@ bool MultiMediaSourceMuxer::isEnabled(){
         _is_enable = (_rtmp ? _rtmp->isEnabled() : false) ||
                      (_rtsp ? _rtsp->isEnabled() : false) ||
                      (_ts ? _ts->isEnabled() : false) ||
+                     (_rtc ? _rtc->isEnabled() : false) ||
                      (_fmp4 ? _fmp4->isEnabled() : false) ||
                      (_ring ? (bool)_ring->readerCount() : false)  ||
                      (_hls ? _hls->isEnabled() : false) ||

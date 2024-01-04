@@ -61,7 +61,7 @@
         item = 0;                                                                                                      \
     }
 #endif // CLEAR_ARR
-
+#define RTC_SCHEMA "rtc"
 #define RTSP_SCHEMA "rtsp"
 #define RTMP_SCHEMA "rtmp"
 #define TS_SCHEMA "ts"
