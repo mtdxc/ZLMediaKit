@@ -499,8 +499,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdpart)
 
 add_subdirectory(3rdpart)
 
-add_subdirectory(src)
-
 add_subdirectory(ext-codec)
 
 if(ENABLE_SRT)
@@ -514,6 +512,8 @@ endif()
 if(ENABLE_API)
   add_subdirectory(api)
 endif()
+
+add_subdirectory(src)
 
 ##############################################################################
 

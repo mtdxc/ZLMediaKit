@@ -88,12 +88,18 @@ const string kWaitAddTrackMS = GENERAL_FIELD "wait_add_track_ms";
 const string kUnreadyFrameCache = GENERAL_FIELD "unready_frame_cache";
 const string kBroadcastPlayerCountChanged = GENERAL_FIELD "broadcast_player_count_changed";
 const string kListenIP = GENERAL_FIELD "listen_ip";
+const string kOpusBitrate = GENERAL_FIELD"opusBitrate";
+const string kAacBitrate = GENERAL_FIELD"aacBitrate";
+const string kTranscodeSize = GENERAL_FIELD"transcode_size";
 
 static onceToken token([]() {
     mINI::Instance()[kFlowThreshold] = 1024;
     mINI::Instance()[kStreamNoneReaderDelayMS] = 20 * 1000;
     mINI::Instance()[kMaxStreamWaitTimeMS] = 15 * 1000;
     mINI::Instance()[kEnableVhost] = 0;
+    mINI::Instance()[kOpusBitrate] = 64000;
+    mINI::Instance()[kAacBitrate] = 64000;
+    mINI::Instance()[kTranscodeSize] = 1;
     mINI::Instance()[kResetWhenRePlay] = 1;
     mINI::Instance()[kMergeWriteMS] = 0;
     mINI::Instance()[kMediaServerId] = makeRandStr(16);
@@ -124,6 +130,8 @@ const string kEnableRtsp = string(kFieldName) + "enable_rtsp";
 const string kEnableRtmp = string(kFieldName) + "enable_rtmp";
 const string kEnableTS = string(kFieldName) + "enable_ts";
 const string kEnableFMP4 = string(kFieldName) + "enable_fmp4";
+const string kEnableRtc = string(kFieldName) + "enable_rtc";
+const string kAudioTranscode = string(kFieldName) + "audio_transcode";
 
 const string kMP4AsPlayer = string(kFieldName) + "mp4_as_player";
 const string kMP4MaxSecond = string(kFieldName) + "mp4_max_second";
@@ -131,6 +139,7 @@ const string kMP4SavePath = string(kFieldName) + "mp4_save_path";
 
 const string kHlsSavePath = string(kFieldName) + "hls_save_path";
 
+const string kRtcDemand = string(kFieldName) + "rtc_demand";
 const string kHlsDemand = string(kFieldName) + "hls_demand";
 const string kRtspDemand = string(kFieldName) + "rtsp_demand";
 const string kRtmpDemand = string(kFieldName) + "rtmp_demand";
@@ -152,6 +161,8 @@ static onceToken token([]() {
     mINI::Instance()[kEnableRtmp] = 1;
     mINI::Instance()[kEnableTS] = 1;
     mINI::Instance()[kEnableFMP4] = 1;
+    mINI::Instance()[kEnableRtc] = 1;
+    mINI::Instance()[kAudioTranscode] = 1;
 
     mINI::Instance()[kMP4AsPlayer] = 0;
     mINI::Instance()[kMP4MaxSecond] = 3600;
@@ -159,6 +170,7 @@ static onceToken token([]() {
 
     mINI::Instance()[kHlsSavePath] = "./www";
 
+    mINI::Instance()[kRtcDemand] = 0;
     mINI::Instance()[kHlsDemand] = 0;
     mINI::Instance()[kRtspDemand] = 0;
     mINI::Instance()[kRtmpDemand] = 0;

@@ -10,6 +10,7 @@
 
 #include "mk_media.h"
 #include "Util/logger.h"
+#include "Util/mini.h"
 #include "Common/Device.h"
 
 using namespace std;
