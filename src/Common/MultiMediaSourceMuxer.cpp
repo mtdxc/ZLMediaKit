@@ -669,6 +669,9 @@ EventPoller::Ptr MultiMediaSourceMuxer::getOwnerPoller(MediaSource &sender) {
 
 bool MultiMediaSourceMuxer::close(MediaSource &sender) {
     MediaSourceEventInterceptor::close(sender);
+    forEachLink([this](Track::Ptr track){
+        track->delDelegate(this);
+    });
     _rtmp = nullptr;
     _rtsp = nullptr;
     _rtc = nullptr;
@@ -954,6 +957,22 @@ bool MultiMediaSourceMuxer::isEnabled(){
         }
     }
     return _is_enable;
+}
+
+bool MultiMediaSourceMuxer::link(Track::Ptr track) {
+    if (!track) return false;
+    addTrack(track);
+    track->addDelegate(shared_from_this());
+    _links[track->getCodecId()] = track;
+    return true;
+}
+
+void MultiMediaSourceMuxer::forEachLink(std::function<void(Track::Ptr track)>&& cb) {
+    for (size_t i = 0; i < sizeof(_links) / sizeof(_links[0]); i++) {
+        if (auto track = _links[i].lock()) {
+            cb(track);
+        }
+    }
 }
 
 }//namespace mediakit

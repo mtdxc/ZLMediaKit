@@ -202,10 +202,13 @@ public:
 #if defined(ENABLE_RTPPROXY)
     void forEachRtpSender(const std::function<void(const std::string &ssrc, const RtpSender &sender)> &cb) const;
 #endif // ENABLE_RTPPROXY
+    bool link(Track::Ptr track);
 
     void addProbe(uint32_t probe_ms, const std::function<void(const std::list<FrameInfo> &info_list)> &cb);
 
 protected:
+    std::weak_ptr<Track> _links[CodecMax];
+    void forEachLink(std::function<void(Track::Ptr track)>&& cb);
     /////////////////////////////////MediaSink override/////////////////////////////////
 
     /**
