@@ -47,6 +47,7 @@
 #include "Player/PlayerProxy.h"
 #include "Pusher/PusherProxy.h"
 #include "Rtp/RtpProcess.h"
+#include "Rtp/RtpSender.h"
 #include "Record/MP4Reader.h"
 
 #if defined(ENABLE_RTPPROXY)
