@@ -20,6 +20,7 @@
 #include "Rtsp/RtspSession.h"
 #include "WebHook.h"
 #include "WebApi.h"
+#include "Common/Device.h"
 
 using namespace std;
 using namespace Json;
@@ -535,7 +536,41 @@ void installWebHook() {
             closePlayer();
             return;
         }
-
+#ifdef ENABLE_FFMPEG
+        auto pos = args.stream.rfind('_');
+        if (pos != -1) {
+            std::string oID = args.stream.substr(0, pos);
+            float width = std::stoi(args.stream.substr(pos + 1));
+            auto oSrc = MediaSource::find(args.vhost, args.app, oID);
+            if (oSrc) {
+                auto video = std::dynamic_pointer_cast<VideoTrack>(oSrc->getTrack(TrackVideo));
+                GET_CONFIG(bool, transcode_size, General::kTranscodeSize);
+                if (transcode_size && video && video->getVideoWidth() > width) {
+                    InfoL << "setup trans " << oID << "->" << args.stream;
+                    ProtocolOption option;
+                    // 默认解复用mp4不生成mp4
+                    option.enable_mp4 = false;
+                    // 强制无人观看时自动关闭
+                    option.auto_close = true;
+                    float duration = 0;
+                    auto dev = std::make_shared<MultiMediaSourceMuxer>(args, duration, option);
+                    int height = width * video->getVideoHeight() / video->getVideoWidth();
+                    if (height % 2) height++;
+                    auto transVideo = video->getTransodeTrack(video->getCodecId(), width, height, 0);
+                    if (transVideo) {
+                        dev->link(transVideo);
+                    } else {
+                        dev->link(video);
+                    }
+                    auto audio = oSrc->getTrack(TrackAudio);
+                    if (audio) {
+                        dev->link(audio);
+                    }
+                    return;
+                }
+            }
+        }
+#endif
         GET_CONFIG(string, hook_stream_not_found, Hook::kOnStreamNotFound);
         if (!hook_enable || hook_stream_not_found.empty()) {
             return;

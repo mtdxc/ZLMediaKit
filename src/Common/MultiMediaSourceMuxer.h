@@ -198,7 +198,11 @@ public:
 
     void forEachRtpSender(const std::function<void(const std::string &ssrc)> &cb) const;
 
+    bool link(Track::Ptr track);
+    bool close(MediaSource &sender) override;
 protected:
+    std::weak_ptr<Track> _links[CodecMax];
+    void forEachLink(std::function<void(Track::Ptr track)>&& cb);
     /////////////////////////////////MediaSink override/////////////////////////////////
 
     /**
