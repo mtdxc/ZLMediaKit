@@ -45,7 +45,7 @@ public:
  
  * [AUTO-TRANSLATED:101887bd]
  */
-class DevChannel  : public MultiMediaSourceMuxer{
+class DevChannel : public MultiMediaSourceMuxer {
 public:
     using Ptr = std::shared_ptr<DevChannel>;
 
