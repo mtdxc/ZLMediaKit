@@ -520,10 +520,29 @@ bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
 
     bool ret = false;
     if (_rtmp) {
-        ret = _rtmp->addTrack(track) ? true : ret;
+        /* 利用多音频流来实现转码，这样也行，但无法控制按需转码
+        if (track->getCodecId() == CodecOpus) {
+            GET_CONFIG(int, bitrate, General::kAacBitrate);
+            int channels = std::dynamic_pointer_cast<AudioTrack>(track)->getAudioChannel();
+            link(track->getTransodeTrack(CodecAAC, 44100, channels, bitrate));
+        } 
+        else
+        */
+        {
+            ret = _rtmp->addTrack(track) ? true : ret;
+        }
     }
     if (_rtc) {
-        ret = _rtc->addTrack(track) ? true : ret;
+        /* 利用多音频流来实现转码，这样也行，但无法控制按需转码
+        if (track->getCodecId() == CodecAAC) {
+            GET_CONFIG(int, bitrate, General::kOpusBitrate);
+            int channels = std::dynamic_pointer_cast<AudioTrack>(track)->getAudioChannel();
+            link(track->getTransodeTrack(CodecOpus, 48000, channels, bitrate));
+        } 
+        else*/ 
+        {
+            ret = _rtc->addTrack(track) ? true : ret;
+        }
     }
     if (_rtsp) {
         ret = _rtsp->addTrack(track) ? true : ret;
@@ -547,7 +566,7 @@ bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
 }
 
 void MultiMediaSourceMuxer::onAllTrackReady() {
-    CHECK(!_create_in_poller || getOwnerPoller(MediaSource::NullMediaSource())->isCurrentThread());
+    //CHECK(!_create_in_poller || getOwnerPoller(MediaSource::NullMediaSource())->isCurrentThread());
 
     if (_option.paced_sender_ms) {
         std::weak_ptr<MultiMediaSourceMuxer> weak_self = shared_from_this();
