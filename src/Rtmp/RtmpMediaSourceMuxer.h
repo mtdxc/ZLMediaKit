@@ -56,10 +56,27 @@ public:
         _media_src->setMetaData(getMetadata());
     }
 
+    bool addTrack(const Track::Ptr &track) override {
+        auto t = track;
+        if (_option.audio_transcode && track->getCodecId() == CodecOpus) {
+            GET_CONFIG(int, bitrate, General::kAacBitrate);
+            int channels = std::dynamic_pointer_cast<AudioTrack>(track)->getAudioChannel();
+            _trans = track->getTransodeTrack(CodecAAC, 44100, channels, bitrate);
+            if (_trans) t = _trans;
+        }
+        return RtmpMuxer::addTrack(t);
+    }
+
     void onReaderChanged(MediaSource &sender, int size) override {
         _enabled = _option.rtmp_demand ? size : true;
         if (!size && _option.rtmp_demand) {
             _clear_cache = true;
+        }
+        if (_trans) {
+            if (size)
+                _trans->addDelegate(shared_from_this());
+            else
+                _trans->delDelegate(this);
         }
         MediaSourceEventInterceptor::onReaderChanged(sender, size);
     }
@@ -82,6 +99,7 @@ public:
     }
 
 private:
+    Track::Ptr _trans;
     bool _enabled = true;
     bool _clear_cache = false;
     ProtocolOption _option;
