@@ -21,6 +21,7 @@ namespace mediakit{
 class FFmpegDecoder;
 class FFmpegEncoder;
 class FFmpegFrame;
+struct GopFlush;
 // 裸帧回调接口
 class RawFrameInterface {
 public:
@@ -172,6 +173,8 @@ protected:
     std::map<RawFrameInterface*, RawFrameInterface::Ptr> _raw_cbs;
     // 转码Map(getInfo -> Ptr), 缓存用于复用对象
     std::map<std::string, Ptr> _trans_tracks;
+    // gop解码工具类
+    std::shared_ptr<GopFlush> _gop;
     // 指向转码的父Track
     Track* _parent = nullptr;
     // 编码配置项
