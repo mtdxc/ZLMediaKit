@@ -58,32 +58,90 @@ void Track::onSizeChange(size_t size) {
     }
 }
 
+// gop解码刷新类，管理gop缓存，并保证解码延迟最低
+struct GopFlush : public std::list<Frame::Ptr> {
+    GopFlush(int ms) : max_size(ms) {}
+    // 关键帧标记，cacheFrame时有用
+    bool key_pos = false;
+    const int max_size;
+    // 缓存gop帧
+    void cacheFrame(const Frame::Ptr &frame) {
+        auto video_key_pos = frame->keyFrame() || frame->configFrame();
+        if (video_key_pos && !key_pos) {
+            clear();
+        }
+        if (size() < max_size) {
+            push_back(Frame::getCacheAbleFrame(frame));
+        }
+        if (!frame->dropAble()) {
+            key_pos = video_key_pos;
+        }
+    }
+
+    // 刷新gop帧，drop开启pts丢帧，可通过needDrop来判断是否要丢帧
+    void flush(std::function<void(const Frame::Ptr &frame)> cb, bool enable_drop = true) {
+        if (empty())
+            return;
+        flush_drop = 0;
+        last_flush_pts = 0;
+        if (enable_drop)
+            last_flush_pts = (*rbegin())->pts();
+        for (auto frame : *this) {
+            cb(frame);
+        }
+        InfoL << "flush gop with " << size() << " items, last_pts=" << last_flush_pts;
+    }
+
+    bool needDrop(uint64_t pts) {
+        if (last_flush_pts) {
+            if (pts < last_flush_pts) {
+                flush_drop++;
+                return true;
+            }
+            if (flush_drop) {
+                InfoL << "drop " << flush_drop << " rawFrames in gop flush";
+                flush_drop = 0;
+            }
+            last_flush_pts = 0;
+        }
+        return false;
+    }
+    uint64_t last_flush_pts = 0;
+    int flush_drop = 0;
+};
+
 bool Track::inputFrame(const Frame::Ptr &frame) {
-    bool ret = FrameDispatcher::inputFrame(frame);
-    int cbSize = 0;
     {
         std::unique_lock<decltype(_trans_mutex)> l(_trans_mutex);
-        cbSize = _raw_cbs.size();
+        if (_gop && frame->getTrackType() == TrackVideo) {
+            _gop->cacheFrame(frame);
         }
-    if (cbSize>0) {
+        if (_raw_cbs.size()) {
             if (!_decoder) {
                 _decoder = std::make_shared<FFmpegDecoder>(shared_from_this());
-            // 让编码器必须等待关键帧
+                // 让编码器等待关键帧
                 _decoder->addDecodeDrop();
                 InfoL << " open decoder " << getInfo();
-            _decoder->setOnDecode([this](const FFmpegFrame::Ptr &frame) {
-                onRawFrame(frame);
-            });
+                _decoder->setOnDecode([this](const FFmpegFrame::Ptr &frame) { onRawFrame(frame); });
+                if (_gop && _gop->size()) {
+                    if (_gop->size() > _decoder->getMaxTaskSize())
+                        _decoder->setMaxTaskSize(_gop->size());
+                    _gop->flush([this](const Frame::Ptr &frame) { _decoder->inputFrame(frame, true, true); });
                 }
+            }
             _decoder->inputFrame(frame, true, true);
         } else if (_decoder) {
             InfoL << " close decoder " << getInfo();
             _decoder = nullptr;
         }
-    return ret;
     }
+    return FrameDispatcher::inputFrame(frame);
+}
 
 void Track::onRawFrame(const std::shared_ptr<FFmpegFrame>& frame) {
+    if (_gop && _gop->needDrop(frame->get()->pts)) {
+        return;
+    }
     std::list<RawFrameInterface::Ptr> raw_cbs;
     {
         std::unique_lock<decltype(_trans_mutex)> l(_trans_mutex);
@@ -173,7 +231,8 @@ Track::Ptr Track::getTransodeTrack(CodecId id, int arg1, int arg2, int bitrate) 
         if (ret) {
             static int transIdx = CodecMax;
             ret->setIndex(transIdx++);
-
+          if (!_gop && mediakit::getTrackType(id) == TrackVideo)
+              _gop = std::make_shared<GopFlush>(1000);
             ret->setupEncoder(arg1, arg2, arg3, bitrate);
             ret->_parent = this;
             ret->onSizeChange(0);
