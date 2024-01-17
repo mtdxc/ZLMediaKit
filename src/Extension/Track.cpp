@@ -1,4 +1,4 @@
-ï»¿#include "Track.h"
+#include "Track.h"
 #include "Codec/Transcode.h"
 #include "Extension/Factory.h"
 #include "Poller/EventPoller.h"
@@ -38,32 +38,90 @@ void Track::onSizeChange(size_t size) {
     }
 }
 
+// gop½âÂëË¢ÐÂÀà£¬¹ÜÀígop»º´æ£¬²¢±£Ö¤½âÂëÑÓ³Ù×îµÍ
+struct GopFlush : public std::list<Frame::Ptr> {
+    GopFlush(int ms) : max_size(ms) {}
+    // ¹Ø¼üÖ¡±ê¼Ç£¬cacheFrameÊ±ÓÐÓÃ
+    bool key_pos = false;
+    const int max_size;
+    // »º´ægopÖ¡
+    void cacheFrame(const Frame::Ptr &frame) {
+        auto video_key_pos = frame->keyFrame() || frame->configFrame();
+        if (video_key_pos && !key_pos) {
+            clear();
+        }
+        if (size() < max_size) {
+            push_back(Frame::getCacheAbleFrame(frame));
+        }
+        if (!frame->dropAble()) {
+            key_pos = video_key_pos;
+        }
+    }
+
+    // Ë¢ÐÂgopÖ¡£¬drop¿ªÆôpts¶ªÖ¡£¬¿ÉÍ¨¹ýneedDropÀ´ÅÐ¶ÏÊÇ·ñÒª¶ªÖ¡
+    void flush(std::function<void(const Frame::Ptr &frame)> cb, bool enable_drop = true) {
+        if (empty())
+            return;
+        flush_drop = 0;
+        last_flush_pts = 0;
+        if (enable_drop)
+            last_flush_pts = (*rbegin())->pts();
+        for (auto frame : *this) {
+            cb(frame);
+        }
+        InfoL << "flush gop with " << size() << " items, last_pts=" << last_flush_pts;
+    }
+
+    bool needDrop(uint64_t pts) {
+        if (last_flush_pts) {
+            if (pts < last_flush_pts) {
+                flush_drop++;
+                return true;
+            }
+            if (flush_drop) {
+                InfoL << "drop " << flush_drop << " rawFrames in gop flush";
+                flush_drop = 0;
+            }
+            last_flush_pts = 0;
+        }
+        return false;
+    }
+    uint64_t last_flush_pts = 0;
+    int flush_drop = 0;
+};
+
 bool Track::inputFrame(const Frame::Ptr &frame) {
-    bool ret = FrameDispatcher::inputFrame(frame);
-    int cbSize = 0;
     {
         std::unique_lock<decltype(_trans_mutex)> l(_trans_mutex);
-        cbSize = _raw_cbs.size();
-    }
-    if (cbSize>0) {
-        if (!_decoder) {
-            _decoder = std::make_shared<FFmpegDecoder>(shared_from_this());
-            // è®©ç¼–ç å™¨å¿…é¡»ç­‰å¾…å…³é”®å¸§
-            _decoder->addDecodeDrop();
-            InfoL << " open decoder " << getInfo();
-            _decoder->setOnDecode([this](const FFmpegFrame::Ptr &frame) {
-                onRawFrame(frame);
-            });
+        if (_gop && frame->getTrackType() == TrackVideo) {
+            _gop->cacheFrame(frame);
         }
-        _decoder->inputFrame(frame, true, true);
-    } else if (_decoder) {
-        InfoL << " close decoder " << getInfo();
-        _decoder = nullptr;
+        if (_raw_cbs.size()) {
+            if (!_decoder) {
+                _decoder = std::make_shared<FFmpegDecoder>(shared_from_this());
+                // ÈÃ±àÂëÆ÷µÈ´ý¹Ø¼üÖ¡
+                _decoder->addDecodeDrop();
+                InfoL << " open decoder " << getInfo();
+                _decoder->setOnDecode([this](const FFmpegFrame::Ptr &frame) { onRawFrame(frame); });
+                if (_gop && _gop->size()) {
+                    if (_gop->size() > _decoder->getMaxTaskSize())
+                        _decoder->setMaxTaskSize(_gop->size());
+                    _gop->flush([this](const Frame::Ptr &frame) { _decoder->inputFrame(frame, true, true); });
+                }
+            }
+            _decoder->inputFrame(frame, true, true);
+        } else if (_decoder) {
+            InfoL << " close decoder " << getInfo();
+            _decoder = nullptr;
+        }
     }
-    return ret;
+    return FrameDispatcher::inputFrame(frame);
 }
 
 void Track::onRawFrame(const std::shared_ptr<FFmpegFrame>& frame) {
+    if (_gop && _gop->needDrop(frame->get()->pts)) {
+        return;
+    }
     std::list<RawFrameInterface::Ptr> raw_cbs;
     {
         std::unique_lock<decltype(_trans_mutex)> l(_trans_mutex);
@@ -100,7 +158,7 @@ struct RawCb : public RawFrameInterface {
     using CB = std::function<void(const std::shared_ptr<FFmpegFrame> &frame)>;
     CB _cb;
     RawCb(CB cb) : _cb(cb) {}
-    // é€šè¿‡ RawFrameInterface ç»§æ‰¿
+    // Í¨¹ý RawFrameInterface ¼Ì³Ð
     virtual void inputRawFrame(const std::shared_ptr<FFmpegFrame> &frame) override {
         if (_cb) _cb(frame);
     }
@@ -123,8 +181,8 @@ bool Track::delRawDelegate(RawFrameInterface* cb) {
 
 void Track::setupEncoder(int arg1, int arg2, int arg3, int bitrate) {
     Track::Ptr cfg;
-    // Factory::getTrackByCodecIdåœ¨æœªReadyæ—¶ï¼Œæ— æ³•èŽ·å–å®½é«˜å‚æ•°ï¼Œ
-    // å› æ­¤è¿™è¾¹é‡‡ç”¨Audio/VideoTrackImpæ¥åˆ›å»ºcfg
+    // Factory::getTrackByCodecIdÔÚÎ´ReadyÊ±£¬ÎÞ·¨»ñÈ¡¿í¸ß²ÎÊý£¬
+    // Òò´ËÕâ±ß²ÉÓÃAudio/VideoTrackImpÀ´´´½¨cfg
     if (getTrackType() == TrackVideo)
         cfg.reset(new VideoTrackImp(getCodecId(), arg1, arg2, arg3));
     else
@@ -153,7 +211,8 @@ Track::Ptr Track::getTransodeTrack(CodecId id, int arg1, int arg2, int bitrate) 
         if (ret) {
             static int transIdx = CodecMax;
             ret->setIndex(transIdx++);
-
+          if (!_gop && mediakit::getTrackType(id) == TrackVideo)
+              _gop = std::make_shared<GopFlush>(1000);
             ret->setupEncoder(arg1, arg2, arg3, bitrate);
             ret->_parent = this;
             ret->onSizeChange(0);
