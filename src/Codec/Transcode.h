@@ -12,7 +12,7 @@
 #define ZLMEDIAKIT_TRANSCODE_H
 
 #if defined(ENABLE_FFMPEG)
-
+#include "Util/util.h"
 #include "Util/TimeTicker.h"
 #include "Common/MediaSink.h"
 
@@ -48,6 +48,7 @@ public:
 private:
     char *_data = nullptr;
     std::shared_ptr<AVFrame> _frame;
+    toolkit::ObjectStatistic<FFmpegFrame> _counter;
 };
 
 class FFmpegSwr {
@@ -75,6 +76,7 @@ private:
     int _target_samplerate;
     AVSampleFormat _target_format;
     SwrContext *_ctx = nullptr;
+    toolkit::ObjectStatistic<FFmpegSwr> _statistic;
 };
 
 class FFmpegAudioFifo {
@@ -157,6 +159,7 @@ private:
     onDec _cb;
     std::shared_ptr<AVCodecContext> _context;
     FrameMerger _merger{FrameMerger::h264_prefix};
+    toolkit::ObjectStatistic<FFmpegDecoder> _counter;
 };
 
 class FFmpegSws {
@@ -179,6 +182,7 @@ private:
     SwsContext *_ctx = nullptr;
     AVPixelFormat _src_format = AV_PIX_FMT_NONE;
     AVPixelFormat _target_format = AV_PIX_FMT_NONE;
+    toolkit::ObjectStatistic<FFmpegSws> _counter;
 };
 
 class FFmpegEncoder : public TaskManager, public CodecInfo {
@@ -209,6 +213,7 @@ private:
     std::unique_ptr<FFmpegSws> _sws;
     std::unique_ptr<FFmpegSwr> _swr;
     std::unique_ptr<FFmpegAudioFifo> _fifo;
+    toolkit::ObjectStatistic<FFmpegEncoder> _counter;
 };
 }//namespace mediakit
 #endif// ENABLE_FFMPEG
