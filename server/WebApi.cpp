@@ -31,7 +31,7 @@
 #include "Network/TcpServer.h"
 #include "Network/UdpServer.h"
 #include "Thread/WorkThreadPool.h"
-
+#include "Codec/Transcode.h"
 #ifdef ENABLE_MYSQL
 #include "Util/SqlPool.h"
 #endif //ENABLE_MYSQL
@@ -535,6 +535,17 @@ void getStatisticJson(const function<void(Value &val)> &cb) {
 
     val["RtpPacket"] = (Json::UInt64)(ObjectStatistic<RtpPacket>::count());
     val["RtmpPacket"] = (Json::UInt64)(ObjectStatistic<RtmpPacket>::count());
+
+    // val["FFmpegSource"] = (Json::UInt64)(ObjectStatistic<FFmpegSource>::count());
+#ifdef ENABLE_FFMPEG
+    val["FFmpegFrame"] = (Json::UInt64)(ObjectStatistic<FFmpegFrame>::count());
+    val["FFmpegSwr"] = (Json::UInt64)(ObjectStatistic<FFmpegSwr>::count());
+    val["FFmpegSws"] = (Json::UInt64)(ObjectStatistic<FFmpegSws>::count());
+    val["FFmpegAudioFifo"] = (Json::UInt64)(ObjectStatistic<FFmpegAudioFifo>::count());
+    val["FFmpegDecoder"] = (Json::UInt64)(ObjectStatistic<FFmpegDecoder>::count());
+    val["FFmpegEncoder"] = (Json::UInt64)(ObjectStatistic<FFmpegEncoder>::count());
+#endif // ENABLE_FFMPEG
+
 #ifdef ENABLE_MEM_DEBUG
     auto bytes = getTotalMemUsage();
     val["totalMemUsage"] = (Json::UInt64) bytes;
