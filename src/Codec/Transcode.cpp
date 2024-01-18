@@ -24,6 +24,12 @@
 
 using namespace std;
 using namespace toolkit;
+StatisticImp(mediakit::FFmpegFrame);
+StatisticImp(mediakit::FFmpegSwr);
+StatisticImp(mediakit::FFmpegSws);
+StatisticImp(mediakit::FFmpegAudioFifo);
+StatisticImp(mediakit::FFmpegDecoder);
+StatisticImp(mediakit::FFmpegEncoder);
 
 namespace mediakit {
 // 配置项目
