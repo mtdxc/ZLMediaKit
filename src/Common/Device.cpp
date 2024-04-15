@@ -19,13 +19,46 @@
 #ifdef ENABLE_X264
 #include "Codec/H264Encoder.h"
 #endif //ENABLE_X264
+
+#ifdef ENABLE_FFMPEG
+#include "Codec/Transcode.h"
+#endif // ENABLE_FFMPEG
+
 using namespace toolkit;
 using namespace std;
 
 namespace mediakit {
 
 bool DevChannel::inputYUV(char *yuv[3], int linesize[3], uint64_t cts) {
-#ifdef ENABLE_X264
+#if defined(ENABLE_FFMPEG)
+    auto &encoder = _encoder[0];
+    if (!encoder) {
+        VideoTrack::Ptr cfg = std::make_shared<VideoTrackImp>(_video->codecId, _video->iWidth, _video->iHeight, _video->iFrameRate);
+        cfg->setBitRate(_video->iBitRate);
+        auto encoder = std::make_shared<FFmpegEncoder>(cfg);
+        std::weak_ptr<DevChannel> weak_self = std::dynamic_pointer_cast<DevChannel>(shared_from_this());
+        encoder->setOnEncode([weak_self](const Frame::Ptr &frame) {
+            if (auto self = weak_self.lock()) {
+                self->inputFrame(frame);
+            }
+        });
+    }
+    if (encoder) {
+        auto frame = FFmpegFrame::alloc();
+        for (size_t i = 0; i < 3; i++) {
+            frame->data[i] = (uint8_t *)yuv[i];
+            frame->linesize[i] = linesize[i];
+        }
+        frame->pts = cts;
+        frame->format = AV_PIX_FMT_YUV420P;
+        if (_video) {
+            frame->width = _video->iWidth;
+            frame->height = _video->iHeight;
+        }
+        encoder->inputFrame(frame, false);
+        return true;
+    }
+#elif defined(ENABLE_X264)
     //TimeTicker1(50);
     if (!_pH264Enc) {
         _pH264Enc.reset(new H264Encoder());
@@ -44,14 +77,41 @@ bool DevChannel::inputYUV(char *yuv[3], int linesize[3], uint64_t cts) {
         return ret;
     }
     return false;
-#else
+#else 
     WarnL << "h264编码未启用,该方法无效,编译时请打开ENABLE_X264选项";
     return false;
 #endif //ENABLE_X264
 }
 
 bool DevChannel::inputPCM(char* pcData, int iDataLen, uint64_t uiStamp) {
-#ifdef ENABLE_FAAC
+#if defined(ENABLE_FFMPEG)
+    auto &encoder = _encoder[1];
+    if (!encoder) {
+        AudioTrack::Ptr cfg = std::make_shared<AudioTrackImp>(_audio->codecId, _audio->iSampleRate, _audio->iChannel, _audio->iSampleBit);
+        cfg->setBitRate(64000);
+        auto encoder = std::make_shared<FFmpegEncoder>(cfg);
+        std::weak_ptr<DevChannel> weak_self = std::dynamic_pointer_cast<DevChannel>(shared_from_this());
+        encoder->setOnEncode([weak_self](const Frame::Ptr &frame) {
+            if (auto self = weak_self.lock()) {
+                self->inputFrame(frame);
+            }
+        });
+    }
+    if (encoder) {
+        auto frame = FFmpegFrame::alloc();
+        frame->data[0] = (uint8_t*)pcData;
+        frame->linesize[0] = iDataLen;
+        frame->pts = uiStamp;
+        frame->format = AV_SAMPLE_FMT_S16;
+        if (_audio) {
+            frame->channels = _audio->iChannel;
+            frame->sample_rate = _audio->iSampleRate;
+            frame->nb_samples = iDataLen / 2 / _audio->iChannel;
+        }
+        encoder->inputFrame(frame, false);
+        return true;
+    }
+#elif defined(ENABLE_FAAC)
     if (!_pAacEnc) {
         _pAacEnc.reset(new AACEncoder());
         if (!_pAacEnc->init(_audio->iSampleRate, _audio->iChannel, _audio->iSampleBit)) {

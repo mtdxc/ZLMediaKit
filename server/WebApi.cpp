@@ -63,7 +63,7 @@
 #include "ZLMVersion.h"
 #endif
 
-#if defined(ENABLE_VIDEOSTACK) && defined(ENABLE_X264) && defined (ENABLE_FFMPEG)
+#if defined(ENABLE_VIDEOSTACK) && defined (ENABLE_FFMPEG)
 #include "VideoStack.h"
 #endif
 
@@ -2161,7 +2161,7 @@ void installWebApi() {
         }
     });
 
-#if defined(ENABLE_VIDEOSTACK) && defined(ENABLE_X264) && defined(ENABLE_FFMPEG)
+#if defined(ENABLE_VIDEOSTACK) && defined(ENABLE_FFMPEG)
     VideoStackManager::Instance().loadBgImg("novideo.yuv");
     NoticeCenter::Instance().addListener(nullptr, Broadcast::kBroadcastStreamNoneReader, [](BroadcastStreamNoneReaderArgs) {
         auto id = sender.getMediaTuple().stream;
