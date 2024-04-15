@@ -21,7 +21,7 @@ namespace mediakit {
 
 class H264Encoder;
 class AACEncoder;
-
+class FFmpegEncoder;
 class VideoInfo {
 public:
     CodecId codecId = CodecH264;
@@ -182,6 +182,7 @@ private:
     std::shared_ptr<AACEncoder> _pAacEnc;
     std::shared_ptr<VideoInfo> _video;
     std::shared_ptr<AudioInfo> _audio;
+    std::shared_ptr<FFmpegEncoder> _encoder[2];
     toolkit::SmoothTicker _aTicker[2];
 };
 

@@ -455,7 +455,7 @@ elseif(NOT ANDROID OR IOS)
 endif()
 
 if(ENABLE_VIDEOSTACK)
-  if(ENABLE_FFMPEG AND ENABLE_X264)
+  if(ENABLE_FFMPEG)
     message(STATUS "ENABLE_VIDEOSTACK defined")
     update_cached_list(MK_COMPILE_DEFINITIONS ENABLE_VIDEOSTACK)
   else()
@@ -553,6 +553,6 @@ file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/default.pem" DESTINATION ${EXECUTABLE_OUT
 
 # 拷贝VideoStack 无视频流时默认填充的背景图片
 # Copy the default background image used by VideoStack when there is no video stream
-if (ENABLE_VIDEOSTACK AND ENABLE_FFMPEG AND ENABLE_X264)
+if (ENABLE_VIDEOSTACK AND ENABLE_FFMPEG)
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/conf/novideo.yuv" DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 endif ()
