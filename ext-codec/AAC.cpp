@@ -21,10 +21,8 @@ using namespace std;
 using namespace toolkit;
 
 namespace mediakit{
-
-#ifndef ENABLE_MP4
 unsigned const samplingFrequencyTable[16] = { 96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0 };
-
+#ifndef ENABLE_MP4
 class AdtsHeader {
 public:
     unsigned int syncword = 0; // 12 bslbf 同步字The bit string ‘1111 1111 1111’，说明一个ADTS帧的开始
@@ -255,6 +253,22 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+AACTrack::AACTrack(int samplerate, int channel, int profile) : _channel(channel), _sampleRate(samplerate) {
+    uint8_t audioSpecificConfig[2] = { 0 };
+    uint8_t audioObjectType = profile + 1;
+    int samplingFrequencyIndex = 0;
+    for (size_t i = 0; i < sizeof(samplingFrequencyTable) / sizeof(samplingFrequencyTable[0]); i++) {
+        if (samplingFrequencyTable[i] == (unsigned)samplerate) {
+            samplingFrequencyIndex = i;
+            break;
+        }
+    }
+    _cfg.resize(2);
+    _cfg[0] = (audioObjectType << 3) | (samplingFrequencyIndex >> 1);
+    _cfg[1] = (samplingFrequencyIndex << 7) | (channel << 3);
+    update();
+}
+
 AACTrack::AACTrack(const string &aac_cfg) {
     if (aac_cfg.size() < 2) {
         throw std::invalid_argument("adts配置必须最少2个字节");
@@ -387,7 +401,10 @@ CodecId getCodec() {
 }
 
 Track::Ptr getTrackByCodecId(int sample_rate, int channels, int sample_bit) {
-    return std::make_shared<AACTrack>();
+    if (sample_rate && channels)
+        return std::make_shared<AACTrack>(sample_rate, channels);
+    else
+        return std::make_shared<AACTrack>();
 }
 
 Track::Ptr getTrackBySdp(const SdpTrack::Ptr &track) {
