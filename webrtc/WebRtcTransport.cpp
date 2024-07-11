@@ -660,11 +660,6 @@ void WebRtcTransport::onRtcConfigure(RtcConfigure &configure) const {
     fingerprint.algorithm = _offer_sdp ? _offer_sdp->media[0].fingerprint.algorithm : "sha-256";
     fingerprint.hash = getFingerprint(fingerprint.algorithm, _dtls_transport);
     configure.setDefaultSetting(_ice_agent->getUfrag(), _ice_agent->getPassword(), RtpDirection::sendrecv, fingerprint);
-
-    // 开启remb后关闭twcc，因为开启twcc后remb无效  [AUTO-TRANSLATED:8a8feca2]
-    // Turn off twcc after turning on remb, because remb is invalid after turning on twcc
-    GET_CONFIG(size_t, remb_bit_rate, Rtc::kRembBitRate);
-    configure.enableTWCC(!remb_bit_rate);
 }
 
 static void setSdpBitrate(RtcSession &sdp) {
@@ -848,6 +843,7 @@ void WebRtcTransportImp::OnDtlsTransportApplicationDataReceived(const RTC::DtlsT
 
 WebRtcTransportImp::WebRtcTransportImp(const EventPoller::Ptr &poller) : WebRtcTransport(poller) {
     InfoL << getIdentifier();
+    _remb_bitrate = mINI::Instance()[Rtc::kRembBitRate];
 }
 
 WebRtcTransportImp::~WebRtcTransportImp() {
@@ -861,6 +857,23 @@ void WebRtcTransportImp::onDestory() {
 
 void WebRtcTransportImp::onSendSockData(Buffer::Ptr buf, bool flush, const IceTransport::Pair::Ptr& pair) {
     return _ice_agent->sendSocketData(buf, pair, flush);
+}
+
+void WebRtcTransportImp::onConfig(toolkit::mINI& cfg) {
+    if (cfg.count("bitrate")) {
+        setRembBitRate(cfg["bitrate"]);
+    }
+}
+
+bool WebRtcTransportImp::setRembBitRate(size_t val) {
+    if (_remb_bitrate && val) {
+        InfoL << getIdentifier() << " setRembBitRate " << _remb_bitrate << "->" << val;
+        _remb_bitrate = val;
+        return true;
+    } else {
+        InfoL << "skip " << val << " for twcc eanble";
+        return false;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -1047,6 +1060,9 @@ void WebRtcTransportImp::onCheckSdp(SdpType type, RtcSession &sdp) {
 
 void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
     WebRtcTransport::onRtcConfigure(configure);
+    // 开启remb后关闭twcc，因为开启twcc后remb无效
+    configure.enableTWCC(!_remb_bitrate);
+
     if (!_cands.empty()) {
         for (auto &cand : _cands) {
             configure.addCandidate(cand);
@@ -1464,9 +1480,8 @@ void WebRtcTransportImp::onSortedRtp(MediaTrack &track, const string &rid, RtpPa
 
         // 开启remb，则发送remb包调节比特率  [AUTO-TRANSLATED:20e98cea]
         // If remb is enabled, send remb packets to adjust the bitrate
-        GET_CONFIG(size_t, remb_bit_rate, Rtc::kRembBitRate);
-        if (remb_bit_rate && _answer_sdp->supportRtcpFb(SdpConst::kRembRtcpFb)) {
-            sendRtcpRemb(rtp->getSSRC(), remb_bit_rate);
+        if (_remb_bitrate && _answer_sdp->supportRtcpFb(SdpConst::kRembRtcpFb)) {
+            sendRtcpRemb(rtp->getSSRC(), _remb_bitrate);
         }
     }
 
