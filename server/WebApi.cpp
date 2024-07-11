@@ -2160,7 +2160,27 @@ void installWebApi() {
 
     api_regist("/index/api/whip", [](API_ARGS_STRING_ASYNC) { whip_whep_func("push", API_ARGS_VALUE, invoker); });
     api_regist("/index/api/whep", [](API_ARGS_STRING_ASYNC) { whip_whep_func("play", API_ARGS_VALUE, invoker); });
+    api_regist("/index/api/config_webrtc", [](API_ARGS_MAP_ASYNC) {
+        CHECK_ARGS("id");
+        auto obj = WebRtcTransportManager::Instance().getItem(allArgs["id"]);
+        if (!obj) {
+            invoker(404, headerOut, "id not found");
+            return;
+        }
 
+        mINI args;
+        for (auto &pr : allArgs.args) {
+            args.emplace(pr.first, pr.second);
+        }
+        headerOut["Content-Type"] = "text/plain";
+        try {
+            obj->onConfig(args);
+            invoker(200, headerOut, "");
+        }
+        catch (std::exception &ex) {
+            invoker(406, headerOut, ex.what());
+        }
+    });
     api_regist(delete_webrtc_url, [](API_ARGS_MAP_ASYNC) {
         CHECK_ARGS("id", "token");
         CHECK(allArgs.parser.method() == "DELETE", "http method is not DELETE: " + allArgs.parser.method());
