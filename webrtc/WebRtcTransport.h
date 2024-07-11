@@ -318,7 +318,13 @@ private:
     void unrefSelf();
     void onCheckAnswer(RtcSession &sdp);
 
+public:
+    virtual void onConfig(toolkit::mINI& cfg);
+    bool setRembBitRate(size_t val);
+    size_t getRembBitRate() const {return _remb_bitrate;}
 private:
+    mutable size_t _remb_bitrate = 0;
+
     bool _preferred_tcp = false;
     uint16_t _rtx_seq[2] = {0, 0};
     // 用掉的总流量  [AUTO-TRANSLATED:713b61c9]
