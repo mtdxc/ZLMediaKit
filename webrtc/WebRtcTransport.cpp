@@ -884,6 +884,7 @@ void WebRtcTransportImp::OnDtlsTransportApplicationDataReceived(const RTC::DtlsT
 
 WebRtcTransportImp::WebRtcTransportImp(const EventPoller::Ptr &poller) : WebRtcTransport(poller) {
     InfoL << getIdentifier();
+    _remb_bitrate = mINI::Instance()[Rtc::kRembBitRate];
 }
 
 WebRtcTransportImp::~WebRtcTransportImp() {
@@ -897,6 +898,23 @@ void WebRtcTransportImp::onDestory() {
 
 void WebRtcTransportImp::onSendSockData(Buffer::Ptr buf, bool flush, const IceTransport::Pair::Ptr& pair) {
     return _ice_agent->sendSocketData(buf, pair, flush);
+}
+
+void WebRtcTransportImp::onConfig(toolkit::mINI& cfg) {
+    if (cfg.count("bitrate")) {
+        setRembBitRate(cfg["bitrate"]);
+    }
+}
+
+bool WebRtcTransportImp::setRembBitRate(size_t val) {
+    if (_remb_bitrate && val) {
+        InfoL << getIdentifier() << " setRembBitRate " << _remb_bitrate << "->" << val;
+        _remb_bitrate = val;
+        return true;
+    } else {
+        InfoL << "skip " << val << " for twcc eanble";
+        return false;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -956,7 +974,7 @@ void WebRtcTransportImp::onStartWebRTC() {
             // This type of track supports sending
             track->rtcp_context_send = std::make_shared<RtcpContextForSend>();
 
-            // send ssrc --> MediaTrack
+            // rtx pt --> MediaTrack
             if (track->answer_ssrc_rtp) {
                 _ssrc_to_track_send[track->answer_ssrc_rtp] = track;
                 InfoL << "register outgoing rtp stream: " << track->answer_ssrc_rtp << ", pt: " << (int)track->plan_rtp->pt << ", mid: " << track->media->mid << ", codec: " << track->plan_rtp->codec;
@@ -968,7 +986,7 @@ void WebRtcTransportImp::onStartWebRTC() {
         }
 
         if (canRecvRtp(m_answer)) {
-            // rtp pt --> MediaTrack
+            // ssrc --> MediaTrack
             _mid_to_track_recv[track->media->mid][track->plan_rtp->pt] = std::unique_ptr<WrappedMediaTrack>(new WrappedRtpTrack(track, *this));
             if (track->plan_rtx) {
                 // rtx pt --> MediaTrack
@@ -980,7 +998,7 @@ void WebRtcTransportImp::onStartWebRTC() {
                 _mid_to_track_recv[track->media->mid][plan_red->pt] = std::unique_ptr<WrappedMediaTrack>(new WrappedRedTrack(track, *this));
             }
 
-            // recv ssrc --> MediaTrack
+            // 记录ssrc对应的MediaTrack  [AUTO-TRANSLATED:8e344bc1]
             if (track->offer_ssrc_rtp) {
                 _ssrc_to_track_recv[track->offer_ssrc_rtp] = track;
                 InfoL << "register incoming rtp stream: " << track->offer_ssrc_rtp << ", pt: " << (int)track->plan_rtp->pt << ", mid: " << track->media->mid << ", codec: " << track->plan_rtp->codec;
@@ -990,11 +1008,11 @@ void WebRtcTransportImp::onStartWebRTC() {
                 InfoL << "register incoming rtp stream: " << track->offer_ssrc_rtx << ", pt: " << (int)track->plan_rtx->pt << ", mid: " << track->media->mid << ", codec: " << track->plan_rtx->codec;
             }
 
-            // simulcast 收流ssrc到track/rid映射相关设置
+            // Record the MediaTrack corresponding to ssrc
             size_t index = 0;
             for (auto &ssrc : m_offer->rtp_ssrc_sim) {
-                // 记录ssrc对应的MediaTrack  [AUTO-TRANSLATED:8e344bc1]
-                // Record the MediaTrack corresponding to ssrc
+                // 支持firefox的simulcast, 提前映射好ssrc和rid的关系  [AUTO-TRANSLATED:86f3e5bf]
+                // Support firefox's simulcast, map the relationship between ssrc and rid in advance
                 if (ssrc.ssrc) {
                     _ssrc_to_track_recv[ssrc.ssrc] = track;
                     InfoL << "register incoming rtp simulcast stream: " << ssrc.ssrc << ", pt: " << (int)track->plan_rtp->pt << ", mid: " << track->media->mid << ", codec: " << track->plan_rtp->codec;
@@ -1106,6 +1124,9 @@ void WebRtcTransportImp::onCheckSdp(SdpType type, RtcSession &sdp) {
 
 void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
     WebRtcTransport::onRtcConfigure(configure);
+    // 开启remb后关闭twcc，因为开启twcc后remb无效
+    configure.enableTWCC(!_remb_bitrate);
+
     if (!_cands.empty()) {
         for (auto &cand : _cands) {
             configure.addCandidate(cand);
@@ -1179,7 +1200,7 @@ void WebRtcTransportImp::setOriginRtpSdp(const std::string &origin_sdp) {
         pr.second->origin_rtp_ext_ctx = origin_rtp_ext_ctx;
     }
 }
-
+///////////////////////////////////////////////////////////////////
 const RtpExtContext &WebRtcTransportImp::getExtContext() const {
     return _rtp_ext_ctx;
 }
@@ -1831,8 +1852,8 @@ void WebRtcTransportImp::onSendRtp(const RtpPacket::Ptr &rtp_in, bool flush, boo
     }
 
     if (!rtx) {
-        // RTP seq/timestamp 源切换校正：
-        // 同一输出 track（MID）可能先后复用多个上游源流，各源流 seq/ts 独立编号，
+        // 统计rtp发送情况，好做sr汇报  [AUTO-TRANSLATED:142028b2]
+        // Statistics of RTP sending, for SR reporting
         // 直接转发会让接收端 jitter buffer 误判丢包或卡帧。源切换由 clearSendRtpMap
         // 显式触发（switch_corrector.onSourceSwitch）：切换后据上次输出值重算固定偏移，
         // 未切换时偏移恒定，输出 = 输入 + 偏移，完整保留源流内部 seq/ts 相对变化。
