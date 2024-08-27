@@ -37,19 +37,12 @@ namespace mediakit {
 
 class FFmpegFrame {
 public:
-    using Ptr = std::shared_ptr<FFmpegFrame>;
-
-    FFmpegFrame(std::shared_ptr<AVFrame> frame = nullptr);
-    ~FFmpegFrame();
-
-    AVFrame *get() const;
-    void fillPicture(AVPixelFormat target_format, int target_width, int target_height);
-    int getChannels() const;
-
-private:
-    char *_data = nullptr;
-    std::shared_ptr<AVFrame> _frame;
-    toolkit::ObjectStatistic<FFmpegFrame> _counter;
+    using Ptr = std::shared_ptr<AVFrame>;
+    using WPtr = std::weak_ptr<AVFrame>;
+    static Ptr alloc();
+    static Ptr clone(AVFrame* frame);
+    static Ptr allocPicture(AVPixelFormat target_format, int target_width, int target_height);
+    static int getChannels(Ptr frame);
 };
 
 class FFmpegSwr {
@@ -78,7 +71,6 @@ private:
     AVSampleFormat _target_format;
     SwrContext *_ctx = nullptr;
     toolkit::ObjectStatistic<FFmpegSwr> _statistic;
-    toolkit::ResourcePool<FFmpegFrame> _swr_frame_pool;
 };
 
 class FFmpegAudioFifo {
@@ -162,7 +154,6 @@ private:
     std::shared_ptr<AVCodecContext> _context;
     FrameMerger _merger{FrameMerger::h264_prefix};
     toolkit::ObjectStatistic<FFmpegDecoder> _counter;
-    toolkit::ResourcePool<FFmpegFrame> _frame_pool;
 };
 
 class FFmpegSws {
@@ -186,7 +177,6 @@ private:
     AVPixelFormat _src_format = AV_PIX_FMT_NONE;
     AVPixelFormat _target_format = AV_PIX_FMT_NONE;
     toolkit::ObjectStatistic<FFmpegSws> _counter;
-    toolkit::ResourcePool<FFmpegFrame> _sws_frame_pool;
 };
 
 class FFmpegUtils {

@@ -38,7 +38,7 @@ struct Param {
 
     // runtime
     std::weak_ptr<Channel> weak_chn;
-    std::weak_ptr<mediakit::FFmpegFrame> weak_buf;
+    mediakit::FFmpegFrame::WPtr weak_buf;
 
     ~Param();
 };
