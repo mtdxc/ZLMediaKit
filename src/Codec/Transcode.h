@@ -34,18 +34,14 @@ namespace mediakit {
 
 class FFmpegFrame {
 public:
-    using Ptr = std::shared_ptr<FFmpegFrame>;
-
-    FFmpegFrame(std::shared_ptr<AVFrame> frame = nullptr);
-    ~FFmpegFrame();
-
-    AVFrame *get() const;
-    void fillPicture(AVPixelFormat target_format, int target_width, int target_height);
-
+    using Ptr = std::shared_ptr<AVFrame>;
+    using WPtr = std::weak_ptr<AVFrame>;
+    static Ptr alloc();
+    static Ptr clone(AVFrame* frame);
+    static Ptr allocPicture(AVPixelFormat target_format, int target_width, int target_height);
 private:
-    char *_data = nullptr;
-    std::shared_ptr<AVFrame> _frame;
-    toolkit::ObjectStatistic<FFmpegFrame> _counter;
+    FFmpegFrame() = delete;
+    ~FFmpegFrame() = delete;
 };
 
 class FFmpegSwr {

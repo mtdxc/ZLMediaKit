@@ -2,6 +2,7 @@
 #include "VideoStack.h"
 #include "Codec/Transcode.h"
 #include "Common/Device.h"
+#include "Common/config.h"
 #include "Util/logger.h"
 #include "Util/util.h"
 #include "json/value.h"
@@ -27,17 +28,17 @@ Param::~Param() { VideoStackManager::Instance().unrefChannel(id, width, height, 
 
 Channel::Channel(const std::string& id, int width, int height, AVPixelFormat pixfmt)
     : _id(id), _width(width), _height(height), _pixfmt(pixfmt) {
-    _tmp = std::make_shared<mediakit::FFmpegFrame>();
+    _tmp = mediakit::FFmpegFrame::alloc();
 
-    _tmp->get()->width = _width;
-    _tmp->get()->height = _height;
-    _tmp->get()->format = _pixfmt;
+    _tmp->width = _width;
+    _tmp->height = _height;
+    _tmp->format = _pixfmt;
 
-    av_frame_get_buffer(_tmp->get(), 32);
+    av_frame_get_buffer(_tmp.get(), 32);
 
-    memset(_tmp->get()->data[0], 0, _tmp->get()->linesize[0] * _height);
-    memset(_tmp->get()->data[1], 0, _tmp->get()->linesize[1] * _height / 2);
-    memset(_tmp->get()->data[2], 0, _tmp->get()->linesize[2] * _height / 2);
+    memset(_tmp->data[0], 0, _tmp->linesize[0] * _height);
+    memset(_tmp->data[1], 0, _tmp->linesize[1] * _height / 2);
+    memset(_tmp->data[2], 0, _tmp->linesize[2] * _height / 2);
 
     auto frame = VideoStackManager::Instance().getBgImg();
     _sws = std::make_shared<mediakit::FFmpegSws>(_pixfmt, _width, _height);
@@ -75,27 +76,23 @@ void Channel::fillBuffer(const Param::Ptr& p) {
 void Channel::copyData(const mediakit::FFmpegFrame::Ptr& buf, const Param::Ptr& p) {
 
     switch (p->pixfmt) {
-        case AV_PIX_FMT_YUV420P: {
-            for (int i = 0; i < p->height; i++) {
-                memcpy(buf->get()->data[0] + buf->get()->linesize[0] * (i + p->posY) + p->posX,
-                       _tmp->get()->data[0] + _tmp->get()->linesize[0] * i, _tmp->get()->width);
-            }
-            // 确保height为奇数时，也能正确的复制到最后一行uv数据  [AUTO-TRANSLATED:69895ea5]
-            // Ensure that the uv data can be copied to the last line correctly when height is odd
-            for (int i = 0; i < (p->height + 1) / 2; i++) {
-                // U平面  [AUTO-TRANSLATED:8b73dc2d]
-                // U plane
-                memcpy(buf->get()->data[1] + buf->get()->linesize[1] * (i + p->posY / 2) +
-                           p->posX / 2,
-                       _tmp->get()->data[1] + _tmp->get()->linesize[1] * i, _tmp->get()->width / 2);
+    case AV_PIX_FMT_YUV420P: {
+        for (int i = 0; i < p->height; i++) {
+            memcpy(buf->data[0] + buf->linesize[0] * (i + p->posY) + p->posX,
+                _tmp->data[0] + _tmp->linesize[0] * i,
+                _tmp->width);
+        }
+        //确保height为奇数时，也能正确的复制到最后一行uv数据
+        for (int i = 0; i < (p->height + 1) / 2; i++) {
+            // U plane
+            memcpy(buf->data[1] + buf->linesize[1] * (i + p->posY / 2) + p->posX / 2,
+                _tmp->data[1] + _tmp->linesize[1] * i,
+                _tmp->width / 2);
 
-                // V平面  [AUTO-TRANSLATED:8fa72cc7]
-                // V plane
-                memcpy(buf->get()->data[2] + buf->get()->linesize[2] * (i + p->posY / 2) +
-                           p->posX / 2,
-                       _tmp->get()->data[2] + _tmp->get()->linesize[2] * i, _tmp->get()->width / 2);
-            }
-            break;
+            // V平面
+            memcpy(buf->data[2] + buf->linesize[2] * (i + p->posY / 2) + p->posX / 2,
+                _tmp->data[2] + _tmp->linesize[2] * i,
+                _tmp->width / 2);
         }
         case AV_PIX_FMT_NV12: {
             // TODO: 待实现  [AUTO-TRANSLATED:247ec1df]
@@ -103,7 +100,9 @@ void Channel::copyData(const mediakit::FFmpegFrame::Ptr& buf, const Param::Ptr& 
             break;
         }
 
-        default: WarnL << "No support pixformat: " << av_get_pix_fmt_name(p->pixfmt); break;
+    default:
+        WarnL << "No support pixformat: " << p->pixfmt;
+        break;
     }
 }
 void StackPlayer::addChannel(const std::weak_ptr<Channel>& chn) {
@@ -215,13 +214,13 @@ VideoStack::VideoStack(const std::string& id, int width, int height, AVPixelForm
                        float fps, int bitRate)
     : _id(id), _width(width), _height(height), _pixfmt(pixfmt), _fps(fps), _bitRate(bitRate) {
 
-    _buffer = std::make_shared<mediakit::FFmpegFrame>();
+    _buffer = mediakit::FFmpegFrame::alloc();
 
-    _buffer->get()->width = _width;
-    _buffer->get()->height = _height;
-    _buffer->get()->format = _pixfmt;
+    _buffer->width = _width;
+    _buffer->height = _height;
+    _buffer->format = _pixfmt;
 
-    av_frame_get_buffer(_buffer->get(), 32);
+    av_frame_get_buffer(_buffer.get(), 32);
 
     _dev = std::make_shared<mediakit::DevChannel>(
         mediakit::MediaTuple{DEFAULT_VHOST, "live", _id, ""});
@@ -276,7 +275,7 @@ void VideoStack::start() {
                 std::chrono::milliseconds(frameInterval)) {
                 lastEncTP = std::chrono::steady_clock::now();
 
-                _dev->inputYUV((char**)_buffer->get()->data, _buffer->get()->linesize, pts);
+                _dev->inputYUV((char**)_buffer->data, _buffer->linesize, pts);
                 pts += frameInterval;
             }
         }
@@ -294,9 +293,9 @@ void VideoStack::initBgColor() {
     double U = RGB_TO_U(R, G, B);
     double V = RGB_TO_V(R, G, B);
 
-    memset(_buffer->get()->data[0], Y, _buffer->get()->linesize[0] * _height);
-    memset(_buffer->get()->data[1], U, _buffer->get()->linesize[1] * _height / 2);
-    memset(_buffer->get()->data[2], V, _buffer->get()->linesize[2] * _height / 2);
+    memset(_buffer->data[0], Y, _buffer->linesize[0] * _height);
+    memset(_buffer->data[1], U, _buffer->linesize[1] * _height / 2);
+    memset(_buffer->data[2], V, _buffer->linesize[2] * _height / 2);
 }
 
 Channel::Ptr VideoStackManager::getChannel(const std::string& id, int width, int height,
@@ -477,23 +476,20 @@ Params VideoStackManager::parseParams(const Json::Value& json, std::string& id, 
 }
 
 bool VideoStackManager::loadBgImg(const std::string& path) {
-    _bgImg = std::make_shared<mediakit::FFmpegFrame>();
+    _bgImg = mediakit::FFmpegFrame::alloc();
 
-    _bgImg->get()->width = 1280;
-    _bgImg->get()->height = 720;
-    _bgImg->get()->format = AV_PIX_FMT_YUV420P;
+    _bgImg->width = 1280;
+    _bgImg->height = 720;
+    _bgImg->format = AV_PIX_FMT_YUV420P;
 
-    av_frame_get_buffer(_bgImg->get(), 32);
+    av_frame_get_buffer(_bgImg.get(), 32);
 
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open()) { return false; }
 
-    file.read((char*)_bgImg->get()->data[0],
-              _bgImg->get()->linesize[0] * _bgImg->get()->height);// Y
-    file.read((char*)_bgImg->get()->data[1],
-              _bgImg->get()->linesize[1] * _bgImg->get()->height / 2);// U
-    file.read((char*)_bgImg->get()->data[2],
-              _bgImg->get()->linesize[2] * _bgImg->get()->height / 2);// V
+    file.read((char*)_bgImg->data[0], _bgImg->linesize[0] * _bgImg->height); // Y
+    file.read((char*)_bgImg->data[1], _bgImg->linesize[1] * _bgImg->height / 2); // U
+    file.read((char*)_bgImg->data[2], _bgImg->linesize[2] * _bgImg->height / 2); // V
     return true;
 }
 

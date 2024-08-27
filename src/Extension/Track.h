@@ -15,18 +15,17 @@
 #include <string>
 #include "Frame.h"
 #include "Rtsp/Rtsp.h"
-
+struct AVFrame;
 namespace mediakit{
 #ifdef ENABLE_FFMPEG
 class FFmpegDecoder;
 class FFmpegEncoder;
-class FFmpegFrame;
 struct GopFlush;
 // 裸帧回调接口
 class RawFrameInterface {
 public:
     using Ptr = std::shared_ptr<RawFrameInterface>;
-    virtual void inputRawFrame(const std::shared_ptr<FFmpegFrame>& frame) = 0;
+    virtual void inputRawFrame(const std::shared_ptr<AVFrame>& frame) = 0;
 };
 #endif
 /**
@@ -152,20 +151,20 @@ public:
     ~Track();
 
     // 注册原始帧(RawFrame)回调，注册后就会启动解码器，具体使用详见test_player.cpp实现
-    RawFrameInterface *addRawDelegate(std::function<void(const std::shared_ptr<FFmpegFrame> &frame)> cb);
+    RawFrameInterface *addRawDelegate(std::function<void(const std::shared_ptr<AVFrame> &frame)> cb);
     RawFrameInterface* addRawDelegate(RawFrameInterface::Ptr cb);
     bool delRawDelegate(RawFrameInterface* cb);
     // 输入帧，分发帧，当_raw_cbs>0时，解码，并回调onRawFrame
     virtual bool inputFrame(const Frame::Ptr &frame);
     // 输入裸帧：没有则创建编码器，编码，并回调inputFrame
-    virtual void inputRawFrame(const std::shared_ptr<FFmpegFrame>& frame);
+    virtual void inputRawFrame(const std::shared_ptr<AVFrame>& frame);
     // 设置编码参数
     void setupEncoder(int arg1, int arg2, int arg3, int bitrate);
 protected:
     // addRawDelegate/delRawDelegate with parent
     virtual void onSizeChange(size_t size);
     // for_each(_raw_cbs, call inputRawFrame)
-    void onRawFrame(const std::shared_ptr<FFmpegFrame>& frame);
+    void onRawFrame(const std::shared_ptr<AVFrame>& frame);
 
 protected:
     std::recursive_mutex _trans_mutex;

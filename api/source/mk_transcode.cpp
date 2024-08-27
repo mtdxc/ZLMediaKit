@@ -82,29 +82,29 @@ API_EXPORT mk_frame_pix API_CALL mk_frame_pix_ref(mk_frame_pix frame) {
 
 API_EXPORT mk_frame_pix API_CALL mk_frame_pix_from_av_frame(AVFrame *frame) {
     assert(frame);
-    return (mk_frame_pix)new FFmpegFrame::Ptr(std::make_shared<FFmpegFrame>(std::shared_ptr<AVFrame>(av_frame_clone(frame), [](AVFrame *frame){
-        av_frame_free(&frame);
-    })));
+    return (mk_frame_pix) new FFmpegFrame::Ptr(FFmpegFrame::clone(frame));
 }
 
 API_EXPORT mk_frame_pix API_CALL mk_frame_pix_from_buffer(mk_buffer plane_data[], int line_size[], int plane) {
     assert(plane <= AV_NUM_DATA_POINTERS);
-    std::shared_ptr<AVFrame> frame(av_frame_alloc(), [](AVFrame *ptr) {
-        av_frame_free(&ptr);
-    });
+    std::vector<uint8_t *> data;
     std::vector<mk_buffer> buffer_array;
     for (auto i = 0; i < plane; ++i) {
         auto buffer = mk_buffer_ref(plane_data[i]);
-        frame->data[i] = (uint8_t *) mk_buffer_get_data(buffer);
-        frame->linesize[i] = line_size[i];
+        data.emplace_back((uint8_t *)mk_buffer_get_data(buffer));
         buffer_array.emplace_back(buffer);
     }
-    return (mk_frame_pix)new FFmpegFrame::Ptr(new FFmpegFrame(std::move(frame)), [buffer_array](FFmpegFrame *frame) {
+    std::shared_ptr<AVFrame> frame(av_frame_alloc(), [buffer_array](AVFrame *ptr) {
+        av_frame_free(&ptr);
         for (auto &buffer : buffer_array) {
             mk_buffer_unref(buffer);
         }
-        delete frame;
     });
+    for (auto i = 0; i < plane; ++i) {
+        frame->data[i] = data[i];
+        frame->linesize[i] = line_size[i];
+    }
+    return (mk_frame_pix) new FFmpegFrame::Ptr(frame);
 }
 
 API_EXPORT void API_CALL mk_frame_pix_unref(mk_frame_pix frame) {
@@ -114,7 +114,7 @@ API_EXPORT void API_CALL mk_frame_pix_unref(mk_frame_pix frame) {
 
 API_EXPORT AVFrame *API_CALL mk_frame_pix_get_av_frame(mk_frame_pix frame) {
     assert(frame);
-    return (*(FFmpegFrame::Ptr *) frame)->get();
+    return (*(FFmpegFrame::Ptr *) frame).get();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
