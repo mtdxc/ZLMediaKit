@@ -272,31 +272,22 @@ void TaskManager::onThreadRun(const string &name) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-FFmpegFrame::FFmpegFrame(std::shared_ptr<AVFrame> frame) {
-    if (frame) {
-        _frame = std::move(frame);
-    } else {
-        _frame.reset(av_frame_alloc(), [](AVFrame *ptr) {
-            av_frame_free(&ptr);
-        });
-    }
+FFmpegFrame::Ptr FFmpegFrame::alloc() {
+    return std::shared_ptr<AVFrame>(av_frame_alloc(), [](AVFrame *pkt) { av_frame_free(&pkt); });
 }
 
-FFmpegFrame::~FFmpegFrame() {
-    if (_data) {
-        delete[] _data;
-        _data = nullptr;
-    }
+FFmpegFrame::Ptr FFmpegFrame::clone(AVFrame *frame) {
+    return std::shared_ptr<AVFrame>(av_frame_clone(frame), [](AVFrame *pkt) { av_frame_free(&pkt); });
 }
 
-AVFrame *FFmpegFrame::get() const {
-    return _frame.get();
-}
-
-void FFmpegFrame::fillPicture(AVPixelFormat target_format, int target_width, int target_height) {
-    assert(_data == nullptr);
-    _data = new char[av_image_get_buffer_size(target_format, target_width, target_height, 32)];
-    av_image_fill_arrays(_frame->data, _frame->linesize, (uint8_t *) _data,  target_format, target_width, target_height, 32);
+FFmpegFrame::Ptr FFmpegFrame::allocPicture(AVPixelFormat target_format, int target_width, int target_height) {
+    char* data = new char[av_image_get_buffer_size(target_format, target_width, target_height, 32)];
+    Ptr ret = std::shared_ptr<AVFrame>(av_frame_alloc(), [data](AVFrame *pkt) {
+        av_frame_free(&pkt);
+        delete[] data;
+    });
+    av_image_fill_arrays(ret->data, ret->linesize, (uint8_t *) data,  target_format, target_width, target_height, 32);
+    return ret;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -530,8 +521,8 @@ FFmpegDecoder::~FFmpegDecoder() {
 
 void FFmpegDecoder::flush() {
     while (true) {
-        auto out_frame = std::make_shared<FFmpegFrame>();
-        auto ret = avcodec_receive_frame(_context.get(), out_frame->get());
+        auto out_frame = FFmpegFrame::alloc();
+        auto ret = avcodec_receive_frame(_context.get(), out_frame.get());
         if (ret == AVERROR(EAGAIN)) {
             avcodec_send_packet(_context.get(), nullptr);
             continue;
@@ -598,8 +589,8 @@ bool FFmpegDecoder::decodeFrame(const char *data, size_t size, uint64_t dts, uin
     }
 
     while (true) {
-        auto out_frame = std::make_shared<FFmpegFrame>();
-        ret = avcodec_receive_frame(_context.get(), out_frame->get());
+        auto out_frame = FFmpegFrame::alloc();
+        ret = avcodec_receive_frame(_context.get(), out_frame.get());
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
             break;
         }
@@ -607,10 +598,10 @@ bool FFmpegDecoder::decodeFrame(const char *data, size_t size, uint64_t dts, uin
             WarnL << "avcodec_receive_frame failed:" << ffmpeg_err(ret);
             break;
         }
-        if (live && pts - out_frame->get()->pts > MAX_DELAY_SECOND * 1000 && _ticker.createdTime() > 10 * 1000) {
+        if (live && pts - out_frame->pts > MAX_DELAY_SECOND * 1000 && _ticker.createdTime() > 10 * 1000) {
             // 后面的帧才忽略,防止Track无法ready  [AUTO-TRANSLATED:23f1a7c9]
             // The following frames are ignored to prevent the Track from being ready
-            WarnL << "解码时，忽略" << MAX_DELAY_SECOND << "秒前的数据:" << pts << " " << out_frame->get()->pts;
+            WarnL << "解码时，忽略" << MAX_DELAY_SECOND << "秒前的数据:" << pts << " " << out_frame->pts;
             continue;
         }
         onDecode(out_frame);
@@ -738,15 +729,15 @@ FFmpegSwr::~FFmpegSwr() {
 }
 
 FFmpegFrame::Ptr FFmpegSwr::inputFrame(const FFmpegFrame::Ptr &frame) {
-    if (frame->get()->format == _target_format &&
+    if (frame->format == _target_format &&
 
 #if LIBAVCODEC_VERSION_INT >= FF_CODEC_VER_7_1
-        !av_channel_layout_compare(&(frame->get()->ch_layout), &_target_ch_layout) &&
+        !av_channel_layout_compare(&(frame->ch_layout), &_target_ch_layout) &&
 #else
-        frame->get()->channels == _target_channels && frame->get()->channel_layout == (uint64_t)_target_channel_layout &&
+        frame->channels == _target_channels && frame->channel_layout == (uint64_t)_target_channel_layout &&
 #endif
 
-        frame->get()->sample_rate == _target_samplerate) {
+        frame->sample_rate == _target_samplerate) {
         // 不转格式  [AUTO-TRANSLATED:31dc6ae1]
         // Do not convert format
         return frame;
@@ -757,35 +748,32 @@ FFmpegFrame::Ptr FFmpegSwr::inputFrame(const FFmpegFrame::Ptr &frame) {
         _ctx = swr_alloc();
         swr_alloc_set_opts2(&_ctx, 
                     &_target_ch_layout, _target_format, _target_samplerate, 
-                    &frame->get()->ch_layout, (AVSampleFormat)frame->get()->format, frame->get()->sample_rate,
+                    &frame->ch_layout, (AVSampleFormat)frame->format, frame->sample_rate,
                      0, nullptr);
 #else
         _ctx = swr_alloc_set_opts(nullptr, _target_channel_layout, _target_format, _target_samplerate,
-                                  frame->get()->channel_layout, (AVSampleFormat) frame->get()->format,
-                                  frame->get()->sample_rate, 0, nullptr);
+                                  frame->channel_layout, (AVSampleFormat) frame->format,
+                                  frame->sample_rate, 0, nullptr);
 #endif
-
-        InfoL << "swr_alloc_set_opts:" << av_get_sample_fmt_name((enum AVSampleFormat) frame->get()->format) << " -> "
+        InfoL << "swr_alloc_set_opts:" << av_get_sample_fmt_name((enum AVSampleFormat) frame->format) << " -> "
               << av_get_sample_fmt_name(_target_format);
     }
     if (_ctx) {
-        auto out = std::make_shared<FFmpegFrame>();
-        out->get()->format = _target_format;
-
+        auto out = FFmpegFrame::alloc();
+        out->format = _target_format;
 #if LIBAVCODEC_VERSION_INT >= FF_CODEC_VER_7_1
-        out->get()->ch_layout = _target_ch_layout;
-        av_channel_layout_copy(&(out->get()->ch_layout), &_target_ch_layout);
+        out->ch_layout = _target_ch_layout;
+        av_channel_layout_copy(&(out->ch_layout), &_target_ch_layout);
 #else
-        out->get()->channel_layout = _target_channel_layout;
-        out->get()->channels = _target_channels;
+        out->channel_layout = _target_channel_layout;
+        out->channels = _target_channels;
 #endif
-
-        out->get()->sample_rate = _target_samplerate;
-        out->get()->pkt_dts = frame->get()->pkt_dts;
-        out->get()->pts = frame->get()->pts;
+        out->sample_rate = _target_samplerate;
+        out->pkt_dts = frame->pkt_dts;
+        out->pts = frame->pts;
 
         int ret = 0;
-        if (0 != (ret = swr_convert_frame(_ctx, out->get(), frame->get()))) {
+        if (0 != (ret = swr_convert_frame(_ctx, out.get(), frame.get()))) {
             WarnL << "swr_convert_frame failed:" << ffmpeg_err(ret);
             return nullptr;
         }
@@ -824,45 +812,45 @@ FFmpegFrame::Ptr FFmpegSws::inputFrame(const FFmpegFrame::Ptr &frame) {
 FFmpegFrame::Ptr FFmpegSws::inputFrame(const FFmpegFrame::Ptr &frame, int &ret, uint8_t *data) {
     ret = -1;
     TimeTicker2(30, TraceL);
-    auto target_width = _target_width ? _target_width : frame->get()->width;
-    auto target_height = _target_height ? _target_height : frame->get()->height;
-    if (frame->get()->format == _target_format && frame->get()->width == target_width && frame->get()->height == target_height) {
+    auto target_width = _target_width ? _target_width : frame->width;
+    auto target_height = _target_height ? _target_height : frame->height;
+    if (frame->format == _target_format && frame->width == target_width && frame->height == target_height) {
         // 不转格式  [AUTO-TRANSLATED:31dc6ae1]
         // Do not convert format
         return frame;
     }
-    if (_ctx && (_src_width != frame->get()->width || _src_height != frame->get()->height || _src_format != (enum AVPixelFormat) frame->get()->format)) {
+    if (_ctx && (_src_width != frame->width || _src_height != frame->height || _src_format != (enum AVPixelFormat) frame->format)) {
         // 输入分辨率发生变化了  [AUTO-TRANSLATED:0e4ea2e8]
         // Input resolution has changed
         sws_freeContext(_ctx);
         _ctx = nullptr;
     }
     if (!_ctx) {
-        _src_format = (enum AVPixelFormat) frame->get()->format;
-        _src_width = frame->get()->width;
-        _src_height = frame->get()->height;
-        _ctx = sws_getContext(frame->get()->width, frame->get()->height, (enum AVPixelFormat) frame->get()->format, target_width, target_height, _target_format, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-        InfoL << "sws_getContext:" << av_get_pix_fmt_name((enum AVPixelFormat) frame->get()->format) << " -> " << av_get_pix_fmt_name(_target_format);
+        _src_format = (enum AVPixelFormat) frame->format;
+        _src_width = frame->width;
+        _src_height = frame->height;
+        _ctx = sws_getContext(frame->width, frame->height, (enum AVPixelFormat) frame->format, target_width, target_height, _target_format, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+        InfoL << "sws_getContext:" << av_get_pix_fmt_name((enum AVPixelFormat) frame->format) << " -> " << av_get_pix_fmt_name(_target_format);
     }
     if (_ctx) {
-        auto out = std::make_shared<FFmpegFrame>();
-        if (!out->get()->data[0]) {
+        auto out = FFmpegFrame::alloc();
+        if (!out->data[0]) {
             if (data) {
-                av_image_fill_arrays(out->get()->data, out->get()->linesize, data, _target_format, target_width, target_height, 32);
+                av_image_fill_arrays(out->data, out->linesize, data, _target_format, target_width, target_height, 32);
             } else {
-                out->fillPicture(_target_format, target_width, target_height);
+                out = FFmpegFrame::allocPicture(_target_format, target_width, target_height);
             }
         }
-        if (0 >= (ret = sws_scale(_ctx, frame->get()->data, frame->get()->linesize, 0, frame->get()->height, out->get()->data, out->get()->linesize))) {
+        if (0 >= (ret = sws_scale(_ctx, frame->data, frame->linesize, 0, frame->height, out->data, out->linesize))) {
             WarnL << "sws_scale failed:" << ffmpeg_err(ret);
             return nullptr;
         }
 
-        out->get()->format = _target_format;
-        out->get()->width = target_width;
-        out->get()->height = target_height;
-        out->get()->pkt_dts = frame->get()->pkt_dts;
-        out->get()->pts = frame->get()->pts;
+        out->format = _target_format;
+        out->width = target_width;
+        out->height = target_height;
+        out->pkt_dts = frame->pkt_dts;
+        out->pts = frame->pts;
         return out;
     }
     return nullptr;
@@ -1098,13 +1086,13 @@ void FFmpegEncoder::inputFrame_l(FFmpegFrame::Ptr frame_in) {
     }
 
     if (getTrackType() == TrackVideo || _context->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE) {
-        encodeFrame(frame->get());
+        encodeFrame(frame.get());
         return;
     }
 
     if (!_fifo)
         _fifo.reset(new FFmpegAudioFifo());
-    _fifo->Write(frame->get());
+    _fifo->Write(frame.get());
     std::shared_ptr<AVFrame> fifo_out(av_frame_alloc(), [](AVFrame *frame) { av_frame_free(&frame); });
     while (true) {
         auto ptr = _fifo->Read(fifo_out.get(), _context->frame_size);

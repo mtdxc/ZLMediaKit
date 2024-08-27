@@ -138,8 +138,8 @@ bool Track::inputFrame(const Frame::Ptr &frame) {
     return FrameDispatcher::inputFrame(frame);
 }
 
-void Track::onRawFrame(const std::shared_ptr<FFmpegFrame>& frame) {
-    if (_gop && _gop->needDrop(frame->get()->pts)) {
+void Track::onRawFrame(const std::shared_ptr<AVFrame>& frame) {
+    if (_gop && _gop->needDrop(frame->pts)) {
         return;
     }
     std::list<RawFrameInterface::Ptr> raw_cbs;
@@ -154,13 +154,13 @@ void Track::onRawFrame(const std::shared_ptr<FFmpegFrame>& frame) {
     }
 }
 
-void Track::inputRawFrame(const std::shared_ptr<FFmpegFrame> &frame) {
+void Track::inputRawFrame(const std::shared_ptr<AVFrame> &frame) {
     if (!_encoder) {
         if (!_enc_cfg) {
-            WarnL << "call setupEncoder first, skip frame " << frame->get();
+            WarnL << "call setupEncoder first, skip frame " << frame.get();
             return;
         }
-        int format = frame->get()->format;
+        int format = frame->format;
         int threads = 1 + (getTrackType() == TrackVideo);
         InfoL << "with threads " << threads << ", format " << format;
         _encoder = std::make_shared<FFmpegEncoder>(_enc_cfg, threads, format);
@@ -175,15 +175,15 @@ void Track::inputRawFrame(const std::shared_ptr<FFmpegFrame> &frame) {
 }
 
 struct RawCb : public RawFrameInterface {
-    using CB = std::function<void(const std::shared_ptr<FFmpegFrame> &frame)>;
+    using CB = std::function<void(const std::shared_ptr<AVFrame> &frame)>;
     CB _cb;
     RawCb(CB cb) : _cb(cb) {}
     // 通过 RawFrameInterface 继承
-    virtual void inputRawFrame(const std::shared_ptr<FFmpegFrame> &frame) override {
+    virtual void inputRawFrame(const std::shared_ptr<AVFrame> &frame) override {
         if (_cb) _cb(frame);
     }
 };
-RawFrameInterface *Track::addRawDelegate(std::function<void(const std::shared_ptr<FFmpegFrame> &frame)> cb) {
+RawFrameInterface *Track::addRawDelegate(std::function<void(const std::shared_ptr<AVFrame> &frame)> cb) {
     return addRawDelegate(std::make_shared<RawCb>(cb));
 }
 
