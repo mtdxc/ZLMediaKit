@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
                 [displayer](const FFmpegFrame::Ptr &yuv) {
                     SDLDisplayerHelper::Instance().doTask([yuv, displayer]() {
                         // sdl要求在main线程渲染
-                        displayer->displayYUV(yuv->get());
+                        displayer->displayYUV(yuv.get());
                         return true;
                     });
                 });
@@ -112,14 +112,14 @@ int main(int argc, char *argv[]) {
                  [audio_player, swr](const FFmpegFrame::Ptr &frame) mutable {
                     if (!swr) {
 # if LIBAVCODEC_VERSION_INT >= FF_CODEC_VER_7_1
-                        swr = std::make_shared<FFmpegSwr>(AV_SAMPLE_FMT_S16, &(frame->get()->ch_layout), frame->get()->sample_rate);
+                        swr = std::make_shared<FFmpegSwr>(AV_SAMPLE_FMT_S16, &(frame->ch_layout), frame->sample_rate);
 #else
-                        swr = std::make_shared<FFmpegSwr>(AV_SAMPLE_FMT_S16, frame->get()->channels, frame->get()->channel_layout, frame->get()->sample_rate);
+                        swr = std::make_shared<FFmpegSwr>(AV_SAMPLE_FMT_S16, frame->channels, frame->channel_layout, frame->sample_rate);
 #endif
                     }
                     auto pcm = swr->inputFrame(frame);
-                    auto len = pcm->get()->nb_samples * pcm->getChannels() * av_get_bytes_per_sample((enum AVSampleFormat)pcm->get()->format);
-                    audio_player->playPCM((const char *)(pcm->get()->data[0]), MIN(len, frame->get()->linesize[0]));
+                    auto len = pcm->nb_samples * FFmpegFrame::getChannels(pcm) * av_get_bytes_per_sample((enum AVSampleFormat)pcm->format);
+                    audio_player->playPCM((const char *)(pcm->data[0]), MIN(len, frame->linesize[0]));
                 });
             }
         });
