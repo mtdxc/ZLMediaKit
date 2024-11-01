@@ -24,7 +24,11 @@
 
 INSTANCE_IMP(VideoStackManager)
 
-Param::~Param() { VideoStackManager::Instance().unrefChannel(id, width, height, pixfmt); }
+Param::~Param() {
+    auto strongChn= weak_chn.lock();
+    if (!strongChn) { return; }
+    VideoStackManager::Instance().unrefChannel(id, width, height, pixfmt); 
+}
 
 Channel::Channel(const std::string& id, int width, int height, AVPixelFormat pixfmt)
     : _id(id), _width(width), _height(height), _pixfmt(pixfmt) {
@@ -277,7 +281,9 @@ void VideoStack::start() {
 
                 _dev->inputYUV((char**)_buffer->data, _buffer->linesize, pts);
                 pts += frameInterval;
-            }
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }  
         }
     });
 }
