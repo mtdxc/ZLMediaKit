@@ -339,6 +339,10 @@
                                         </el-col>
                                         <el-col :span="8">
                                             <el-checkbox
+                                                v-model="addStreamProxy_params.enable_rtc">转rtc</el-checkbox>
+                                        </el-col>
+                                        <el-col :span="8">
+                                            <el-checkbox
                                                 v-model="addStreamProxy_params.enable_rtmp">转rtmp/flv</el-checkbox>
                                         </el-col>
                                         <el-col :span="8">
@@ -1453,6 +1457,18 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
+                                                启用 webrtc
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-select v-model="serverConfig.protocol.enable_rtc" placeholder="请选择"
+                                                    style="width: 100%;">
+                                                    <el-option label="是" value="1"></el-option>
+                                                    <el-option label="否" value="0"></el-option>
+                                                </el-select>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
                                                 启用 http-ts/ws-ts
                                             </div>
                                             <div class="conf_item_value">
@@ -2158,6 +2174,7 @@
                     enable_hls: false,
                     enable_hls_fmp4: false,
                     enable_mp4: false,
+                    enable_rtc: true,
                     enable_rtsp: true,
                     enable_rtmp: true,
                     enable_ts: true,
@@ -2229,6 +2246,7 @@
                 showPlayerDialog: false,
                 sessionlist: [],
                 schemaFilters:[
+                    {text:'rtc', value: 'rtc'},
                     {text:'rtsp', value: 'rtsp'},
                     {text:'rtmp', value: 'rtmp'},
                     {text:'ts', value: 'ts'},
