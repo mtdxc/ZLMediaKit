@@ -266,6 +266,9 @@
                                         <el-radio label="play"></el-radio>
                                     </el-radio-group>
                                 </el-form-item>
+                                <el-form-item label="bitrate">
+                                    <el-input v-model="webrtc.bitrate" @change="setBitrate"></el-input>
+                                </el-form-item>
                                 <el-form-item label="resolution">
                                     <el-select v-model="webrtc.resolution" placeholder="请选择分辨率" @change="$forceUpdate()"
                                         style="width: 100%;">
@@ -2264,11 +2267,13 @@
                     useCamera: true,
                     audioEnable: true,
                     videoEnable: true,
+                    bitrate: 1000, // kb/s
                     msgsend: "",
                     msgrecv: "",
                 },
                 resolution_opt: [],
                 webrtc_player: null,
+                webrtc_pusher: null,
                 getAllSession_queryparams: {
                     local_port: null,
                     peer_ip: null
@@ -2346,6 +2351,12 @@
             filterSchema(value, row) {
                 return row.schema === value;
             },
+            setBitrate(val) {
+                console.log("setBitrate", val);
+                if (this.webrtc_pusher) {
+                    this.webrtc_pusher.setBitrate(val*1024);
+                }  
+            },
             startwebrtc() {
                 if (this.webrtc.resolution == "") {
                     this.$message({
@@ -2354,10 +2365,10 @@
                     });
                     return
                 }
-                this.webrtc_player = new ZLMRTCClient.Endpoint(
+                var ep = new ZLMRTCClient.Endpoint(
                     {
                         element: this.$refs.video,// video 标签
-                        debug: this.webrtc.debug,// 是否打印日志
+                        debug: this.webrtc.debug,// 打印日志
                         zlmsdpUrl: this.webrtc.zlmsdpUrl,//流地址
                         simulcast: this.webrtc.simulcast,
                         useCamera: this.webrtc.useCamera,
@@ -2370,7 +2381,7 @@
                         },
                         usedatachannel: this.webrtc.usedatachannel,
                     });
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ICE_CANDIDATE_ERROR, (e) => {// ICE 协商出错
+                ep.on(ZLMRTCClient.Events.WEBRTC_ICE_CANDIDATE_ERROR, (e) => {// ICE 协商出错
                     console.log('ICE 协商出错')
                     this.$message({
                         message: 'ICE 协商出错',
@@ -2378,7 +2389,7 @@
                     });
                 });
 
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ON_REMOTE_STREAMS, (e) => {//获取到了远端流，可以播放
+                ep.on(ZLMRTCClient.Events.WEBRTC_ON_REMOTE_STREAMS, (e) => {//获取到了远端流，可以播放
                     this.$message({
                         message: '播放成功',
                         type: 'success'
@@ -2386,7 +2397,7 @@
                     console.log('播放成功', e.streams)
                 });
 
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_OFFER_ANWSER_EXCHANGE_FAILED, (e) => {// offer anwser 交换失败
+                ep.on(ZLMRTCClient.Events.WEBRTC_OFFER_ANWSER_EXCHANGE_FAILED, (e) => {// offer anwser 交换失败
                     console.log('offer anwser 交换失败', e)
                     this.$message({
                         message: `offer anwser 交换失败:${e.msg}`,
@@ -2395,13 +2406,13 @@
                     this.stopwebrtc();
                 });
 
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ON_LOCAL_STREAM, (s) => {// 获取到了本地流
+                ep.on(ZLMRTCClient.Events.WEBRTC_ON_LOCAL_STREAM, (s) => {// 获取到了本地流
                     this.$refs.selfVideo.srcObject = s;
                     this.$refs.selfVideo.muted = true;
 
                 });
 
-                this.webrtc_player.on(ZLMRTCClient.Events.CAPTURE_STREAM_FAILED, (s) => {// 获取本地流失败
+                ep.on(ZLMRTCClient.Events.CAPTURE_STREAM_FAILED, (s) => {// 获取本地流失败
                     this.$message({
                         message: '获取本地流失败',
                         type: 'error'
@@ -2409,11 +2420,11 @@
                     console.log('获取本地流失败')
                 });
 
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ON_CONNECTION_STATE_CHANGE, (state) => {// RTC 状态变化 ,详情参考 https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/connectionState
+                ep.on(ZLMRTCClient.Events.WEBRTC_ON_CONNECTION_STATE_CHANGE, (state) => {// RTC 状态变化 ,详情参考 https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/connectionState
                     console.log('当前状态==>', state)
                 });
 
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_OPEN, (event) => {
+                ep.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_OPEN, (event) => {
                     console.log('rtc datachannel 打开 :', event)
                     this.$message({
                         message: 'rtc datachannel 打开',
@@ -2421,47 +2432,57 @@
                     });
                 });
 
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_MSG, (event) => {
+                ep.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_MSG, (event) => {
                     console.log('rtc datachannel 消息 :', event.data)
                     this.webrtc.msgrecv = event.data
                 });
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_ERR, (event) => {
+                ep.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_ERR, (event) => {
                     console.log('rtc datachannel 错误 :', event)
                     this.$message({
                         message: 'rtc datachannel 错误 ',
                         type: 'error'
                     });
                 });
-                this.webrtc_player.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_CLOSE, (event) => {
+                ep.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_CLOSE, (event) => {
                     console.log('rtc datachannel 关闭 :', event)
                     this.$message({
                         message: 'rtc datachannel 关闭 ',
                         type: 'warning'
                     });
                 });
+                if (this.webrtc.recvOnly)
+                    this.webrtc_player = ep;
+                else
+                    this.webrtc_pusher = ep;
             },
             stopwebrtc() {
+                if (this.webrtc_pusher) {
+                    this.webrtc_pusher.close();
+                    this.webrtc_pusher = null;
+                }
                 if (this.webrtc_player) {
                     this.webrtc_player.close();
                     this.webrtc_player = null;
+                }
                 if (this.$refs.video) {
                     this.$refs.video.srcObject = null;
                     this.$refs.video.load();
                 }
                 this.$refs.selfVideo.srcObject = null;
                 this.$refs.selfVideo.load();
-                }
             },
             sendata() {
                 console.log(`发送数据：${this.webrtc.msgsend}`)
-                if (this.webrtc_player) {
-                    this.webrtc_player.sendMsg(this.webrtc.msgsend)
+                let ep = this.webrtc_player ? this.webrtc_player : this.webrtc_pusher;
+                if (ep) {
+                    ep.sendMsg(this.webrtc.msgsend)
                 }
             },
             closedata() {
                 console.log(`关闭数据通道`)
-                if (this.webrtc_player) {
-                    this.webrtc_player.closeDataChannel()
+                let ep = this.webrtc_player ? this.webrtc_player : this.webrtc_pusher;
+                if (ep) {
+                    ep.closeDataChannel()
                     this.$message({
                         message: '关闭数据通道',
                         type: 'success'
