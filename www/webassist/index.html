@@ -225,6 +225,7 @@
                     <el-divider><i class="el-icon-connection"></i></el-divider>
                     <div style="width: 100%;text-align: right;">
                         <el-checkbox label="自动刷新" v-model="autorefresh_session" ></el-checkbox>
+                        <el-button type="primary" icon="el-icon-refresh" @click="getAllSession">刷新</el-button>
                     </div>
 
                     <el-table :data="sessionlist" empty-text="暂无连接数据">
@@ -310,9 +311,8 @@
                         </el-col>
                     </el-row>
                 </div>
-                <div v-if="selectIndex==='3'">
-                    <el-row :gutter="20">
-                        <el-col :span="8" :offset="1" style="border-radius: 4px; background-color: #545c6421;">
+                <div v-if="selectIndex==='3'" style="display: flex;">
+                        <div style="border-radius: 4px; background-color: #545c6421;margin: 10px; flex: 1">
                             <el-form style="margin: 10px;">
                                 <!-- <el-form-item label="api操作密钥" label-width="180px">
                                     <el-input v-model="secret" disabled></el-input>
@@ -411,12 +411,10 @@
                                 <el-form-item label="重试次数" label-width="180px">
                                     <el-input v-model="addStreamProxy_params.retry_count" placeholder="默认为-1无限重试"></el-input>
                                 </el-form-item>
-                                <el-form-item label="时间戳覆盖" label-width="180px">
-                                    <el-select v-model="addStreamProxy_params.modify_stamp" style="width: 100%;">
-                                        <el-option label="不开启" value=""> </el-option>
-                                        <el-option label="绝对时间戳" value="0"> </el-option>
-                                        <el-option label="系统时间戳" value="1"> </el-option>
-                                        <el-option label="相对时间戳" value="2"> </el-option>
+                                <el-form-item label="修改时间戳" label-width="180px">
+                                    <el-select v-model="addStreamProxy_params.modify_stamp" placeholder="请选择" style="width: 100%;">
+                                        <el-option label="未指定" value="" > </el-option>
+                                        <el-option v-for="(val,key) in frameModify" :label="val" :value="key"></el-option>
                                     </el-select>
                                 </el-form-item>
                                 <el-form-item label="mp4录像保存目录" label-width="180px">
@@ -435,10 +433,10 @@
                                     <el-input type="textarea" :rows="5" v-model="apiurl" readonly></el-input>
                                 </el-form-item>
                             </el-form>
-                        </el-col>
-                        <el-col :span="12" :offset="2" style="border-radius: 4px; background-color: #545c6421;">
+                        </div>
+                        <div style="border-radius: 4px; background-color: #545c6421; margin: 10px;; flex: 1">
                             <el-form style="margin: 10px;">
-                                <div style="margin: 10px;width: 100%;text-align: left;">
+                                <div style="width: 100%;text-align: left; margin-bottom: 10px;">
                                     <el-button type="primary" @click="addStreamProxy">增加</el-button>
                                     <el-button type="primary" icon="el-icon-refresh" @click="listStreamProxy">刷新</el-button>
                                 </div>
@@ -448,6 +446,11 @@
                                     <el-table-column sortable prop="src.app" label="app"> </el-table-column>
                                     <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                                     <el-table-column sortable prop="status" label="状态"> </el-table-column>
+                                    <el-table-column prop="bytesSpeed" label="码率">
+                                        <template #default="scope">
+                                            {{scope.row.bytesSpeed | bitsSpeed}}/s
+                                        </template>
+                                    </el-table-column>
                                     <el-table-column sortable prop="liveSecs" label="时长(s)"> </el-table-column>
                                     <el-table-column sortable prop="rePullCount" label="重试次数"> </el-table-column>
                                     <el-table-column sortable prop="totalReaderCount" label="观看人数"> </el-table-column>
@@ -459,11 +462,11 @@
                                     </el-table-column>
                                 </el-table>    
                             </el-form>
-                        </el-col>
+                        </div>
                     </el-row>
                 </div>
                 <div v-if="selectIndex==='4'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <!-- <el-form-item label="api操作密钥" label-width="180px">
                             <el-input v-model="secret" disabled></el-input>
                         </el-form-item> -->
@@ -500,11 +503,11 @@
                         </el-form-item>
                         <el-form-item label="">
                             <!-- <el-input type="textarea" :rows="5" v-model="addStreamPusherProxy_apiurl" readonly></el-input> -->
-                        </el-form-item>
                             <div style="width: 100%;text-align: right;">
                                 <el-button type="primary" @click="addStreamPusherProxy">增加</el-button>
                                 <el-button type="primary" icon="el-icon-refresh" @click="listStreamPusherProxy">刷新</el-button>
                             </div>
+                        </el-form-item>
                     </el-form>
                     <el-table :data="pusherProxyList" empty-text="暂无推流代理">
                         <!-- <el-table-column sortable prop="key" label="key"> </el-table-column> -->
@@ -513,6 +516,11 @@
                         <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                         <el-table-column sortable prop="status" label="状态"> </el-table-column>
                         <el-table-column sortable prop="liveSecs" label="时长(s)"> </el-table-column>
+                        <el-table-column prop="bytesSpeed" label="码率">
+                            <template #default="scope">
+                                {{scope.row.bytesSpeed | bitsSpeed}}/s
+                            </template>
+                        </el-table-column>
                         <el-table-column sortable prop="rePublishCount" label="重试次数"> </el-table-column>
                         <el-table-column label="操作">
                             <template slot-scope="scope">
@@ -523,7 +531,7 @@
                     </el-table>                
                 </div>                
                 <div v-show="selectIndex==='5'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <el-form-item label="源地址" label-width="180px">
                             <el-input v-model="addFFmpeg_param.src_url"></el-input>
                         </el-form-item>
@@ -559,7 +567,7 @@
                     </el-table>
                 </div>
                 <div v-show="selectIndex==='6'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <el-form-item label="虚拟主机" label-width="180px">
                             <el-input v-model="addRtpServer_param.vhost"></el-input>
                         </el-form-item>
@@ -687,7 +695,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 流超时时间(ms)
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.maxStreamWaitMS"></el-input>
@@ -696,7 +704,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 合并写缓存(ms)
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.mergeWriteMS"></el-input>
@@ -705,7 +713,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 断连删除
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.general.resetWhenRePlay" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -715,7 +723,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 无人观看流的释放超时(ms)
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.streamNoneReaderDelayMS"></el-input>
@@ -724,7 +732,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 未就绪缓存帧数
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.unready_frame_cache"></el-input>
@@ -733,7 +741,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 加流超时(ms)
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.wait_add_track_ms"></el-input>
@@ -742,7 +750,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 流就绪超时(ms)
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.wait_track_ready_ms"></el-input>
@@ -751,13 +759,13 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 on_flow_report事件阈值
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.flowThreshold"></el-input>
                                             </div>
                                         </div>
-                                            </div>
+                                    </div>
                                 </el-col>
                             </el-row>
                         </el-tab-pane>
@@ -792,7 +800,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 自动重启时间
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.ffmpeg.restart_sec"></el-input>
@@ -1121,14 +1129,14 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 保留hls文件
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.hls.segKeep" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
                                             </div>
                                         </div>
-                                                    </div>
+                                    </div>
                                 </el-col>
                             </el-row>
                         </el-tab-pane>
@@ -1253,7 +1261,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 forwarded_ip_header
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
                                                     v-model="serverConfig.http.forwarded_ip_header"></el-input>
@@ -1387,11 +1395,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                开启帧级时间戳覆盖
+                                                修改时间戳
                                             </div>
                                             <div class="conf_item_value">
-                                                <el-input type="text"
-                                                    v-model="serverConfig.protocol.modify_stamp"></el-input>
+                                                <el-select v-model="serverConfig.protocol.modify_stamp" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in frameModify" :label="val" :value="key"></el-option>
+                                                </el-select>
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -1410,8 +1419,8 @@
                                     <div class="confs">
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                        启用 http-fmp4/ws-fmp4
-                                                    </div>
+                                                启用 http-fmp4/ws-fmp4
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.enable_fmp4" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1464,8 +1473,8 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                        启用 http-ts/ws-ts
-                                                    </div>
+                                                启用 http-ts/ws-ts
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.enable_ts" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1478,8 +1487,8 @@
                                     <div class="confs">
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                        按需生成 http[s]-fmp4、ws[s]-fmp4
-                                                    </div>
+                                                按需生成 http[s]-fmp4、ws[s]-fmp4
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.fmp4_demand" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1500,8 +1509,8 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                        按需生成 rtmp[s]、http[s]-flv、ws[s]-flv
-                                                    </div>
+                                                按需生成 rtmp[s]、http[s]-flv、ws[s]-flv
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.rtmp_demand" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1587,7 +1596,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 fastStart
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.record.fastStart" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1597,7 +1606,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 文件缓存大小
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
                                                     v-model="serverConfig.record.fileBufSize"></el-input>
@@ -1606,7 +1615,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 保存路径
-                                                </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.record.filePath"></el-input>
                                             </div>
@@ -1614,7 +1623,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 循环播放
-                                                </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.record.fileRepeat" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1624,7 +1633,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 fileSecond
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
                                                     v-model="serverConfig.record.fileSecond"></el-input>
@@ -1748,7 +1757,7 @@
                                                     v-model="serverConfig.rtmp.keepAliveSecond"></el-input>
                                             </div>
                                         </div>
-                                            </div>
+                                    </div>
                                 </el-col>
                             </el-row>
                         </el-tab-pane>
@@ -1848,7 +1857,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 低延迟开关
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.rtp.lowLatency" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1881,7 +1890,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 调试输出目录(包括rtp/ps/h264)
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
                                                     v-model="serverConfig.rtp_proxy.dumpDir"></el-input>
@@ -1890,7 +1899,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 udp和tcp代理服务端口
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.rtp_proxy.port"></el-input>
                                             </div>
@@ -1898,7 +1907,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 端口范围
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
                                                     v-model="serverConfig.rtp_proxy.port_range"></el-input>
@@ -1916,7 +1925,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 开启gop缓存优化
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.rtp_proxy.gop_cache" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1935,7 +1944,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 g711u载荷类型
-                                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
                                                     v-model="serverConfig.rtp_proxy.g711u_pt"></el-input>
@@ -1981,7 +1990,7 @@
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 ts载荷类型
-                                    </div>
+                                            </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.rtp_proxy.ts_pt"></el-input>
                                             </div>
@@ -2151,6 +2160,11 @@
                     0:"全部",
                     1:"只音频",
                     2:"只视频",
+                },
+                frameModify:{
+                    0: "不修改",
+                    1: "接收时间戳",
+                    2: "相对时间戳"
                 },
                 getMediaList_queryparams: {
                     schema: "rtc",
