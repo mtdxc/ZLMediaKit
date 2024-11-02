@@ -68,6 +68,7 @@
                     <el-divider><i class="el-icon-s-data"></i></el-divider>
                     <div style="width: 100%;text-align: right;">
                         <el-checkbox label="自动刷新" v-model="autorefresh_medialist" ></el-checkbox>
+                        <el-button type="primary" icon="el-icon-refresh" @click="getMediaList">刷新</el-button>
                     </div>
 
                     <el-table :data="medialist" empty-text="暂无数据">
@@ -213,6 +214,7 @@
                     <el-divider><i class="el-icon-connection"></i></el-divider>
                     <div style="width: 100%;text-align: right;">
                         <el-checkbox label="自动刷新" v-model="autorefresh_session" ></el-checkbox>
+                        <el-button type="primary" icon="el-icon-refresh" @click="getAllSession">刷新</el-button>
                     </div>
 
                     <el-table :data="sessionlist" empty-text="暂无连接数据">
@@ -298,9 +300,8 @@
                         </el-col>
                     </el-row>
                 </div>
-                <div v-if="selectIndex==='3'">
-                    <el-row :gutter="20">
-                        <el-col :span="8" :offset="1" style="border-radius: 4px; background-color: #545c6421;">
+                <div v-if="selectIndex==='3'" style="display: flex;">
+                        <div style="border-radius: 4px; background-color: #545c6421;margin: 10px; flex: 1">
                             <el-form style="margin: 10px;">
                                 <!-- <el-form-item label="api操作密钥" label-width="180px">
                                     <el-input v-model="secret" disabled></el-input>
@@ -423,10 +424,10 @@
                                     <el-input type="textarea" :rows="5" v-model="apiurl" readonly></el-input>
                                 </el-form-item>
                             </el-form>
-                        </el-col>
-                        <el-col :span="12" :offset="2" style="border-radius: 4px; background-color: #545c6421;">
+                        </div>
+                        <div style="border-radius: 4px; background-color: #545c6421; margin: 10px;; flex: 1">
                             <el-form style="margin: 10px;">
-                                <div style="margin: 10px;width: 100%;text-align: left;">
+                                <div style="width: 100%;text-align: left; margin-bottom: 10px;">
                                     <el-button type="primary" @click="addStreamProxy">增加</el-button>
                                     <el-button type="primary" icon="el-icon-refresh" @click="listStreamProxy">刷新</el-button>
                                 </div>
@@ -447,11 +448,11 @@
                                     </el-table-column>
                                 </el-table>    
                             </el-form>
-                        </el-col>
+                        </div>
                     </el-row>
                 </div>
                 <div v-if="selectIndex==='4'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <!-- <el-form-item label="api操作密钥" label-width="180px">
                             <el-input v-model="secret" disabled></el-input>
                         </el-form-item> -->
@@ -488,11 +489,11 @@
                         </el-form-item>
                         <el-form-item label="">
                             <!-- <el-input type="textarea" :rows="5" v-model="addStreamPusherProxy_apiurl" readonly></el-input> -->
+                            <div style="width: 100%;text-align: right;">
+                                <el-button type="primary" @click="addStreamPusherProxy">增加</el-button>
+                                <el-button type="primary" icon="el-icon-refresh" @click="listStreamPusherProxy">刷新</el-button>
+                            </div>
                         </el-form-item>
-                        <div style="width: 100%;text-align: right;">
-                            <el-button type="primary" @click="addStreamPusherProxy">增加</el-button>
-                            <el-button type="primary" icon="el-icon-refresh" @click="listStreamPusherProxy">刷新</el-button>
-                        </div>
                     </el-form>
                     <el-table :data="pusherProxyList" empty-text="暂无推流代理">
                         <!-- <el-table-column sortable prop="key" label="key"> </el-table-column> -->
@@ -511,7 +512,7 @@
                     </el-table>                
                 </div>                
                 <div v-show="selectIndex==='5'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <el-form-item label="源地址" label-width="180px">
                             <el-input v-model="addFFmpeg_param.src_url"></el-input>
                         </el-form-item>
@@ -547,7 +548,7 @@
                     </el-table>
                 </div>
                 <div v-show="selectIndex==='6'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <el-form-item label="虚拟主机" label-width="180px">
                             <el-input v-model="addRtpServer_param.vhost"></el-input>
                         </el-form-item>
