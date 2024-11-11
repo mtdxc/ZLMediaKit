@@ -74,13 +74,13 @@
                         <!-- <el-table-column prop="vhost" label="主机名"> </el-table-column> -->
                         <el-table-column sortable prop="app" label="应用名"> </el-table-column>
                         <el-table-column prop="stream" label="流id"> </el-table-column>
-                        <el-table-column sortable prop="schema" label="协议" :filters="schemaFilters" :filter-method="filterSchema"> </el-table-column>
-                        <el-table-column prop="createStamp" label="创建时间">
+                        <el-table-column prop="schema" label="协议" :filters="schemaFilters" :filter-method="filterSchema"> </el-table-column>
+                        <el-table-column prop="createStamp" label="创建时间" width="160">
                             <template #default="scope">
                                 {{scope.row.createStamp | secFormat}}
                             </template>
                         </el-table-column>
-                        <el-table-column prop="aliveSecond" label="时长(s)">
+                        <el-table-column prop="aliveSecond" label="时长(s)" width="80">
                         </el-table-column>
                         <el-table-column prop="bytesSpeed" label="码率">
                             <template #default="scope">
@@ -121,7 +121,7 @@
                         </el-table-column>
 -->
                         <el-table-column prop="originTypeStr" label="类型"> </el-table-column>
-                        <el-table-column prop="originUrl" label="源地址"> </el-table-column>
+                        <el-table-column prop="originUrl" label="源地址" min-width="220"> </el-table-column>
                         <!-- 
                         <el-table-column prop="readerCount" label="本协议观看人数"> </el-table-column>
                         <el-table-column sortable prop="totalReaderCount" label="观看总人数"> </el-table-column>
@@ -132,14 +132,14 @@
                             </template>
                         </el-table-column>
                         <el-table-column label="网络信息">
-                            <el-table-column prop="originSock.identifier" label="identifier"> </el-table-column>
-                            <el-table-column prop="originSock.local_ip" label="local_ip"> </el-table-column>
-                            <el-table-column prop="originSock.local_port" label="local_port"> </el-table-column>
-                            <el-table-column prop="originSock.peer_ip" label="peer_ip"> </el-table-column>
-                            <el-table-column prop="originSock.peer_port" label="peer_port"> </el-table-column>
+                            <el-table-column prop="originSock.identifier" label="id"> </el-table-column>
+                            <el-table-column prop="originSock.local_ip" label="本地Ip"> </el-table-column>
+                            <el-table-column prop="originSock.local_port" width="80" label="本地端口"> </el-table-column>
+                            <el-table-column prop="originSock.peer_ip" label="对方ip"> </el-table-column>
+                            <el-table-column prop="originSock.peer_port" width="80" label="对方端口"> </el-table-column>
                         </el-table-column>
 
-                        <el-table-column type="expand" label="媒体轨道">
+                        <el-table-column type="expand" label="媒体轨道" width="50">
                             <template slot-scope="scope">
                                 <el-table v-if="scope.row.tracks.length > 0" :data="scope.row.tracks">
                                     <!-- 
@@ -170,9 +170,11 @@
                                             <el-tag v-else>{{scope.row.width}}x{{scope.row.height}}@{{scope.row.fps}}</el-tag>
                                         </template>
                                     </el-table-column>
+                                    <el-table-column prop="时间戳" label="lastpts">
+                                    </el-table-column>
                                     <el-table-column prop="key_frames" label="关键帧数">
                                     </el-table-column>
-                                    <el-table-column prop="gop_interval_ms" label="gop间隔时间(s)">
+                                    <el-table-column prop="gop_interval_ms" label="gop间隔(ms)">
                                     </el-table-column>
                                     <el-table-column prop="gop_size" label="gop大小">
                                     </el-table-column>
@@ -195,12 +197,12 @@
                         :visible.sync="showPlayerDialog">
                         <div id="shared" style="margin-top: 1rem;">
                         <el-table :data="playerlist" empty-text="暂无播放器">
-                            <el-table-column prop="identifier" label="id"></el-table-column>
-                            <el-table-column prop="local_ip" label="本机ip"></el-table-column>
-                            <el-table-column prop="local_port" label="本机端口"></el-table-column>
-                            <el-table-column prop="peer_ip" label="对端ip"></el-table-column>
-                            <el-table-column prop="peer_port" label="对端端口"></el-table-column>
-                            <el-table-column prop="typeid" label="类型"></el-table-column>
+                            <el-table-column prop="identifier" sortable label="id"></el-table-column>
+                            <el-table-column prop="local_ip" sortable label="本机ip"></el-table-column>
+                            <el-table-column prop="local_port" sortable label="本机端口"></el-table-column>
+                            <el-table-column prop="peer_ip" sortable label="对端ip"></el-table-column>
+                            <el-table-column prop="peer_port" sortable label="对端端口"></el-table-column>
+                            <el-table-column prop="typeid" sortable label="类型"></el-table-column>
                             <el-table-column label="操作">
                                 <template slot-scope="scope">
                                     <el-button size="mini" type="danger"
@@ -216,12 +218,12 @@
                     </div>
 
                     <el-table :data="sessionlist" empty-text="暂无连接数据">
-                        <el-table-column prop="id" label="id"></el-table-column>
-                        <el-table-column prop="local_ip" label="本机ip"></el-table-column>
-                        <el-table-column prop="local_port" label="本机端口"></el-table-column>
-                        <el-table-column prop="peer_ip" label="对端ip"></el-table-column>
-                        <el-table-column prop="peer_port" label="对端端口"></el-table-column>
-                        <el-table-column prop="typeid" label="类型"></el-table-column>
+                        <el-table-column prop="id" sortable label="id"></el-table-column>
+                        <el-table-column prop="local_ip" sortable label="本机ip"></el-table-column>
+                        <el-table-column prop="local_port" sortable label="本机端口"></el-table-column>
+                        <el-table-column prop="peer_ip" sortable label="对端ip"></el-table-column>
+                        <el-table-column prop="peer_port" sortable label="对端端口"></el-table-column>
+                        <el-table-column prop="typeid" sortable label="类型"></el-table-column>
                         <el-table-column label="操作">
                             <template slot-scope="scope">
                                 <el-button size="mini" type="danger"

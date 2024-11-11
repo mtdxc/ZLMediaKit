@@ -487,6 +487,7 @@ Value makeMediaSourceJson(MediaSource &media){
         }
         obj["frames"] = track->getFrames();
         obj["duration"] = track->getDuration();
+        obj["lastpts"] = track->getLastPts();
         switch(codec_type){
             case TrackAudio : {
                 auto audio_track = dynamic_pointer_cast<AudioTrack>(track);
