@@ -67,20 +67,28 @@
                     </el-row>
                     <el-divider><i class="el-icon-s-data"></i></el-divider>
                     <div style="width: 100%;text-align: right;">
+                        <el-select v-model="getMediaList_queryparams.schema" placeholder="请选择协议" style="width: 100px;">
+                            <el-option label="全部" value=""> </el-option>
+                            <el-option v-for="(item, index) in schemaFilters" :key="index" :label="item.text" :value="item.value" />
+                        </el-select>
+                        <el-input v-model="getMediaList_queryparams.app" placeholder="请输入app名" style="width: 150px;"></el-input>
+                        <el-input v-model="getMediaList_queryparams.stream" placeholder="请输入流id" style="width: 150px;"></el-input>
                         <el-checkbox label="自动刷新" v-model="autorefresh_medialist" ></el-checkbox>
+                        <span>共{{medialist.length}}项</span>
+                        <el-button type="primary" icon="el-icon-refresh" @click="getMediaList">查询</el-button>
                     </div>
 
                     <el-table :data="medialist" empty-text="暂无数据">
                         <!-- <el-table-column prop="vhost" label="主机名"> </el-table-column> -->
                         <el-table-column sortable prop="app" label="应用名"> </el-table-column>
                         <el-table-column prop="stream" label="流id"> </el-table-column>
-                        <el-table-column sortable prop="schema" label="协议" :filters="schemaFilters" :filter-method="filterSchema"> </el-table-column>
-                        <el-table-column prop="createStamp" label="创建时间">
+                        <el-table-column prop="schema" label="协议" :filters="schemaFilters" :filter-method="filterSchema"> </el-table-column>
+                        <el-table-column prop="createStamp" label="创建时间" width="160">
                             <template #default="scope">
                                 {{scope.row.createStamp | secFormat}}
                             </template>
                         </el-table-column>
-                        <el-table-column prop="aliveSecond" label="时长(s)">
+                        <el-table-column prop="aliveSecond" label="时长(s)" width="80">
                         </el-table-column>
                         <el-table-column prop="bytesSpeed" label="码率">
                             <template #default="scope">
@@ -121,7 +129,7 @@
                         </el-table-column>
 -->
                         <el-table-column prop="originTypeStr" label="类型"> </el-table-column>
-                        <el-table-column prop="originUrl" label="源地址"> </el-table-column>
+                        <el-table-column prop="originUrl" label="源地址" min-width="220"> </el-table-column>
                         <!-- 
                         <el-table-column prop="readerCount" label="本协议观看人数"> </el-table-column>
                         <el-table-column sortable prop="totalReaderCount" label="观看总人数"> </el-table-column>
@@ -132,14 +140,14 @@
                             </template>
                         </el-table-column>
                         <el-table-column label="网络信息">
-                            <el-table-column prop="originSock.identifier" label="identifier"> </el-table-column>
-                            <el-table-column prop="originSock.local_ip" label="local_ip"> </el-table-column>
-                            <el-table-column prop="originSock.local_port" label="local_port"> </el-table-column>
-                            <el-table-column prop="originSock.peer_ip" label="peer_ip"> </el-table-column>
-                            <el-table-column prop="originSock.peer_port" label="peer_port"> </el-table-column>
+                            <el-table-column prop="originSock.identifier" label="id"> </el-table-column>
+                            <el-table-column prop="originSock.local_ip" label="本地Ip"> </el-table-column>
+                            <el-table-column prop="originSock.local_port" width="80" label="本地端口"> </el-table-column>
+                            <el-table-column prop="originSock.peer_ip" label="对方ip"> </el-table-column>
+                            <el-table-column prop="originSock.peer_port" width="80" label="对方端口"> </el-table-column>
                         </el-table-column>
 
-                        <el-table-column type="expand" label="媒体轨道">
+                        <el-table-column type="expand" label="媒体轨道" width="50">
                             <template slot-scope="scope">
                                 <el-table v-if="scope.row.tracks.length > 0" :data="scope.row.tracks">
                                     <!-- 
@@ -170,9 +178,13 @@
                                             <el-tag v-else>{{scope.row.width}}x{{scope.row.height}}@{{scope.row.fps}}</el-tag>
                                         </template>
                                     </el-table-column>
+                                    <el-table-column prop="lastpts" label="时间戳">
+                                    </el-table-column>
+                                    <el-table-column prop="loss" label="丢包率">
+                                    </el-table-column>
                                     <el-table-column prop="key_frames" label="关键帧数">
                                     </el-table-column>
-                                    <el-table-column prop="gop_interval_ms" label="gop间隔时间(s)">
+                                    <el-table-column prop="gop_interval_ms" label="gop间隔(ms)">
                                     </el-table-column>
                                     <el-table-column prop="gop_size" label="gop大小">
                                     </el-table-column>
@@ -195,12 +207,12 @@
                         :visible.sync="showPlayerDialog">
                         <div id="shared" style="margin-top: 1rem;">
                         <el-table :data="playerlist" empty-text="暂无播放器">
-                            <el-table-column prop="identifier" label="id"></el-table-column>
-                            <el-table-column prop="local_ip" label="本机ip"></el-table-column>
-                            <el-table-column prop="local_port" label="本机端口"></el-table-column>
-                            <el-table-column prop="peer_ip" label="对端ip"></el-table-column>
-                            <el-table-column prop="peer_port" label="对端端口"></el-table-column>
-                            <el-table-column prop="typeid" label="类型"></el-table-column>
+                            <el-table-column prop="identifier" sortable label="id"></el-table-column>
+                            <el-table-column prop="local_ip" sortable label="本机ip"></el-table-column>
+                            <el-table-column prop="local_port" sortable label="本机端口"></el-table-column>
+                            <el-table-column prop="peer_ip" sortable label="对端ip"></el-table-column>
+                            <el-table-column prop="peer_port" sortable label="对端端口"></el-table-column>
+                            <el-table-column prop="typeid" sortable label="类型"></el-table-column>
                             <el-table-column label="操作">
                                 <template slot-scope="scope">
                                     <el-button size="mini" type="danger"
@@ -213,15 +225,17 @@
                     <el-divider><i class="el-icon-connection"></i></el-divider>
                     <div style="width: 100%;text-align: right;">
                         <el-checkbox label="自动刷新" v-model="autorefresh_session" ></el-checkbox>
+                        <el-button type="primary" icon="el-icon-refresh" @click="getAllSession">刷新</el-button>
                     </div>
 
                     <el-table :data="sessionlist" empty-text="暂无连接数据">
-                        <el-table-column prop="id" label="id"></el-table-column>
-                        <el-table-column prop="local_ip" label="本机ip"></el-table-column>
-                        <el-table-column prop="local_port" label="本机端口"></el-table-column>
-                        <el-table-column prop="peer_ip" label="对端ip"></el-table-column>
-                        <el-table-column prop="peer_port" label="对端端口"></el-table-column>
-                        <el-table-column prop="typeid" label="类型"></el-table-column>
+                        <el-table-column prop="id" sortable label="id"></el-table-column>
+                        <el-table-column prop="local_ip" sortable label="本机ip"></el-table-column>
+                        <el-table-column prop="local_port" sortable label="本机端口"></el-table-column>
+                        <el-table-column prop="peer_ip" sortable label="对端ip"></el-table-column>
+                        <el-table-column prop="peer_port" sortable label="对端端口"></el-table-column>
+                        <el-table-column prop="type" sortable label="类型"></el-table-column>
+                        <el-table-column prop="typeid" sortable label="类"></el-table-column>
                         <el-table-column label="操作">
                             <template slot-scope="scope">
                                 <el-button size="mini" type="danger"
@@ -298,9 +312,8 @@
                         </el-col>
                     </el-row>
                 </div>
-                <div v-if="selectIndex==='3'">
-                    <el-row :gutter="20">
-                        <el-col :span="8" :offset="1" style="border-radius: 4px; background-color: #545c6421;">
+                <div v-if="selectIndex==='3'" style="display: flex;">
+                        <div style="border-radius: 4px; background-color: #545c6421;margin: 10px; flex: 1">
                             <el-form style="margin: 10px;">
                                 <!-- <el-form-item label="api操作密钥" label-width="180px">
                                     <el-input v-model="secret" disabled></el-input>
@@ -399,12 +412,10 @@
                                 <el-form-item label="重试次数" label-width="180px">
                                     <el-input v-model="addStreamProxy_params.retry_count" placeholder="默认为-1无限重试"></el-input>
                                 </el-form-item>
-                                <el-form-item label="时间戳覆盖" label-width="180px">
-                                    <el-select v-model="addStreamProxy_params.modify_stamp" style="width: 100%;">
-                                        <el-option label="不开启" value=""> </el-option>
-                                        <el-option label="绝对时间戳" value="0"> </el-option>
-                                        <el-option label="系统时间戳" value="1"> </el-option>
-                                        <el-option label="相对时间戳" value="2"> </el-option>
+                                <el-form-item label="修改时间戳" label-width="180px">
+                                    <el-select v-model="addStreamProxy_params.modify_stamp" placeholder="请选择" style="width: 100%;">
+                                        <el-option label="未指定" value="" > </el-option>
+                                        <el-option v-for="(val,key) in frameModify" :label="val" :value="key"></el-option>
                                     </el-select>
                                 </el-form-item>
                                 <el-form-item label="mp4录像保存目录" label-width="180px">
@@ -423,10 +434,10 @@
                                     <el-input type="textarea" :rows="5" v-model="apiurl" readonly></el-input>
                                 </el-form-item>
                             </el-form>
-                        </el-col>
-                        <el-col :span="12" :offset="2" style="border-radius: 4px; background-color: #545c6421;">
+                        </div>
+                        <div style="border-radius: 4px; background-color: #545c6421; margin: 10px;; flex: 1">
                             <el-form style="margin: 10px;">
-                                <div style="margin: 10px;width: 100%;text-align: left;">
+                                <div style="width: 100%;text-align: left; margin-bottom: 10px;">
                                     <el-button type="primary" @click="addStreamProxy">增加</el-button>
                                     <el-button type="primary" icon="el-icon-refresh" @click="listStreamProxy">刷新</el-button>
                                 </div>
@@ -436,6 +447,11 @@
                                     <el-table-column sortable prop="src.app" label="app"> </el-table-column>
                                     <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                                     <el-table-column sortable prop="status" label="状态"> </el-table-column>
+                                    <el-table-column prop="bytesSpeed" label="码率">
+                                        <template #default="scope">
+                                            {{scope.row.bytesSpeed | bitsSpeed}}/s
+                                        </template>
+                                    </el-table-column>
                                     <el-table-column sortable prop="liveSecs" label="时长(s)"> </el-table-column>
                                     <el-table-column sortable prop="rePullCount" label="重试次数"> </el-table-column>
                                     <el-table-column sortable prop="totalReaderCount" label="观看人数"> </el-table-column>
@@ -447,11 +463,11 @@
                                     </el-table-column>
                                 </el-table>    
                             </el-form>
-                        </el-col>
+                        </div>
                     </el-row>
                 </div>
                 <div v-if="selectIndex==='4'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <!-- <el-form-item label="api操作密钥" label-width="180px">
                             <el-input v-model="secret" disabled></el-input>
                         </el-form-item> -->
@@ -488,11 +504,11 @@
                         </el-form-item>
                         <el-form-item label="">
                             <!-- <el-input type="textarea" :rows="5" v-model="addStreamPusherProxy_apiurl" readonly></el-input> -->
+                            <div style="width: 100%;text-align: right;">
+                                <el-button type="primary" @click="addStreamPusherProxy">增加</el-button>
+                                <el-button type="primary" icon="el-icon-refresh" @click="listStreamPusherProxy">刷新</el-button>
+                            </div>
                         </el-form-item>
-                        <div style="width: 100%;text-align: right;">
-                            <el-button type="primary" @click="addStreamPusherProxy">增加</el-button>
-                            <el-button type="primary" icon="el-icon-refresh" @click="listStreamPusherProxy">刷新</el-button>
-                        </div>
                     </el-form>
                     <el-table :data="pusherProxyList" empty-text="暂无推流代理">
                         <!-- <el-table-column sortable prop="key" label="key"> </el-table-column> -->
@@ -501,6 +517,11 @@
                         <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                         <el-table-column sortable prop="status" label="状态"> </el-table-column>
                         <el-table-column sortable prop="liveSecs" label="时长(s)"> </el-table-column>
+                        <el-table-column prop="bytesSpeed" label="码率">
+                            <template #default="scope">
+                                {{scope.row.bytesSpeed | bitsSpeed}}/s
+                            </template>
+                        </el-table-column>
                         <el-table-column sortable prop="rePublishCount" label="重试次数"> </el-table-column>
                         <el-table-column label="操作">
                             <template slot-scope="scope">
@@ -511,7 +532,7 @@
                     </el-table>                
                 </div>                
                 <div v-show="selectIndex==='5'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <el-form-item label="源地址" label-width="180px">
                             <el-input v-model="addFFmpeg_param.src_url"></el-input>
                         </el-form-item>
@@ -547,7 +568,7 @@
                     </el-table>
                 </div>
                 <div v-show="selectIndex==='6'">
-                    <el-form style="margin: 10px;">
+                    <el-form>
                         <el-form-item label="虚拟主机" label-width="180px">
                             <el-input v-model="addRtpServer_param.vhost"></el-input>
                         </el-form-item>
@@ -1375,11 +1396,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                开启帧级时间戳覆盖
+                                                修改时间戳
                                             </div>
                                             <div class="conf_item_value">
-                                                <el-input type="text"
-                                                    v-model="serverConfig.protocol.modify_stamp"></el-input>
+                                                <el-select v-model="serverConfig.protocol.modify_stamp" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in frameModify" :label="val" :value="key"></el-option>
+                                                </el-select>
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -2140,8 +2162,13 @@
                     1:"只音频",
                     2:"只视频",
                 },
+                frameModify:{
+                    0: "不修改",
+                    1: "接收时间戳",
+                    2: "相对时间戳"
+                },
                 getMediaList_queryparams: {
-                    schema: null,
+                    schema: "rtc",
                     vhost: "__defaultVhost__",
                     app: null,
                     stream: null
