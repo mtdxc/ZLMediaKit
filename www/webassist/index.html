@@ -642,16 +642,6 @@
                                     <div class="confs">
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                check_nvidia_dev
-                                            </div>
-                                            <div class="conf_item_value">
-                                                <el-select v-model="serverConfig.general.check_nvidia_dev" placeholder="请选择" style="width: 100%;">
-                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
-                                                </el-select>
-                                            </div>
-                                        </div>
-                                        <div class="conf_item">
-                                            <div class="conf_item_label">
                                                 启用虚拟主机
                                             </div>
                                             <div class="conf_item_value">
@@ -682,7 +672,14 @@
 
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                流超时时间(ms)
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        播放在播放某个流时，如果该流不存在，ZLMediaKit会最多让播放器等待maxStreamWaitMS毫秒
+                                                        <br>如果在这个时间内，该流注册成功，那么会立即返回播放器播放成功
+                                                        <br>否则返回播放器未找到该流，该机制的目的是可以先播放再推流
+                                                    </div>
+                                                    <span>流超时时间(ms)</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
@@ -691,7 +688,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                合并写缓存(ms)
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        合并写缓存大小(单位毫秒)，合并写指服务器缓存一定的数据后才会一次性写入socket，这样能提高性能，但是会提高延时
+                                                        <br>开启后会同时关闭TCP_NODELAY并开启MSG_MORE
+                                                    </div>
+                                                    <span>合并写缓存(ms)</span>
+                                                </el-tooltip>                                          
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
@@ -700,7 +703,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                断连删除
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        拉流代理时如果断流再重连成功是否删除前一次的媒体流数据，如果删除将重新开始，
+                                                        <br>如不删除将会接着上一次的数据继续写(录制hls/mp4时会继续在前一个文件后面写)                                                        
+                                                    </div>
+                                                    <span>断连删除</span>
+                                                </el-tooltip> 
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.general.resetWhenRePlay" placeholder="请选择" style="width: 100%;">
@@ -710,7 +719,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                无人观看流的释放超时(ms)
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        某个流无人观看时，触发hook.on_stream_none_reader事件的最大等待时间，单位毫秒
+                                                        <br/>在配合hook.on_stream_none_reader事件时，可以做到无人观看自动停止拉流或停止接收推流
+                                                    </div>
+                                                    <span>无人观看流的释放超时(ms)</span>
+                                                </el-tooltip> 
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
@@ -719,7 +734,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                未就绪缓存帧数
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        如果track未就绪，我们先缓存帧数据，但是有最大个数限制，防止内存溢出
+                                                    </div>
+                                                    <span>未就绪缓存帧数</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
@@ -728,7 +748,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                加流超时(ms)
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        如果流只有单Track，最多等待若干毫秒，超时后未收到其他Track的数据，则认为是单Track
+                                                        <br>如果协议元数据有声明特定track数，那么无此等待时间
+                                                    </div>
+                                                    <span>加流超时(ms)</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
@@ -737,7 +763,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                流就绪超时(ms)
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        最多等待未初始化的Track时间，单位毫秒，超时之后会忽略未初始化的Track
+                                                    </div>
+                                                    <span>流就绪超时(ms)</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
@@ -746,11 +777,27 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                on_flow_report事件阈值
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        播放器或推流器在断开后会触发hook.on_flow_report事件(使用多少流量事件)，
+                                                        <br>flowThreshold参数控制触发hook.on_flow_report事件阈值，使用流量超过该阈值后才触发，单位KB
+                                                    </div>
+                                                    <span>流控事件阈值(kb)</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
                                                     v-model="serverConfig.general.flowThreshold"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                广播观看人数变化事件
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-select v-model="serverConfig.general.broadcast_player_count_changed" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
+                                                </el-select>
                                             </div>
                                         </div>
                                     </div>
@@ -787,7 +834,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                自动重启时间
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        自动重启的时间(秒), 默认为0, 也就是不自动重启. 
+                                                        <br>主要是为了避免长时间ffmpeg拉流导致的不同步现象
+                                                    </div>
+                                                    <span>自动重启时间</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="number"
@@ -1038,6 +1091,20 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        过滤on_stream_changed hook的协议类型，可以选择只监听某些感兴趣的协议；置空则不过滤协议
+                                                    </div>
+                                                    <span>发送流变更事件的协议类型</span>
+                                                </el-tooltip>
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.hook.stream_changed_schemas"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
                                                 无人观看流事件
                                             </div>
                                             <div class="conf_item_value">
@@ -1064,7 +1131,7 @@
                                     <div class="confs">
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                广播hls切片完成
+                                                广播hls切片完成(on_record_ts)
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.hls.broadcastRecordTs" placeholder="请选择" style="width: 100%;">
@@ -1116,10 +1183,31 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                保留hls文件
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        此选项开启后m3u8文件还是表现为直播，但是切片文件会被全部保留为点播用
+                                                        <br>segDur设置为0或segKeep设置为1的情况下，每个切片文件夹下会生成一个vod.m3u8文件用于点播该时间段的录像
+                                                    </div>
+                                                    <span>保留hls文件</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.hls.segKeep" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
+                                                </el-select>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        如果设置为1，则第一个切片长度强制设置为1个GOP。当GOP小于segDur，可以提高首屏速度
+                                                    </div>
+                                                    <span>快速注册</span>
+                                                </el-tooltip>
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-select v-model="serverConfig.hls.fastRegister" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
                                             </div>
@@ -1248,7 +1336,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                forwarded_ip_header
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        可以把http代理前真实客户端ip放在http头中：https://github.com/ZLMediaKit/ZLMediaKit/issues/1388
+                                                        <br>切勿暴露此key，否则可能导致伪造客户端ip
+                                                    </div>
+                                                    <span>forwarded_ip_header</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
@@ -1264,7 +1358,6 @@
                                                 <el-select v-model="serverConfig.record.dirMenu" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
-
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -1288,7 +1381,7 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                Ip白名单
+                                                Ip白名单，置空不限制
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
@@ -1342,7 +1435,21 @@
                                                     v-model="serverConfig.protocol.continue_push_ms"></el-input>
                                             </div>
                                         </div>
-
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        平滑发送定时器间隔，单位毫秒，置0则关闭；开启后影响cpu性能同时增加内存
+                                                        <br>该配置开启后可以解决一些流发送不平滑导致zlmediakit转发也不平滑的问题
+                                                    </div>
+                                                    <span>平滑发送定时器间隔(ms)</span>
+                                                </el-tooltip>
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="number"
+                                                    v-model="serverConfig.protocol.paced_sender_ms"></el-input>
+                                            </div>
+                                        </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
                                                 将mp4录制当做观看者
@@ -1407,13 +1514,17 @@
                                     <div class="confs">
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                启用 http-fmp4/ws-fmp4
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        启用 http-fmp4/ws-fmp4
+                                                    </div>
+                                                    <span>启用fmp4</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.enable_fmp4" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
-
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -1473,7 +1584,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                启用 http-ts/ws-ts
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        启用 http-ts/ws-ts
+                                                    </div>
+                                                    <span>启用ts</span>
+                                                </el-tooltip>                                                
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.enable_ts" placeholder="请选择" style="width: 100%;">
@@ -1487,7 +1603,12 @@
                                     <div class="confs">
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                按需生成 http[s]-fmp4、ws[s]-fmp4
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        按需生成 http[s]-fmp4、ws[s]-fmp4
+                                                    </div>
+                                                    <span>按需生成fmp4</span>
+                                                </el-tooltip> 
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.fmp4_demand" placeholder="请选择" style="width: 100%;">
@@ -1509,13 +1630,17 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                按需生成 rtmp[s]、http[s]-flv、ws[s]-flv
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        按需生成 rtmp[s]、http[s]-flv、ws[s]-flv
+                                                    </div>
+                                                    <span>按需生成rtmp</span>
+                                                </el-tooltip> 
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.rtmp_demand" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
-
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -1537,7 +1662,6 @@
                                                 <el-select v-model="serverConfig.protocol.ts_demand" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
-
                                             </div>
                                         </div>
                                     </div>
@@ -1595,7 +1719,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                fastStart
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        mp4录制完成后是否进行二次关键帧索引写入头部
+                                                    </div>
+                                                    <span>快速启动</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.record.fastStart" placeholder="请选择" style="width: 100%;">
@@ -1605,7 +1734,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                文件缓存大小
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        mp4录制写文件缓存，单位BYTE,调整参数可以提高文件io性能
+                                                    </div>
+                                                    <span>文件缓存大小</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
@@ -1613,17 +1747,25 @@
                                             </div>
                                         </div>
                                         <div class="conf_item">
-                                            <div class="conf_item_label">
-                                                保存路径
-                                            </div>
+                                            <el-tooltip effect="dark" placement="bottom-start">
+                                                <div slot="content">
+                                                    MP4录制写文件格式是否采用fmp4，启用的话，断电未完成录制的文件也能正常打开
+                                                </div>
+                                                <span>Fmp4录制</span>
+                                            </el-tooltip>
                                             <div class="conf_item_value">
-                                                <el-input type="text" v-model="serverConfig.record.filePath"></el-input>
+                                                <el-select v-model="serverConfig.record.enableFmp4" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
+                                                </el-select>
                                             </div>
                                         </div>
                                         <div class="conf_item">
-                                            <div class="conf_item_label">
-                                                循环播放
-                                            </div>
+                                            <el-tooltip effect="dark" placement="bottom-start">
+                                                <div slot="content">
+                                                    MP4点播(rtsp/rtmp/http-flv/ws-flv)是否循环播放文件
+                                                </div>
+                                                <span>循环点播</span>
+                                            </el-tooltip>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.record.fileRepeat" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
@@ -1632,16 +1774,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                fileSecond
-                                            </div>
-                                            <div class="conf_item_value">
-                                                <el-input type="text"
-                                                    v-model="serverConfig.record.fileSecond"></el-input>
-                                            </div>
-                                        </div>
-                                        <div class="conf_item">
-                                            <div class="conf_item_label">
-                                                MP4点播每次流化数据量
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        mp4点播每次流化数据量，单位毫秒，
+                                                        <br>减少该值可以让点播数据发送量更平滑，增大该值则更节省cpu资源
+                                                    </div>
+                                                    <span>MP4点播每次流化数据量(ms)</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.record.sampleMS"></el-input>
@@ -1889,7 +2028,11 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                低延迟模式
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        rtsp 转发是否使用低延迟模式，当开启时，不会缓存rtp包，来提高并发，可以降低一帧的延迟                                                    </div>
+                                                    <span>低延迟模式</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.rtsp.lowLatency" placeholder="请选择" style="width: 100%;">
@@ -1962,7 +2105,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                低延迟开关
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        rtp 打包时，低延迟开关，默认关闭（为0），h264存在一帧多个slice（NAL）的情况，在这种情况下，如果开启可能会导致画面花屏
+                                                    </div>
+                                                    <span>低延迟模式</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.rtp.lowLatency" placeholder="请选择" style="width: 100%;">
@@ -1972,7 +2120,7 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                rtp包长度限制
+                                                rtp包长度限制(KB)
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.rtp.rtpMaxSize"></el-input>
@@ -1980,7 +2128,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                采用stap-a模式
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        H264 rtp打包模式是否采用stap-a模式(为了在老版本浏览器上兼容webrtc)还是采用Single NAL unit packet per H.264 模式
+                                                        <br>有些老的rtsp设备不支持stap-a rtp，设置此配置为0可提高兼容性
+                                                    </div>
+                                                    <span>采用stap-a模式</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.rtp.h264_stap_a" placeholder="请选择" style="width: 100%;">
@@ -1988,14 +2142,18 @@
                                                 </el-select>
                                             </div>
                                         </div>
-
                                     </div>
                                 </el-col>
                                 <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
                                     <div class="confs">
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                调试输出目录(包括rtp/ps/h264)
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        导出调试数据(包括rtp/ps/h264)至该目录,置空则关闭数据导出
+                                                    </div>
+                                                    <span>调试输出目录</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
@@ -2004,7 +2162,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                udp和tcp代理服务端口
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        udp和tcp代理服务器，支持rtp(必须是ts或ps类型)代理
+                                                    </div>
+                                                    <span>代理服务端口</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.rtp_proxy.port"></el-input>
@@ -2012,7 +2175,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                端口范围
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        随机端口范围，最少确保36个端口
+                                                        <br>该范围同时限制rtsp服务器udp端口范围
+                                                    </div>
+                                                    <span>端口范围</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
@@ -2021,7 +2190,7 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                超时时间
+                                                超时时间(s)
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
@@ -2030,7 +2199,13 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                开启gop缓存优化
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        RtpSender相关功能是否提前开启gop缓存优化级联秒开体验，默认开启
+                                                        <br>如果不调用startSendRtp相关接口，可以置0节省内存
+                                                    </div>
+                                                    <span>开启gop缓存优化</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.rtp_proxy.gop_cache" placeholder="请选择" style="width: 100%;">
@@ -2040,20 +2215,26 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                g711a载荷类型
+                                                udp接收缓冲区大小
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
-                                                    v-model="serverConfig.rtp_proxy.g711a_pt"></el-input>
+                                                    v-model="serverConfig.rtp_proxy.udp_recv_socket_buffer"></el-input>
                                             </div>
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                g711u载荷类型
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
+                                                        国标发送g711 rtp 打包时，每个包的语音时长是多少，默认是100 ms，范围为20~180ms (gb28181-2016，c.2.4规定)，
+                                                        <br>最好为20 的倍数，程序自动向20的倍数取整
+                                                    </div>
+                                                    <span>g711包时长(ms)</span>
+                                                </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text"
-                                                    v-model="serverConfig.rtp_proxy.g711u_pt"></el-input>
+                                                    v-model="serverConfig.rtp_proxy.rtp_g711_dur_ms"></el-input>
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -2090,15 +2271,6 @@
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.rtp_proxy.ps_pt"></el-input>
-                                            </div>
-                                        </div>
-
-                                        <div class="conf_item">
-                                            <div class="conf_item_label">
-                                                ts载荷类型
-                                            </div>
-                                            <div class="conf_item_value">
-                                                <el-input type="text" v-model="serverConfig.rtp_proxy.ts_pt"></el-input>
                                             </div>
                                         </div>
                                     </div>
