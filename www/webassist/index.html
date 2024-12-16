@@ -2002,6 +2002,15 @@
                                                     v-model="serverConfig.rtmp.keepAliveSecond"></el-input>
                                             </div>
                                         </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                Gop缓冲大小
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.rtmp.ringSize"></el-input>
+                                            </div>
+                                        </div>
                                     </div>
                                 </el-col>
                             </el-row>
@@ -2056,6 +2065,16 @@
                                             <div class="conf_item_value">
                                                 <el-input type="text"
                                                     v-model="serverConfig.rtsp.handshakeSecond"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+
+                                                Gop缓冲大小
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.rtsp.ringSize"></el-input>
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -2124,6 +2143,15 @@
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-input type="text" v-model="serverConfig.rtp.rtpMaxSize"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                Gop缓冲大小
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.rtp.ringSize"></el-input>
                                             </div>
                                         </div>
                                         <div class="conf_item">

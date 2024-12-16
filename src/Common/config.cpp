@@ -242,6 +242,7 @@ const string kKeepAliveSecond = RTSP_FIELD "keepAliveSecond";
 const string kDirectProxy = RTSP_FIELD "directProxy";
 const string kLowLatency = RTSP_FIELD"lowLatency";
 const string kRtpTransportType = RTSP_FIELD"rtpTransportType";
+const string kRingSize = RTSP_FIELD "ringSize";
 
 static onceToken token([]() {
     // 默认Md5方式认证  [AUTO-TRANSLATED:6155d989]
@@ -252,6 +253,7 @@ static onceToken token([]() {
     mINI::Instance()[kDirectProxy] = 1;
     mINI::Instance()[kLowLatency] = 0;
     mINI::Instance()[kRtpTransportType] = -1;
+    mINI::Instance()[kRingSize] = 2048;
 });
 } // namespace Rtsp
 
@@ -263,12 +265,13 @@ const string kHandshakeSecond = RTMP_FIELD "handshakeSecond";
 const string kKeepAliveSecond = RTMP_FIELD "keepAliveSecond";
 const string kDirectProxy = RTMP_FIELD "directProxy";
 const string kEnhanced = RTMP_FIELD "enhanced";
-
+const string kRingSize = RTMP_FIELD "ringSize";
 static onceToken token([]() {
     mINI::Instance()[kHandshakeSecond] = 15;
     mINI::Instance()[kKeepAliveSecond] = 15;
     mINI::Instance()[kDirectProxy] = 1;
     mINI::Instance()[kEnhanced] = 0;
+    mINI::Instance()[kRingSize] = 1024;
 });
 } // namespace Rtmp
 
@@ -285,6 +288,7 @@ const string kAudioMtuSize = RTP_FIELD "audioMtuSize";
 const string kRtpMaxSize = RTP_FIELD "rtpMaxSize";
 const string kLowLatency = RTP_FIELD "lowLatency";
 const string kH264StapA = RTP_FIELD "h264_stap_a";
+const string kRingSize = RTP_FIELD "ringSize";
 
 static onceToken token([]() {
     mINI::Instance()[kVideoMtuSize] = 1400;
@@ -292,6 +296,7 @@ static onceToken token([]() {
     mINI::Instance()[kRtpMaxSize] = 10;
     mINI::Instance()[kLowLatency] = 0;
     mINI::Instance()[kH264StapA] = 1;
+    mINI::Instance()[kRingSize] = 2048;    
 });
 } // namespace Rtp
 

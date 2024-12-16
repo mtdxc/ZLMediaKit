@@ -427,6 +427,7 @@ extern const std::string kLowLatency;
 // 迫使客户端重新SETUP并切换到对应协议。目前支持FFMPEG和VLC  [AUTO-TRANSLATED:45f9cddb]
 // Force the client to re-SETUP and switch to the corresponding protocol. Currently supports FFMPEG and VLC
 extern const std::string kRtpTransportType;
+extern const std::string kRingSize;
 } // namespace Rtsp
 
 // //////////RTMP服务器配置///////////  [AUTO-TRANSLATED:8de6f41f]
@@ -444,6 +445,7 @@ extern const std::string kDirectProxy;
 // h265-rtmp是否采用增强型(或者国内扩展)  [AUTO-TRANSLATED:4a52d042]
 // Whether h265-rtmp uses enhanced (or domestic extension)
 extern const std::string kEnhanced;
+extern const std::string kRingSize;
 } // namespace Rtmp
 
 // //////////RTP配置///////////  [AUTO-TRANSLATED:23cbcb86]
@@ -464,6 +466,7 @@ extern const std::string kLowLatency;
 // H264 rtp打包模式是否采用stap-a模式(为了在老版本浏览器上兼容webrtc)还是采用Single NAL unit packet per H.264 模式  [AUTO-TRANSLATED:30632378]
 // Whether H264 RTP packaging mode uses stap-a mode (for compatibility with webrtc on older browsers) or Single NAL unit packet per H.264 mode
 extern const std::string kH264StapA;
+extern const std::string kRingSize;
 } // namespace Rtp
 
 // //////////组播配置///////////  [AUTO-TRANSLATED:dc39b9d6]
