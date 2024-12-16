@@ -10,6 +10,7 @@
 
 #include "RtmpMuxer.h"
 #include "Extension/Factory.h"
+#include "Common/config.h"
 
 namespace mediakit {
 
@@ -19,7 +20,8 @@ RtmpMuxer::RtmpMuxer(const TitleMeta::Ptr &title) {
     } else {
         _metadata = title->getMetadata();
     }
-    _rtmp_ring = std::make_shared<RtmpRing::RingType>();
+    GET_CONFIG(int, ringSize, Rtmp::kRingSize);
+    _rtmp_ring = std::make_shared<RtmpRing::RingType>(ringSize);
 }
 
 bool RtmpMuxer::addTrack(const Track::Ptr &track) {
