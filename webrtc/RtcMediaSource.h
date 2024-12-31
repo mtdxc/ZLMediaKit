@@ -3,6 +3,8 @@
 
 #include "Rtsp/RtspMediaSourceMuxer.h"
 #include "Rtsp/RtspMediaSourceImp.h"
+#include "webrtc/WebRtcTransport.h"
+#include "ext-codec/H264.h"
 namespace mediakit {
 
 class RtcMediaSourceImp : public RtspMediaSourceImp {
@@ -51,7 +53,19 @@ public:
                 _trans->delDelegate(this);
         }
     }
-protected:
+
+    bool inputFrame(const Frame::Ptr &frame) override { 
+        // skip b-frame for webrtc
+        GET_CONFIG(int, dropBFrame, Rtc::kDrop264BFrame);
+        if (dropBFrame && frame->getCodecId() == CodecH264) {
+            if (FRAME_B == h264_frameType((uint8_t *)frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize())) {
+                DebugL << "skipBFrame " << frame->size() << " tsp:" << frame->pts() << "," << frame->dts();
+                return true;
+            }
+        }
+        return RtspMediaSourceMuxer::inputFrame(frame);
+    }
+    protected:
     Track::Ptr _trans;
 };
 

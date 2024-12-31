@@ -20,6 +20,8 @@ namespace mediakit{
 
 void splitH264(const char *ptr, size_t len, size_t prefix, const std::function<void(const char *, size_t, size_t)> &cb);
 size_t prefixSize(const char *ptr, size_t len);
+enum H264FrameTye { FRAME_I, FRAME_P, FRAME_B };
+int h264_frameType(uint8_t *data, int size);
 
 template<typename Parent>
 class H264FrameHelper : public Parent{
@@ -71,6 +73,13 @@ public:
         // 多slice情况下, first_mb_in_slice 表示其为一帧的开始  [AUTO-TRANSLATED:80e88e88]
         // // In the case of multiple slices, first_mb_in_slice indicates the start of a frame
         return type >= NAL_B_P && type <= NAL_IDR && (nal_ptr[1] & 0x80);
+    }
+
+    bool bframe() const {
+        auto nal_ptr = (uint8_t *)this->data() + this->prefixSize();
+        if (H264_TYPE(*nal_ptr) != NAL_B_P)
+            return false;
+        return FRAME_B == h264_frameType(nal_ptr, this->size() - this->prefixSize());
     }
 };
 

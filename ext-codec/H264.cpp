@@ -26,6 +26,58 @@ using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
+/* Helpers to decode Exp-Golomb */
+static uint32_t h264_eg_getbit(uint8_t *base, uint32_t offset) {
+    return ((*(base + (offset >> 0x3))) >> (0x7 - (offset & 0x7))) & 0x1;
+}
+
+static uint32_t h264_eg_decode(uint8_t *base, uint32_t *offset) {
+    uint32_t zeros = 0;
+    while (h264_eg_getbit(base, (*offset)++) == 0)
+        zeros++;
+    uint32_t res = 1 << zeros;
+    if (zeros > 0) {
+        int32_t i = 0;
+        for (i = zeros - 1; i >= 0; i--) {
+            res |= h264_eg_getbit(base, (*offset)++) << i;
+        }
+    }
+    return res - 1;
+}
+
+// @see https://blog.csdn.net/dittychen/article/details/55509718
+int h264_frameType(uint8_t *buffer, int size) {
+    uint8_t nalTye = buffer[0] & 0x1F;
+    if (nalTye != 1 && nalTye != 5) {
+        return -1;
+    }
+    buffer++;
+    int frametype = 0;
+    uint32_t offset = 0;
+    /* i_first_mb  */
+    h264_eg_decode(buffer, &offset);
+    /* picture type */
+    int frame_type = h264_eg_decode(buffer, &offset);
+    switch(frame_type)
+    {
+    case 0: case 5: // P
+        frametype = FRAME_P;
+        break;
+    case 1: case 6: // B
+        frametype = FRAME_B;
+        break;
+    case 3: case 8: // SP
+        frametype = FRAME_P;
+        break;
+    case 2: case 7: // I
+        frametype = FRAME_I;
+        break;
+    case 4: case 9: // SI
+        frametype = FRAME_I;
+        break;
+    }
+    return frametype;
+}
 
 static bool getAVCInfo(const char *sps, size_t sps_len, int &iVideoWidth, int &iVideoHeight, float &iVideoFps) {
     if (sps_len < 4) {

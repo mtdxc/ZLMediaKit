@@ -64,6 +64,7 @@ const string kMinBitrate = RTC_FIELD "min_bitrate";
 // 数据通道设置  [AUTO-TRANSLATED:2dc48bc3]
 // Data channel setting
 const string kDataChannelEcho = RTC_FIELD "datachannel_echo";
+const string kDrop264BFrame = RTC_FIELD "drop_h264_bframe";
 
 static onceToken token([]() {
     mINI::Instance()[kTimeOutSec] = 15;
@@ -76,6 +77,7 @@ static onceToken token([]() {
     mINI::Instance()[kMaxBitrate] = 0;
     mINI::Instance()[kMinBitrate] = 0;
 
+    mINI::Instance()[kDrop264BFrame] = true;
     mINI::Instance()[kDataChannelEcho] = true;
 });
 
