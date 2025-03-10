@@ -396,6 +396,7 @@ public:
 
 public:
     uint16_t port = 0;
+    std::string protocol;
     std::string full_url;
     std::string schema;
     std::string host;

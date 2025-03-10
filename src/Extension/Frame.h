@@ -751,7 +751,6 @@ public:
      * [AUTO-TRANSLATED:73cb2ab0]
      */
     uint64_t getVideoKeyFrames() const {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
         return _video_key_frames;
     }
 
@@ -762,22 +761,18 @@ public:
      * [AUTO-TRANSLATED:118b395e]
      */
     uint64_t getFrames() const {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
         return _frames;
     }
 
     size_t getVideoGopSize() const {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
         return _gop_size;
     }
 
     size_t getVideoGopInterval() const {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
         return _gop_interval_ms;
     }
 
     int64_t getDuration() const {
-        std::lock_guard<std::recursive_mutex> lck(_mtx);
         return _stamp.getRelativeStamp();
     }
 

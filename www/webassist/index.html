@@ -1852,7 +1852,17 @@
                                                     v-model="serverConfig.rtc.preferredCodecV"></el-input>
                                             </div>
                                         </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                过滤b帧
                                             </div>
+                                            <div class="conf_item_value">
+                                                <el-select v-model="serverConfig.rtc.bfilter" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
+                                                </el-select>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </el-col>
                                 <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
                                     <div class="confs">

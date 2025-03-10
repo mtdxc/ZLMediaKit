@@ -293,22 +293,24 @@ static inline void addHttpListener(){
             };
             ((HttpSession::HttpResponseInvoker &) invoker) = newInvoker;
         }
-
-        try {
-            it->second(parser, invoker, sender);
-        } catch (ApiRetException &ex) {
-            responseApi(ex.code(), ex.what(), invoker);
-            auto helper = static_cast<SocketHelper &>(sender).shared_from_this();
-            helper->getPoller()->async([helper, ex]() { helper->shutdown(SockException(Err_shutdown, ex.what())); }, false);
-        }
+        auto helper = static_cast<SocketHelper &>(sender).shared_from_this();
+        // 在本poller线程下一次事件循环时执行http api，防止占用NoticeCenter的锁
+        helper->getPoller()->async([it, parser, invoker, helper]() {
+            try {
+                it->second(parser, invoker, *helper);
+            } catch (ApiRetException &ex) {
+                responseApi(ex.code(), ex.what(), invoker);
+                helper->getPoller()->async([helper, ex]() { helper->shutdown(SockException(Err_shutdown, ex.what())); }, false);
+            }
 #ifdef ENABLE_MYSQL
-        catch(SqlException &ex){
-            responseApi(API::SqlFailed, StrPrinter << "操作数据库失败:" << ex.what() << ":" << ex.getSql(), invoker);
-        }
-#endif// ENABLE_MYSQL
-        catch (std::exception &ex) {
-            responseApi(API::Exception, ex.what(), invoker);
-        }
+            catch (SqlException &ex) {
+                responseApi(API::SqlFailed, StrPrinter << "操作数据库失败:" << ex.what() << ":" << ex.getSql(), invoker);
+            }
+#endif // ENABLE_MYSQL
+            catch (std::exception &ex) {
+                responseApi(API::Exception, ex.what(), invoker);
+            }
+        },false);
     });
 }
 
@@ -2059,7 +2061,7 @@ void installWebApi() {
         // 启动FFmpeg进程，开始截图，生成临时文件，截图成功后替换为正式文件  [AUTO-TRANSLATED:7d589e3f]
         // Start the FFmpeg process, start taking screenshots, generate temporary files, replace them with formal files after successful screenshots
         auto new_snap_tmp = new_snap + ".tmp";
-        FFmpegSnap::makeSnap(allArgs["url"], new_snap_tmp, allArgs["timeout_sec"], [invoker, allArgs, new_snap, new_snap_tmp](bool success, const string &err_msg) {
+        FFmpegSnap::makeSnap(allArgs["async"], allArgs["url"], new_snap_tmp, allArgs["timeout_sec"], [invoker, allArgs, new_snap, new_snap_tmp](bool success, const string &err_msg) {
             if (!success) {
                 // 生成截图失败，可能残留空文件  [AUTO-TRANSLATED:c96a4468]
                 // Screenshot generation failed, there may be residual empty files
