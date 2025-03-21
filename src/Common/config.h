@@ -482,6 +482,8 @@ extern const std::string kLowLatency;
 // H264 rtp打包模式是否采用stap-a模式(为了在老版本浏览器上兼容webrtc)还是采用Single NAL unit packet per H.264 模式  [AUTO-TRANSLATED:30632378]
 // Whether H264 RTP packaging mode uses stap-a mode (for compatibility with webrtc on older browsers) or Single NAL unit packet per H.264 mode
 extern const std::string kH264StapA;
+extern const std::string kH264Profile;
+extern const std::string kH265Profile;
 extern const std::string kRingSize;
 } // namespace Rtp
 
