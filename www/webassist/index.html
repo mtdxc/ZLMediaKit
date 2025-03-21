@@ -2176,6 +2176,15 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
+                                                h264 profile
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.rtp.h264_profile"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
                                                 <el-tooltip effect="dark" placement="bottom-start">
                                                     <div slot="content">
                                                         H264 rtp打包模式是否采用stap-a模式(为了在老版本浏览器上兼容webrtc)还是采用Single NAL unit packet per H.264 模式

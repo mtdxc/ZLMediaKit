@@ -289,13 +289,14 @@ const string kRtpMaxSize = RTP_FIELD "rtpMaxSize";
 const string kLowLatency = RTP_FIELD "lowLatency";
 const string kH264StapA = RTP_FIELD "h264_stap_a";
 const string kRingSize = RTP_FIELD "ringSize";
-
+const string kH264Profile = RTP_FIELD "h264_profile";
 static onceToken token([]() {
     mINI::Instance()[kVideoMtuSize] = 1400;
     mINI::Instance()[kAudioMtuSize] = 600;
     mINI::Instance()[kRtpMaxSize] = 10;
     mINI::Instance()[kLowLatency] = 0;
     mINI::Instance()[kH264StapA] = 1;
+    mINI::Instance()[kH264Profile] = "42e01f";
     mINI::Instance()[kRingSize] = 2048;    
 });
 } // namespace Rtp

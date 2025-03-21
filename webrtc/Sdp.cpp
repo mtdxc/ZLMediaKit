@@ -1888,6 +1888,10 @@ void RtcConfigure::onSelectPlan(RtcCodecPlan &plan, CodecId codec) const {
         auto mode = _rtsp_video_plan->fmtp[kMode];
         GET_CONFIG(bool, h264_stap_a, Rtp::kH264StapA);
         plan.fmtp[kMode] = mode.empty() ? std::to_string(h264_stap_a) : mode;
+        GET_CONFIG(string, h264_profile, Rtp::kH264Profile);
+        if (h264_profile.length()) {
+            plan.fmtp[kProfile] = h264_profile;
+        }
     }
 }
 
