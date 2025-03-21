@@ -1333,7 +1333,7 @@ void RtcMedia::checkValid() const {
 
         for (auto ssrc : rtp_rtx_ssrc) {
             InfoL << "ssrc:" << ssrc.cname << "," << ssrc.msid;
-        }
+    }
     }
 
 #if 0
@@ -2033,22 +2033,21 @@ bool RtcConfigure::onCheckCodecProfile(const RtcCodecPlan &plan, CodecId codec) 
         }
         return true;
     }
-    if (_rtsp_video_plan && codec == CodecH264 && getCodecId(_rtsp_video_plan->codec) == CodecH264) {
-        // h264时，profile-level-id  [AUTO-TRANSLATED:94a5f360]
-        // When h264, profile-level-id
-        if (strcasecmp(_rtsp_video_plan->fmtp[kH264Profile].data(), const_cast<RtcCodecPlan &>(plan).fmtp[kH264Profile].data())) {
-            // profile-level-id 不匹配  [AUTO-TRANSLATED:814ec4c4]
-            // profile-level-id does not match
-            return false;
-        }
-        return true;
-    }
-
-    if (_rtsp_video_plan && codec == CodecH265 && getCodecId(_rtsp_video_plan->codec) == CodecH265) {
-        // h265时，profile-id
-        if (strcasecmp(_rtsp_video_plan->fmtp[kH265Profile].data(), const_cast<RtcCodecPlan &>(plan).fmtp[kH265Profile].data())) {
-            // profile-id 不匹配
-            return false;
+    if (codec == CodecH264 || codec == CodecH265) {
+        GET_CONFIG(string, profileH264, Rtp::kH264Profile);
+        GET_CONFIG(string, profileH265, Rtp::kH265Profile);
+        const string& profile = codec == CodecH264 ? profileH264 : profileH265;
+        const string& key = codec == CodecH264 ? kH264Profile : kH265Profile;
+        if (_rtsp_video_plan && getCodecId(_rtsp_video_plan->codec) == codec) {
+            if (strcasecmp(_rtsp_video_plan->fmtp[key].data(), const_cast<RtcCodecPlan &>(plan).fmtp[key].data())) {
+                // profile-level-id does not match
+                return false;
+            }
+        } else {
+            if (profile.length() && strncasecmp(profile.data(), const_cast<RtcCodecPlan &>(plan).fmtp[key].data(), profile.length())) {
+                // profile-level-id does not match
+                return false;
+            }
         }
         return true;
     }
