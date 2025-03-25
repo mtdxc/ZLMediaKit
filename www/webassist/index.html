@@ -1996,6 +1996,16 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
+                                                增强模式
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-select v-model="serverConfig.rtmp.enhanced" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
+                                                </el-select>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
                                                 握手超时
                                             </div>
                                             <div class="conf_item_value">
