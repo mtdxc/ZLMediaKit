@@ -67,8 +67,15 @@
                     </el-row>
                     <el-divider><i class="el-icon-s-data"></i></el-divider>
                     <div style="width: 100%;text-align: right;">
+                        <el-select v-model="getMediaList_queryparams.schema" placeholder="请选择协议" style="width: 100px;">
+                            <el-option label="全部" value=""> </el-option>
+                            <el-option v-for="(item, index) in schemaFilters" :key="index" :label="item.text" :value="item.value" />
+                        </el-select>
+                        <el-input v-model="getMediaList_queryparams.app" placeholder="请输入app名" style="width: 150px;"></el-input>
+                        <el-input v-model="getMediaList_queryparams.stream" placeholder="请输入流id" style="width: 150px;"></el-input>
                         <el-checkbox label="自动刷新" v-model="autorefresh_medialist" ></el-checkbox>
-                        <el-button type="primary" icon="el-icon-refresh" @click="getMediaList">刷新</el-button>
+                        <span>共{{medialist.length}}项</span>
+                        <el-button type="primary" icon="el-icon-refresh" @click="getMediaList">查询</el-button>
                     </div>
 
                     <el-table :data="medialist" empty-text="暂无数据">
@@ -171,7 +178,9 @@
                                             <el-tag v-else>{{scope.row.width}}x{{scope.row.height}}@{{scope.row.fps}}</el-tag>
                                         </template>
                                     </el-table-column>
-                                    <el-table-column prop="时间戳" label="lastpts">
+                                    <el-table-column prop="lastpts" label="时间戳">
+                                    </el-table-column>
+                                    <el-table-column prop="loss" label="丢包率">
                                     </el-table-column>
                                     <el-table-column prop="key_frames" label="关键帧数">
                                     </el-table-column>
@@ -2502,7 +2511,7 @@
                     2: "相对时间戳"
                 },
                 getMediaList_queryparams: {
-                    schema: null,
+                    schema: "rtc",
                     vhost: "__defaultVhost__",
                     app: null,
                     stream: null
