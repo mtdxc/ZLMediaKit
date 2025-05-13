@@ -453,6 +453,11 @@
                                     <el-table-column sortable prop="src.app" label="app"> </el-table-column>
                                     <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                                     <el-table-column sortable prop="status" label="状态"> </el-table-column>
+                                    <el-table-column prop="bytesSpeed" label="码率">
+                                        <template #default="scope">
+                                            {{scope.row.bytesSpeed | bitsSpeed}}/s
+                                        </template>
+                                    </el-table-column>
                                     <el-table-column sortable prop="liveSecs" label="时长(s)"> </el-table-column>
                                     <el-table-column sortable prop="rePullCount" label="重试次数"> </el-table-column>
                                     <el-table-column sortable prop="totalReaderCount" label="观看人数"> </el-table-column>
@@ -518,6 +523,11 @@
                         <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                         <el-table-column sortable prop="status" label="状态"> </el-table-column>
                         <el-table-column sortable prop="liveSecs" label="时长(s)"> </el-table-column>
+                        <el-table-column prop="bytesSpeed" label="码率">
+                            <template #default="scope">
+                                {{scope.row.bytesSpeed | bitsSpeed}}/s
+                            </template>
+                        </el-table-column>
                         <el-table-column sortable prop="rePublishCount" label="重试次数"> </el-table-column>
                         <el-table-column label="操作">
                             <template slot-scope="scope">
