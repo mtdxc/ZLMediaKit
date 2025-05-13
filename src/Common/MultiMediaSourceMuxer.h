@@ -196,7 +196,7 @@ public:
     const MediaTuple &getMediaTuple() const;
     std::string shortUrl() const;
 
-    void forEachRtpSender(const std::function<void(const std::string &ssrc)> &cb) const;
+    void forEachRtpSender(const std::function<void(const std::string &ssrc, const RtpSender &sender)> &cb) const;
 
     bool link(Track::Ptr track);
     bool close(MediaSource &sender) override;
@@ -251,7 +251,7 @@ private:
     toolkit::Ticker _last_check;
     std::unordered_map<int, Stamp> _stamps;
     std::weak_ptr<Listener> _track_listener;
-    std::unordered_multimap<std::string, RingType::RingReader::Ptr> _rtp_sender;
+    std::unordered_multimap<std::string, std::tuple<RingType::RingReader::Ptr, std::weak_ptr<RtpSender>>> _rtp_sender;
     std::shared_ptr<FMP4MediaSourceMuxer> _fmp4;
     std::shared_ptr<RtmpMediaSourceMuxer> _rtmp;
     std::shared_ptr<RtspMediaSourceMuxer> _rtsp;
