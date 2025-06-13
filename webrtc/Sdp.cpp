@@ -862,11 +862,14 @@ void RtcSession::loadFrom(const string &str) {
         }
 
         if (!have_rtx_ssrc) {
-            // 按照sdp顺序依次添加ssrc  [AUTO-TRANSLATED:0996ba7e]
+            std::set<uint32_t> ssrcs;
             // Add SSRCs in the order of SDP
             for (auto &attr : ssrc_attr) {
                 if (attr.attribute == "cname") {
-                    rtc_media.rtp_rtx_ssrc.emplace_back(rtc_ssrc_map[attr.ssrc]);
+                    if (!ssrcs.count(attr.ssrc) && rtc_ssrc_map.count(attr.ssrc)) {
+                        ssrcs.insert(attr.ssrc);
+                        rtc_media.rtp_rtx_ssrc.emplace_back(rtc_ssrc_map[attr.ssrc]);
+                    }
                 }
             }
         }
