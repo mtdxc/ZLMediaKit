@@ -245,6 +245,7 @@ MultiMediaSourceMuxer::MultiMediaSourceMuxer(const MediaTuple& tuple, float dur_
     // Audio related settings
     enableAudio(option.enable_audio);
     enableMuteAudio(option.add_mute_audio);
+    enableMuteVideo(option.add_mute_video);
 }
 
 void MultiMediaSourceMuxer::setMediaListener(const std::weak_ptr<MediaSourceEvent> &listener) {
@@ -680,6 +681,33 @@ bool MultiMediaSourceMuxer::onTrackReady(const Track::Ptr &track) {
         ret = _mp4->addTrack(track) ? true : ret;
     }
     return ret;
+}
+
+void MultiMediaSourceMuxer::onFlush() {
+    if (_rtmp) {
+        _rtmp->flush();
+    }
+    if (_rtsp) {
+        _rtsp->flush();
+    }
+    if (_ts) {
+        _ts->flush();
+    }
+    if (_rtc) {
+        _rtc->flush();
+    }
+    if (_mp4) {
+        _mp4->flush();
+    }
+    if (_fmp4) {
+        _fmp4->flush();
+    }
+    if (_hls) {
+        _hls->flush();
+    }
+    if (_hls_fmp4) {
+        _hls_fmp4->flush();
+    }
 }
 
 void MultiMediaSourceMuxer::onAllTrackReady() {
