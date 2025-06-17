@@ -290,6 +290,8 @@
                                 </el-form-item>
                                 <el-form-item label="datachannel">
                                     <el-switch v-model="webrtc.usedatachannel"></el-switch>
+                                    <el-switch v-model="audio_enable" :onclick="enableStream(true)"></el-switch>audio
+                                    <el-switch v-model="video_enable" :onclick="enableStream(false)"></el-switch>video
                                 </el-form-item>
                                 <el-form-item label="debug日志">
                                     <el-switch v-model="webrtc.debug"></el-switch>
@@ -405,6 +407,11 @@
                                                 v-model="addStreamProxy_params.auto_close">无人观看自动关闭流(不触发无人观看hook)</el-checkbox>
                                         </el-col>
                                     </el-row>
+                                </el-form-item>
+                                <el-form-item label="添加静音视频" label-width="180px">
+                                    <el-select v-model="addStreamProxy_params.add_mute_video" placeholder="请选择" style="width: 100%;">
+                                        <el-option v-for="(val,key) in muteVideo" :label="val" :value="key"></el-option>
+                                    </el-select>
                                 </el-form-item>
                                 <el-form-item label="拉流方式" label-width="180px">
                                     <el-select v-model="addStreamProxy_params.rtp_type" style="width: 100%;">
@@ -1437,6 +1444,16 @@
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
 
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                添加静音视频
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-select v-model="serverConfig.protocol.add_mute_video" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in muteVideo" :label="val" :value="key"></el-option>
+                                                </el-select>
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -2519,6 +2536,11 @@
                     0:'否',
                     1:'是',
                 },
+                muteVideo:{
+                    0:'无',
+                    1:'超时',
+                    2:'开始',
+                },                
                 typeTcpMode:{
                     0:"无",
                     1:"被动",
@@ -2563,6 +2585,7 @@
                     fmp4_demand: false,
                     enable_audio: true,
                     add_mute_audio: true,
+                    add_mute_video: 1,
                     mp4_save_path: "",
                     mp4_max_second: 10,
                     mp4_as_player: false,
@@ -2583,6 +2606,9 @@
                 versioninfo: {
 
                 },
+                audio_enable: true,
+                video_enable: true,
+                local_stream: null,
                 updatetimer: null,
                 autorefresh_medialist: false,
                 autorefresh_session: false,
@@ -2783,7 +2809,7 @@
                 ep.on(ZLMRTCClient.Events.WEBRTC_ON_LOCAL_STREAM, (s) => {// 获取到了本地流
                     this.$refs.selfVideo.srcObject = s;
                     this.$refs.selfVideo.muted = true;
-
+                    this.local_stream = s;
                 });
 
                 ep.on(ZLMRTCClient.Events.CAPTURE_STREAM_FAILED, (s) => {// 获取本地流失败
@@ -2796,6 +2822,12 @@
 
                 ep.on(ZLMRTCClient.Events.WEBRTC_ON_CONNECTION_STATE_CHANGE, (state) => {// RTC 状态变化 ,详情参考 https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/connectionState
                     console.log('当前状态==>', state)
+                    if (!this.audio_enable) {
+                        this.enableStream(true);
+                    }
+                    if (!this.video_enable) {
+                        this.enableStream(false);
+                    }
                 });
 
                 ep.on(ZLMRTCClient.Events.WEBRTC_ON_DATA_CHANNEL_OPEN, (event) => {
@@ -2848,8 +2880,42 @@
                     this.$refs.video.srcObject = null;
                     this.$refs.video.load();
                 }
+                this.local_stream = null;
                 this.$refs.selfVideo.srcObject = null;
                 this.$refs.selfVideo.load();
+            },
+            enableStream(audio){
+                let stream = this.local_stream;
+                if (stream == null) {
+                    return;
+                }
+                const kind = audio ? 'audio' : 'video';
+                // "暂停"视频传输（设置比特率为0）
+                const sender = this.webrtc_pusher.pc.getSenders().find(s => s.track.kind === kind);
+                const parameters = sender.getParameters();
+                console.log(parameters);
+                if (!parameters.encodings) {
+                    parameters.encodings = [{}];
+                }
+                console.log("enable " + kind + "Stream", this.audio_enable, this.video_enable);
+                if (audio) {
+                    parameters.encodings[0].maxBitrate = this.audio_enable?64000:0;  // 设置为0比特率
+                    parameters.encodings[0].active = this.audio_enable;
+                } else {
+                    parameters.encodings[0].maxBitrate = this.video_enable?300000:0;  // 设置为0比特率
+                    parameters.encodings[0].active = this.video_enable;
+                }
+                sender.setParameters(parameters);
+                return;
+                if(audio) {
+                    stream.getAudioTracks().forEach(track => {
+                        track.enabled = this.audio_enable;
+                    });
+                } else {
+                    stream.getVideoTracks().forEach(track => {
+                        track.enabled = this.video_enable;
+                    });
+                }
             },
             sendata() {
                 console.log(`发送数据：${this.webrtc.msgsend}`)

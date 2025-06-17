@@ -187,7 +187,7 @@ public:
      * [AUTO-TRANSLATED:49efef10]
      */
     void enableMuteAudio(bool flag);
-
+    void enableMuteVideo(int flag);
     /**
      * 是否有视频track
      * Whether there is a video track
@@ -216,6 +216,7 @@ protected:
      * [AUTO-TRANSLATED:c54d02e2]
      */
     virtual void onAllTrackReady() {};
+    virtual void onFlush() {};
 
     /**
      * 某Track输出frame，在onAllTrackReady触发后才会调用此方法
@@ -251,6 +252,8 @@ private:
      * [AUTO-TRANSLATED:9ba052b5]
      */
     bool addMuteAudioTrack();
+    void addMuteAudioMaker(Track::Ptr track);
+    bool addMuteVideo(Track::Ptr track, uint64_t tsp);
 
 private:
     CodecId _audio_codec = CodecInvalid;
@@ -258,6 +261,7 @@ private:
     bool _enable_audio = true;
     bool _only_audio = false;
     bool _add_mute_audio = true;
+    int _add_mute_video = 0;
     bool _all_track_ready = false;
     size_t _max_track_size = 2;
 
@@ -266,7 +270,13 @@ private:
 
     std::unordered_map<int, toolkit::List<Frame::Ptr> > _frame_unread;
     std::unordered_map<int, std::function<void()> > _track_ready_callback;
-    std::unordered_map<int, std::pair<Track::Ptr, bool/*got frame*/> > _track_map;
+    struct TrackItem {
+        Track::Ptr track; // Track
+        bool got_frame = false;
+        bool wait_key = false;
+    };
+    virtual bool onRemoveTrack(TrackItem &track);
+    std::unordered_map<int, TrackItem> _track_map;
 };
 
 
