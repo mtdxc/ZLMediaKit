@@ -123,7 +123,7 @@ static onceToken token([]() {
     mINI::Instance()[kCheckNvidiaDev] = 1;
     mINI::Instance()[kEnableFFmpegLog] = 0;
     mINI::Instance()[kWaitTrackReadyMS] = 10000;
-    mINI::Instance()[kWaitAudioTrackDataMS] = 1000;
+    mINI::Instance()[kWaitAudioTrackDataMS] = 0;
     mINI::Instance()[kWaitAddTrackMS] = 3000;
     mINI::Instance()[kUnreadyFrameCache] = 100;
     mINI::Instance()[kBroadcastPlayerCountChanged] = 0;
@@ -136,6 +136,7 @@ namespace Protocol {
 const string kModifyStamp = string(kFieldName) + "modify_stamp";
 const string kEnableAudio = string(kFieldName) + "enable_audio";
 const string kAddMuteAudio = string(kFieldName) + "add_mute_audio";
+const string kAddMuteVideo = string(kFieldName) + "add_mute_video";
 const string kAutoClose = string(kFieldName) + "auto_close";
 const string kContinuePushMS = string(kFieldName) + "continue_push_ms";
 const string kPacedSenderMS = string(kFieldName) + "paced_sender_ms";
@@ -167,6 +168,7 @@ static onceToken token([]() {
     mINI::Instance()[kModifyStamp] = (int)ProtocolOption::kModifyStampRelative;
     mINI::Instance()[kEnableAudio] = 1;
     mINI::Instance()[kAddMuteAudio] = 1;
+    mINI::Instance()[kAddMuteVideo] = 1;
     mINI::Instance()[kContinuePushMS] = 15000;
     mINI::Instance()[kPacedSenderMS] = 0;
     mINI::Instance()[kAutoClose] = 0;
