@@ -11,12 +11,12 @@
 #include "MediaSink.h"
 #include "Common/config.h"
 #include "Extension/Factory.h"
-
+#include "Util/util.h"
 #define MUTE_AUDIO_INDEX 0xFFFF
 
 using namespace std;
 
-namespace mediakit{
+namespace mediakit {
 
 bool MediaSink::addTrack(const Track::Ptr &track_in) {
     if (_only_audio && track_in->getTrackType() != TrackAudio) {
@@ -46,14 +46,14 @@ bool MediaSink::addTrack(const Track::Ptr &track_in) {
     auto track = track_in->clone();
     CHECK(track, "Clone track failed: ", track_in->getCodecName());
     auto index = track->getIndex();
-    if (!_track_map.emplace(index, std::make_pair(track, false)).second) {
+    if (_track_map.count(index)) {
         WarnL << "Already add a same track: " << track->getIndex() << ", codec: " << track->getCodecName();
         return false;
     }
+    TrackItem item;
+    item.track = track;
+    _track_map[index] = item;
     _ticker.resetTime();
-    if (track->getTrackType() == TrackAudio) {
-      _audio_codec = track->getCodecId();
-    }
     _track_ready_callback[index] = [this, track]() { onTrackReady(track); };
 
     track->addDelegate([this](const Frame::Ptr &frame) {
@@ -74,6 +74,18 @@ bool MediaSink::addTrack(const Track::Ptr &track_in) {
         frame_unread.emplace_back(Frame::getCacheAbleFrame(frame));
         return true;
     });
+
+    if (track->getTrackType() == TrackAudio) {
+        _audio_codec = track->getCodecId();
+    } else if (_add_mute_video == 2) {
+        if (addMuteVideo(track, 0)) {
+            _track_map[index].wait_key = true;
+            _track_map[index].got_frame = true;
+        }
+        if (track->ready()) {
+            onTrackReady(track);
+        }
+    }
     return true;
 }
 
@@ -86,6 +98,8 @@ void MediaSink::resetTracks() {
     _track_map.clear();
     _frame_unread.clear();
     _track_ready_callback.clear();
+    if (_max_track_size < 2)
+        _max_track_size = 2;
 }
 
 bool MediaSink::inputFrame(const Frame::Ptr &frame) {
@@ -94,12 +108,28 @@ bool MediaSink::inputFrame(const Frame::Ptr &frame) {
         return false;
     }
     // got frame
-    it->second.second = true;
-    auto ret = it->second.first->inputFrame(frame);
-    if (_mute_audio_maker && frame->getTrackType() == TrackVideo) {
-        // 视频驱动产生静音音频  [AUTO-TRANSLATED:2a8c789c]
-        // Video driver generates silent audio
-        _mute_audio_maker->inputFrame(frame);
+    it->second.got_frame = true;
+    if (it->second.wait_key) {
+        if (!frame->keyFrame() && !frame->configFrame()) {
+            return false;
+        }
+        it->second.wait_key = false;
+    }
+    auto ret = it->second.track->inputFrame(frame);
+    if (_mute_audio_maker) {
+        switch (frame->getTrackType()) {
+        case TrackVideo:
+            // 视频驱动产生静音音频
+            _mute_audio_maker->inputFrame(frame);
+            break;
+        case TrackAudio:
+            InfoL << "destory MuteAudioMaker " << _mute_audio_maker->getCodecName() << "@" << _mute_audio_maker.get() 
+                << " on frame " << frame->getIndex() << "," << frame->getCodecName();
+            _mute_audio_maker = nullptr;
+            break;
+        default:
+            break;
+        }
     }
     checkTrackIfReady();
     return ret;
@@ -108,7 +138,7 @@ bool MediaSink::inputFrame(const Frame::Ptr &frame) {
 void MediaSink::checkTrackIfReady() {
     if (!_all_track_ready && !_track_ready_callback.empty()) {
         for (auto &pr : _track_map) {
-            if (pr.second.second && pr.second.first->ready()) {
+            if (pr.second.got_frame && pr.second.track->ready()) {
                 // Track由未就绪状态转换成就绪状态，我们就触发onTrackReady回调  [AUTO-TRANSLATED:f8975e53]
                 // When a Track transitions from an unready state to a ready state, we trigger the onTrackReady callback
                 auto it = _track_ready_callback.find(pr.first);
@@ -122,19 +152,22 @@ void MediaSink::checkTrackIfReady() {
 
     // 等待音频超时时间
     GET_CONFIG(uint32_t, kWaitAudioTrackDataMS, General::kWaitAudioTrackDataMS);
-    if (_max_track_size > 1) {
+    if (_max_track_size > 1 && kWaitAudioTrackDataMS > 0) {
         for (auto it = _track_map.begin(); it != _track_map.end();) {
-            if (it->second.first->getTrackType() == TrackAudio && _ticker.elapsedTime() > kWaitAudioTrackDataMS && !it->second.second) {
+            auto& ti = it->second;
+            if (ti.track->getTrackType() == TrackAudio && _ticker.elapsedTime() > kWaitAudioTrackDataMS && !ti.got_frame) {
                 // 音频超时且完全没收到音频数据，忽略音频
-                auto index = it->second.first->getIndex();
-                WarnL << "Audio track index " << index << " codec " << it->second.first->getCodecName() << " receive no data for long "
-                      << _ticker.elapsedTime() << "ms. Ignore it!";
-                it = _track_map.erase(it);
-                _max_track_size -= 1;
+                auto index = ti.track->getIndex();
                 _track_ready_callback.erase(index);
-            } else {
-                ++it;
+                WarnL << "Audio track index " << index << " codec " << ti.track->getCodecName() << " receive no data for long " << _ticker.elapsedTime() << "ms";
+                if (onRemoveTrack(ti)) {
+                    WarnL << "Ignore " << ti.track->getIndex() << "," << ti.track->getCodecName();
+                    it = _track_map.erase(it);
+                    _max_track_size--;
+                    continue;
+                }
             }
+            ++it;
         }
     }
 
@@ -192,12 +225,63 @@ void MediaSink::setMaxTrackCount(size_t i) {
     checkTrackIfReady();
 }
 
+bool MediaSink::addMuteVideo(Track::Ptr track, uint64_t tsp) {
+    static std::map<int, std::string> rawMap;
+    auto &rawData = rawMap[track->getCodecId()];
+    if (rawData.empty()) {
+        std::string fileName = StrPrinter << toolkit::exeDir() << "novideo." << track->getCodecName();
+        FILE *fp = fopen(fileName.c_str(), "rb");
+        if (fp) {
+            fseek(fp, 0, SEEK_END);
+            rawData.resize(ftell(fp));
+            fseek(fp, 0, SEEK_SET);
+            fread(&rawData[0], rawData.size(), 1, fp);
+            fclose(fp);
+        } else {
+            WarnL << "unable to open:" << fileName;
+            return false;
+        }
+    }
+    InfoL << track->getCodecName() << "@" << track->getIndex() << ", size: " << rawData.size() << ", tsp=" << tsp;
+    track->inputFrame(Factory::getFrameFromPtr(track->getCodecId(), rawData.data(), rawData.size(), tsp, tsp));
+    return true;
+}
+
+bool MediaSink::onRemoveTrack(TrackItem &ti) {
+    auto track = ti.track;
+    switch (track->getTrackType()) {
+        case TrackAudio:
+            if (_enable_audio && _add_mute_audio) {
+                addMuteAudioMaker(track);
+                ti.got_frame = true;
+                return false;
+            }
+            break;
+        case TrackVideo:
+            if (_add_mute_video) {
+                if (addMuteVideo(track, _ticker.elapsedTime())) {
+                    ti.got_frame = true;
+                    // 手工插入帧了，新的帧必须以关键帧开始，否则解不开
+                    ti.wait_key = true;
+                }
+                if (track->ready()) {
+                    onTrackReady(track);
+                    return false;
+                }
+            }
+            break;
+        default: 
+            break;
+    }
+    return true;
+}
+
 void MediaSink::emitAllTrackReady() {
     if (_all_track_ready) {
         return;
     }
 
-    DebugL << "All track ready use " << _ticker.elapsedTime() << "ms";
+    InfoL << "All track ready use " << _ticker.elapsedTime() << "ms";
     if (!_track_ready_callback.empty()) {
         // 这是超时强制忽略未准备好的Track  [AUTO-TRANSLATED:d4f57e00]
         // This is a timeout forced ignore of unprepared Tracks
@@ -205,10 +289,12 @@ void MediaSink::emitAllTrackReady() {
         // 移除未准备好的Track  [AUTO-TRANSLATED:69965c62]
         // Remove unprepared Tracks
         for (auto it = _track_map.begin(); it != _track_map.end();) {
-            if (!it->second.second || !it->second.first->ready()) {
-                WarnL << "Track not ready for a long time, ignored: " << it->second.first->getCodecName();
-                it = _track_map.erase(it);
-                continue;
+            if (!it->second.got_frame || !it->second.track->ready()) {
+                if (onRemoveTrack(it->second)) {
+                    WarnL << "Track not ready for a long time, ignored: " << it->second.track->getCodecName();
+                    it = _track_map.erase(it);
+                    continue;
+                }
             }
             ++it;
         }
@@ -227,9 +313,10 @@ void MediaSink::emitAllTrackReady() {
                 // The Track has been removed
                 continue;
             }
-            pr.second.for_each([&](const Frame::Ptr &frame) { MediaSink::inputFrame(frame); });
+            pr.second.for_each([&](const Frame::Ptr &frame) { onTrackFrame(frame); });
         }
         _frame_unread.clear();
+        onFlush();
     } else {
         throw toolkit::SockException(toolkit::Err_shutdown, "no vaild track data");
     }
@@ -249,10 +336,10 @@ void MediaSink::onAllTrackReady_l() {
 vector<Track::Ptr> MediaSink::getTracks(bool ready) const {
     vector<Track::Ptr> ret;
     for (auto &pr : _track_map) {
-        if (ready && !pr.second.first->ready()) {
+        if (ready && !pr.second.track->ready()) {
             continue;
         }
-        ret.emplace_back(pr.second.first);
+        ret.emplace_back(pr.second.track);
     }
     return ret;
 }
@@ -360,7 +447,7 @@ bool MediaSink::addMuteAudioTrack() {
         return false;
     }
     for (auto &pr : _track_map) {
-        if (pr.second.first->getTrackType() == TrackAudio) {
+        if (pr.second.track->getTrackType() == TrackAudio) {
             return false;
         }
     }
@@ -370,13 +457,21 @@ bool MediaSink::addMuteAudioTrack() {
     if (codec == CodecAAC) {
         audio->setExtraData(ADTS_CONFIG, 2);
     }
-    _track_map[MUTE_AUDIO_INDEX] = std::make_pair(audio, true);
+    TrackItem item;
+    item.track = audio;
+    item.got_frame = true;
+    _track_map[audio->getIndex()] = item;
     audio->addDelegate([this](const Frame::Ptr &frame) { return onTrackFrame(frame); });
-    _mute_audio_maker = std::make_shared<MuteAudioMaker>();
+    addMuteAudioMaker(audio);
+    return true;
+}
+
+void MediaSink::addMuteAudioMaker(Track::Ptr audio) {
+    _mute_audio_maker = std::make_shared<MuteAudioMaker>(audio->getCodecId());
+    _mute_audio_maker->setIndex(audio->getIndex());
     _mute_audio_maker->addDelegate([audio](const Frame::Ptr &frame) { return audio->inputFrame(frame); });
     onTrackReady(audio);
-    TraceL << "Mute aac track added";
-    return true;
+    InfoL << audio->getCodecName() << "," << audio->getIndex() << " " << _mute_audio_maker.get();
 }
 
 bool MediaSink::isAllTrackReady() const {
@@ -395,6 +490,10 @@ void MediaSink::setOnlyAudio() {
 
 void MediaSink::enableMuteAudio(bool flag) {
     _add_mute_audio = flag;
+}
+
+void MediaSink::enableMuteVideo(int flag) {
+    _add_mute_video = flag;
 }
 
 bool MediaSink::haveVideo() const {

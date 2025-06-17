@@ -209,6 +209,7 @@ public:
     // 添加静音音频，在关闭音频时，此开关无效  [AUTO-TRANSLATED:47c0ec8e]
     // Add mute audio, this switch is invalid when audio is closed
     bool add_mute_audio;
+    int add_mute_video;
     // 无人观看时，是否直接关闭(而不是通过on_none_reader hook返回close)  [AUTO-TRANSLATED:dba7ab70]
     // Whether to close directly when no one is watching (instead of returning close through the on_none_reader hook)
     // 此配置置1时，此流如果无人观看，将不触发on_none_reader hook回调，  [AUTO-TRANSLATED:a5ead314]
@@ -296,6 +297,7 @@ public:
         XX(modify_stamp)        \
         XX(enable_audio)        \
         XX(add_mute_audio)      \
+        XX(add_mute_video)      \
         XX(auto_close)          \
         XX(continue_push_ms)    \
         XX(paced_sender_ms)     \

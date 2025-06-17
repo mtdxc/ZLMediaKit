@@ -223,7 +223,7 @@ protected:
      * [AUTO-TRANSLATED:c54d02e2]
      */
     void onAllTrackReady() override;
-
+    void onFlush() override;
     /**
      * 某Track输出frame，在onAllTrackReady触发后才会调用此方法
      * @param frame
