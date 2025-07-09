@@ -183,6 +183,12 @@ public:
      * [AUTO-TRANSLATED:a4dc847e]
      */
     toolkit::EventPoller::Ptr getOwnerPoller(MediaSource &sender) override;
+    
+    /**
+     * 关闭流
+     * @return 是否成功
+     */
+    bool close(MediaSource &sender) override;
 
     /**
      * 获取本对象
@@ -199,7 +205,6 @@ public:
     void forEachRtpSender(const std::function<void(const std::string &ssrc, const RtpSender &sender)> &cb) const;
 
     bool link(Track::Ptr track);
-    bool close(MediaSource &sender) override;
 protected:
     std::weak_ptr<Track> _links[CodecMax];
     void forEachLink(std::function<void(Track::Ptr track)>&& cb);
