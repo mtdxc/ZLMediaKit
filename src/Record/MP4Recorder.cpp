@@ -23,8 +23,6 @@ using namespace toolkit;
 namespace mediakit {
 
 MP4Recorder::MP4Recorder(const MediaTuple &tuple, const string &path, size_t max_second) {
-    // ///record 业务逻辑//////  [AUTO-TRANSLATED:2e78931a]
-    // ///record Business Logic//////
     static_cast<MediaTuple &>(_info) = tuple;
     _info.folder = path;
     GET_CONFIG(uint32_t, s_max_second, Protocol::kMP4MaxSecond);
@@ -43,12 +41,11 @@ MP4Recorder::~MP4Recorder() {
 void MP4Recorder::createFile() {
     closeFile();
     auto date = getTimeStr("%Y-%m-%d");
-    auto file_name = date + "-" + getTimeStr("%H-%M-%S") + "-" + std::to_string(_file_index++) + ".mp4";
+    bool use_webm = _video_codec == CodecVP8 || _video_codec == CodecVP9;
+    auto file_name = getTimeStr("%H-%M-%S") + "-" + std::to_string(_file_index++) + (use_webm ? ".webm" : ".mp4");
     auto full_path = _info.folder + date + "/" + file_name;
     auto full_path_tmp = _info.folder + date + "/." + file_name;
 
-    // ///record 业务逻辑//////  [AUTO-TRANSLATED:2e78931a]
-    // ///record Business Logic//////
     _info.start_time = ::time(NULL);
     _info.file_name = file_name;
     _info.file_path = full_path;
@@ -60,7 +57,6 @@ void MP4Recorder::createFile() {
         TraceL << "Open tmp mp4 file: " << full_path_tmp;
         _muxer->openMP4(full_path_tmp);
         for (auto &track :_tracks) {
-            // 添加track  [AUTO-TRANSLATED:80ae762a]
             // Add track
             _muxer->addTrack(track);
         }
@@ -79,9 +75,9 @@ void MP4Recorder::asyncClose() {
         info.time_len = muxer->getDuration() / 1000.0f;
         // 关闭mp4可能非常耗时，所以要放在后台线程执行  [AUTO-TRANSLATED:a7378a11]
         // Closing mp4 can be very time-consuming, so it should be executed in the background thread
-        TraceL << "Closing tmp mp4 file: " << full_path_tmp;
+        TraceL << "Closing tmp file: " << full_path_tmp;
         muxer->closeMP4();
-        TraceL << "Closed tmp mp4 file: " << full_path_tmp;
+        TraceL << "Closed tmp file: " << full_path_tmp;
         if (!full_path_tmp.empty()) {
             // 获取文件大小  [AUTO-TRANSLATED:7b90eb41]
             // Get file size
@@ -118,15 +114,11 @@ void MP4Recorder::flush() {
 
 bool MP4Recorder::inputFrame(const Frame::Ptr &frame) {
     auto stamp_inc = _delta_stamp[frame->getTrackType()].relativeStamp(frame->pts(), false);
-    if (!_muxer || (stamp_inc > int64_t(_max_second) * 1000 && (!_have_video || frame->keyFrame()))) {
-        // 成立条件  [AUTO-TRANSLATED:8c9c6083]
-        // Conditions for establishment
-        // 1、_muxer为空  [AUTO-TRANSLATED:fa236097]
-        // 1. _muxer is empty
-        // 2、到了切片时间，并且只有音频  [AUTO-TRANSLATED:212e9d23]
-        // 2. It's time to slice, and there is only audio
-        // 3、到了切片时间，有视频并且遇到视频的关键帧  [AUTO-TRANSLATED:fa4a71ad]
-        // 3. It's time to slice, there is video and a video keyframe is encountered
+    if (!_muxer || (stamp_inc > int64_t(_max_second) * 1000 && (_video_codec == CodecInvalid || frame->keyFrame()))) {
+        // 成立条件
+        // 1、_muxer为空
+        // 2、到了切片时间，并且只有音频
+        // 3、到了切片时间，有视频并且遇到视频的关键帧
         createFile();
         for (auto &ref : _delta_stamp) {
             ref.reset();
@@ -134,19 +126,16 @@ bool MP4Recorder::inputFrame(const Frame::Ptr &frame) {
     }
 
     if (_muxer) {
-        // 生成mp4文件  [AUTO-TRANSLATED:76a8d77c]
-        // Generate mp4 file
         return _muxer->inputFrame(frame);
     }
     return false;
 }
 
 bool MP4Recorder::addTrack(const Track::Ptr &track) {
-    // 保存所有的track，为创建MP4MuxerFile做准备  [AUTO-TRANSLATED:815c2486]
-    // Save all tracks in preparation for creating MP4MuxerFile
+    // 保存所有的track，为创建MP4MuxerFile做准备
     _tracks.emplace_back(track);
     if (track->getTrackType() == TrackVideo) {
-        _have_video = true;
+        _video_codec = track->getCodecId();
     }
     return true;
 }
@@ -154,7 +143,7 @@ bool MP4Recorder::addTrack(const Track::Ptr &track) {
 void MP4Recorder::resetTracks() {
     closeFile();
     _tracks.clear();
-    _have_video = false;
+    _video_codec = CodecInvalid;
 }
 
 } /* namespace mediakit */

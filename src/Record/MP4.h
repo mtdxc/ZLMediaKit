@@ -15,16 +15,65 @@
 
 #include <memory>
 #include <string>
-#include "mp4-writer.h"
-#include "mov-writer.h"
-#include "mov-reader.h"
 #include "mpeg4-hevc.h"
 #include "mpeg4-avc.h"
 #include "mpeg4-aac.h"
 #include "mov-buffer.h"
 #include "mov-format.h"
-
+#include "mkv-buffer.h"
+#include "mkv-reader.h"
+#include "mov-reader.h"
+#include "fmp4-writer.h"
+#include "mov-writer.h"
+#include "mkv-writer.h"
+#include "Extension/Frame.h"
 namespace mediakit {
+
+struct mp4_writer_t {
+    mov_writer_t *mov;
+    fmp4_writer_t* fmp4;
+    mkv_writer_t* mkv;
+};
+
+/// @param[in] flags mov flags, such as: MOV_FLAG_SEGMENT, see more @mov-format.h
+struct mp4_writer_t* mp4_writer_create(int type, const struct mov_buffer_t* buffer, void* param, int flags);
+void mp4_writer_destroy(struct mp4_writer_t* mp4);
+
+/// @param[in] object MPEG-4 systems ObjectTypeIndication such as: MOV_OBJECT_AAC, see more @mov-format.h
+/// @param[in] extra_data AudioSpecificConfig
+/// @return >=0-track, <0-error
+int mp4_writer_add_audio(struct mp4_writer_t* mp4, CodecId object, int channel_count, int bits_per_sample, int sample_rate, const void* extra_data, size_t extra_data_size);
+
+/// @param[in] object MPEG-4 systems ObjectTypeIndication such as: MOV_OBJECT_H264, see more @mov-format.h
+/// @param[in] extra_data AVCDecoderConfigurationRecord/HEVCDecoderConfigurationRecord
+/// @return >=0-track, <0-error
+int mp4_writer_add_video(struct mp4_writer_t* mp4, CodecId object, int width, int height, const void* extra_data, size_t extra_data_size);
+
+int mp4_writer_add_subtitle(struct mp4_writer_t* mp4, CodecId object, const void* extra_data, size_t extra_data_size);
+
+/// Write audio/video stream
+/// raw AAC data, don't include ADTS/AudioSpecificConfig
+/// H.264/H.265 MP4 format, replace start code(0x00000001) with NALU size
+/// @param[in] track return by mov_writer_add_audio/mov_writer_add_video
+/// @param[in] data audio/video frame
+/// @param[in] bytes buffer size
+/// @param[in] pts timestamp in millisecond
+/// @param[in] dts timestamp in millisecond
+/// @param[in] flags MOV_AV_FLAG_XXX, such as: MOV_AV_FLAG_KEYFREAME, see more @mov-format.h
+/// @return 0-ok, other-error
+int mp4_writer_write(struct mp4_writer_t* mp4, int track, const void* data, size_t bytes, int64_t pts, int64_t dts, int flags);
+
+///////////////////// The following interfaces are only applicable to fmp4 ///////////////////////////////
+
+/// Save data and open next segment
+/// @return 0-ok, other-error
+int mp4_writer_save_segment(struct mp4_writer_t* mp4);
+
+/// Get init segment data(write FTYP, MOOV only)
+/// WARNING: it caller duty to switch file/buffer context with fmp4_writer_write
+/// @return 0-ok, other-error
+int mp4_writer_init_segment(struct mp4_writer_t* mp4);
+
 
 // mp4文件IO的抽象接口类  [AUTO-TRANSLATED:dab24105]
 // Abstract interface class for mp4 file IO
@@ -33,22 +82,27 @@ public:
     using Ptr = std::shared_ptr<MP4FileIO>;
     using Writer = std::shared_ptr<mp4_writer_t>;
     using Reader = std::shared_ptr<mov_reader_t>;
+    using WebmWriter = std::shared_ptr<mkv_writer_t>;
+    using WebmReader = std::shared_ptr<mkv_reader_t>;
 
     virtual ~MP4FileIO() = default;
 
     /**
      * 创建mp4复用器
      * @param flags 支持0、MOV_FLAG_FASTSTART、MOV_FLAG_SEGMENT
-     * @param is_fmp4 是否为fmp4还是普通mp4
+     * @param type 类型 
+     * - 2 webm
+     * - 1 fmp4
+     * - 0 普通mp4
      * @return mp4复用器
      * Create an mp4 muxer
-     * @param flags Supports 0, MOV_FLAG_FASTSTART, MOV_FLAG_SEGMENT
-     * @param is_fmp4 Whether it is fmp4 or ordinary mp4
+     * @param flags Supports 0, MOV_FLAG_FASTSTART, MOV_FLAG_SEGMENT, MKV_OPTION_WEBM
+     * @param type Whether it is fmp4 or ordinary mp4
      * @return mp4 muxer
      
      * [AUTO-TRANSLATED:97fefe95]
      */
-    virtual Writer createWriter(int flags, bool is_fmp4 = false);
+    virtual Writer createWriter(int flags, int type);
 
     /**
      * 创建mp4解复用器
@@ -59,6 +113,7 @@ public:
      * [AUTO-TRANSLATED:4a303019]
      */
     virtual Reader createReader();
+    virtual WebmReader createWebmReader();
 
     /**
      * 获取文件读写位置
