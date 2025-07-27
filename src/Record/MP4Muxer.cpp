@@ -34,6 +34,9 @@ void MP4Muxer::openMP4(const string &file) {
 }
 
 MP4FileIO::Writer MP4Muxer::createWriter() {
+    if (_file_name.find(".webm") != std::string::npos) {
+        return _mp4_file->createWriter(MKV_OPTION_WEBM, 2);
+    }
     GET_CONFIG(bool, mp4FastStart, Record::kFastStart);
     GET_CONFIG(bool, recordEnableFmp4, Record::kEnableFmp4);
     return _mp4_file->createWriter(mp4FastStart ? MOV_FLAG_FASTSTART : 0, recordEnableFmp4);
@@ -163,11 +166,6 @@ bool MP4MuxerInterface::addTrack(const Track::Ptr &track) {
     if (!_mov_writter) {
         _mov_writter = createWriter();
     }
-    auto mp4_object = getMovIdByCodec(track->getCodecId());
-    if (mp4_object == MOV_OBJECT_NONE) {
-        WarnL << "Unsupported codec: " << track->getCodecName();
-        return false;
-    }
 
     if (!track->ready()) {
         WarnL << "Track " << track->getCodecName() << " unready";
@@ -182,7 +180,7 @@ bool MP4MuxerInterface::addTrack(const Track::Ptr &track) {
     if (track->getTrackType() == TrackVideo) {
         auto video_track = dynamic_pointer_cast<VideoTrack>(track);
         CHECK(video_track);
-        auto track_id = mp4_writer_add_video(_mov_writter.get(), mp4_object, video_track->getVideoWidth(), video_track->getVideoHeight(), extra_data, extra_size);
+        auto track_id = mp4_writer_add_video(_mov_writter.get(), track->getCodecId(), video_track->getVideoWidth(), video_track->getVideoHeight(), extra_data, extra_size);
         if (track_id < 0) {
             WarnL << "mp4_writer_add_video failed: " << video_track->getCodecName();
             return false;
@@ -193,7 +191,7 @@ bool MP4MuxerInterface::addTrack(const Track::Ptr &track) {
     } else if (track->getTrackType() == TrackAudio) {
         auto audio_track = dynamic_pointer_cast<AudioTrack>(track);
         CHECK(audio_track);
-        auto track_id = mp4_writer_add_audio(_mov_writter.get(), mp4_object, audio_track->getAudioChannel(), audio_track->getAudioSampleBit() * audio_track->getAudioChannel(), audio_track->getAudioSampleRate(), extra_data, extra_size);
+        auto track_id = mp4_writer_add_audio(_mov_writter.get(), track->getCodecId(), audio_track->getAudioChannel(), audio_track->getAudioSampleBit() * audio_track->getAudioChannel(), audio_track->getAudioSampleRate(), extra_data, extra_size);
         if (track_id < 0) {
             WarnL << "mp4_writer_add_audio failed: " << audio_track->getCodecName();
             return false;

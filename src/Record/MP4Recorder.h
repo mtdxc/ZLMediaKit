@@ -68,7 +68,7 @@ private:
     void asyncClose();
 
 private:
-    bool _have_video = false;
+    CodecId _video_codec = CodecInvalid;
     size_t _max_second;
     DeltaStamp _delta_stamp[TrackMax];
     std::atomic<uint64_t> _file_index { 0 };
