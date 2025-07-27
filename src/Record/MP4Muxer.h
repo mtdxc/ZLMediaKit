@@ -19,7 +19,7 @@
 
 namespace mediakit {
 
-class MP4MuxerInterface : public MediaSinkInterface {
+class MP4MuxerInterface : public MuxerInterface {
 public:
 
     /**
@@ -84,7 +84,7 @@ public:
      
      * [AUTO-TRANSLATED:d87afcfb]
      */
-    uint64_t getDuration() const;
+    uint64_t getDuration() const override;
 
 protected:
     virtual MP4FileIO::Writer createWriter() = 0;
@@ -131,7 +131,7 @@ public:
      
      * [AUTO-TRANSLATED:416892f4]
      */
-    void openMP4(const std::string &file);
+    bool open(const std::string &file) override;
 
     /**
      * 手动关闭文件(对象析构时会自动关闭)
@@ -139,7 +139,7 @@ public:
      
      * [AUTO-TRANSLATED:9ca68ff9]
      */
-    void closeMP4();
+    void close() override;
 
 protected:
     MP4FileIO::Writer createWriter() override;

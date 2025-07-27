@@ -30,7 +30,7 @@ struct TransCtx {
         }
         Track::Ptr track = std::make_shared<AudioTrackImp>(codec, samplerate, channel, bits);
         file.reset(new MP4Muxer());
-        file->openMP4(path);
+        file->open(path);
         file->addTrack(track);
         enc.reset(new FFmpegEncoder(track));
         enc->setOnEncode([this](const Frame::Ptr &frame) { file->inputFrame(frame); });
@@ -46,7 +46,7 @@ struct TransCtx {
 
 int TranscodeAudio(const char *srcPath, const char *dstPath) {
     MP4Demuxer srcMp4;
-    srcMp4.openMP4(srcPath);
+    srcMp4.open(srcPath);
 
     auto srcTrack = srcMp4.getTrack(TrackAudio);
     if (!srcTrack) {

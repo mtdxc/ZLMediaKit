@@ -312,6 +312,13 @@ private:
     std::vector<Track::Ptr> _origin_track;
 };
 
+class MuxerInterface : public MediaSinkInterface {
+public:
+    using Ptr = std::shared_ptr<MuxerInterface>;
+    virtual bool open(const std::string &file) {return false;}
+    virtual void close() {}
+    virtual uint64_t getDuration() const {return 0;}
+};
 }//namespace mediakit
 
 #endif //ZLMEDIAKIT_MEDIASINK_H

@@ -423,7 +423,7 @@ std::string MultiMediaSourceMuxer::startRecord(const std::string &file_path, uin
     TraceL << "mp4 save path: " << path;
 
     auto muxer = std::make_shared<MP4Muxer>();
-    muxer->openMP4(path);
+    muxer->open(path);
     for (auto &track : MediaSink::getTracks()) {
         muxer->addTrack(track);
     }
@@ -478,7 +478,7 @@ std::string MultiMediaSourceMuxer::startRecord(const std::string &file_path, uin
         // 新增兜底机制，如果直播录制任务时长超过预期时间3秒，不管数据时间戳是否增长是否达到预期，都强制停止录制
         if ((frame->getIndex() == selected_index && now_dts + forward_time_ms < frame->dts()) || (is_live_stream && ticker.createdTime() > forward_time_ms + 3000)) {
             InfoL << "stop record: " << path << ", end dts: " << frame->dts();
-            WorkThreadPool::Instance().getPoller()->async([muxer]() { muxer->closeMP4(); });
+            WorkThreadPool::Instance().getPoller()->async([muxer]() { muxer->close(); });
             reader = nullptr;
             return;
         }

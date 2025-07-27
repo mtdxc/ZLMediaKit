@@ -33,7 +33,7 @@ public:
      
      * [AUTO-TRANSLATED:a64c5a6b]
      */
-    void openMP4(const std::string &file);
+    void open(const std::string &file);
 
     /**
      * @brief 关闭 mp4 文件
@@ -41,7 +41,7 @@ public:
      
      * [AUTO-TRANSLATED:527865d9]
      */
-    void closeMP4();
+    void close();
 
     /**
      * 移动时间轴至某处
@@ -116,12 +116,12 @@ public:
      * 批量打开mp4文件，把多个文件当做一个mp4看待
      * @param file 多个mp4文件路径，以分号分隔; 或者包含多个mp4文件的文件夹
      */
-    void openMP4(const std::string &file);
+    void open(const std::string &file);
 
     /**
      * @brief 批量关闭 mp4 文件
      */
-    void closeMP4();
+    void close();
 
     /**
      * 移动总体时间轴至某处

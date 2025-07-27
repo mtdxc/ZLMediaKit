@@ -22,12 +22,11 @@ using namespace toolkit;
 namespace mediakit {
 
 MP4Demuxer::~MP4Demuxer() {
-    closeMP4();
+    close();
 }
 
-void MP4Demuxer::openMP4(const string &file) {
-    closeMP4();
-
+void MP4Demuxer::open(const string &file) {
+    close();
     _mp4_file = std::make_shared<MP4FileDisk>();
     _mp4_file->openFile(file.data(), "rb+");
     _mov_reader = _mp4_file->createReader();
@@ -35,7 +34,7 @@ void MP4Demuxer::openMP4(const string &file) {
     _duration_ms = mov_reader_getduration(_mov_reader.get());
 }
 
-void MP4Demuxer::closeMP4() {
+void MP4Demuxer::close() {
     _mov_reader.reset();
     _mp4_file.reset();
 }
@@ -194,7 +193,7 @@ uint64_t MP4Demuxer::getDurationMS() const {
 
 /////////////////////////////////////////////////////////////////////////////////
 
-void MultiMP4Demuxer::openMP4(const string &files_string) {
+void MultiMP4Demuxer::open(const string &files_string) {
     std::vector<std::string> files;
     if (File::is_dir(files_string)) {
         File::scanDir(files_string, [&](const string &path, bool is_dir) {
@@ -211,7 +210,7 @@ void MultiMP4Demuxer::openMP4(const string &files_string) {
     uint64_t duration_ms = 0;
     for (auto &file : files) {
         auto demuxer = std::make_shared<MP4Demuxer>();
-        demuxer->openMP4(file);
+        demuxer->open(file);
         _demuxers.emplace(duration_ms, demuxer);
         duration_ms += demuxer->getDurationMS();
     }
@@ -229,7 +228,7 @@ uint64_t MultiMP4Demuxer::getDurationMS() const {
     return _demuxers.empty() ? 0 : _demuxers.rbegin()->first + _demuxers.rbegin()->second->getDurationMS();
 }
 
-void MultiMP4Demuxer::closeMP4() {
+void MultiMP4Demuxer::close() {
     _demuxers.clear();
     _it = _demuxers.end();
     _tracks.clear();

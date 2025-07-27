@@ -55,7 +55,7 @@ void MP4Reader::setup(const MediaTuple &tuple, const std::string &file_path, con
     }
 
     _demuxer = std::make_shared<MultiMP4Demuxer>();
-    _demuxer->openMP4(_file_path);
+    _demuxer->open(_file_path);
 
     if (tuple.stream.empty()) {
         return;

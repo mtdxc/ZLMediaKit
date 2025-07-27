@@ -19,14 +19,15 @@ using namespace toolkit;
 namespace mediakit {
 
 MP4Muxer::~MP4Muxer() {
-    closeMP4();
+    close();
 }
 
-void MP4Muxer::openMP4(const string &file) {
-    closeMP4();
+bool MP4Muxer::open(const string &file) {
+    close();
     _file_name = file;
     _mp4_file = std::make_shared<MP4FileDisk>();
     _mp4_file->openFile(_file_name.data(), "wb+");
+    return true;
 }
 
 MP4FileIO::Writer MP4Muxer::createWriter() {
@@ -35,14 +36,14 @@ MP4FileIO::Writer MP4Muxer::createWriter() {
     return _mp4_file->createWriter(mp4FastStart ? MOV_FLAG_FASTSTART : 0, recordEnableFmp4);
 }
 
-void MP4Muxer::closeMP4() {
+void MP4Muxer::close() {
     MP4MuxerInterface::resetTracks();
     _mp4_file = nullptr;
 }
 
 void MP4Muxer::resetTracks() {
     MP4MuxerInterface::resetTracks();
-    openMP4(_file_name);
+    open(_file_name);
 }
 
 /////////////////////////////////////////// MP4MuxerInterface /////////////////////////////////////////////
