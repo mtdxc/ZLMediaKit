@@ -15,6 +15,7 @@
 
 #if defined(ENABLE_MP4)
 #include "mov-format.h"
+#include "mkv-format.h"
 #endif
 
 #if defined(ENABLE_HLS) || defined(ENABLE_RTPPROXY)
@@ -58,7 +59,7 @@ void FrameStamp::setStamp(int64_t dts, int64_t pts) {
 
 TrackType getTrackType(CodecId codecId) {
     switch (codecId) {
-#define XX(name, type, value, str, mpeg_id, mp4_id) case name : return type;
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) case name : return type;
         CODEC_MAP(XX)
 #undef XX
         default : return TrackInvalid;
@@ -66,9 +67,34 @@ TrackType getTrackType(CodecId codecId) {
 }
 
 #if defined(ENABLE_MP4)
+int getMkvIdByCodec(CodecId codecId) {
+    switch (codecId) {
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) case name : return mkv_id;
+        CODEC_MAP(XX)
+#undef XX
+        default : return MKV_CODEC_UNKNOWN;
+    }
+}
+
+CodecId getCodecByMkvId(int object_id) {
+    if (object_id == MKV_CODEC_UNKNOWN) {
+        return CodecInvalid;
+    }
+
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) { mkv_id, name },
+    static map<int, CodecId> s_map = { CODEC_MAP(XX) };
+#undef XX
+    auto it = s_map.find(object_id);
+    if (it == s_map.end()) {
+        WarnL << "Unsupported mkv: " << object_id;
+        return CodecInvalid;
+    }
+    return it->second;
+}
+
 int getMovIdByCodec(CodecId codecId) {
     switch (codecId) {
-#define XX(name, type, value, str, mpeg_id, mp4_id) case name : return mp4_id;
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) case name : return mp4_id;
         CODEC_MAP(XX)
 #undef XX
         default : return MOV_OBJECT_NONE;
@@ -80,7 +106,7 @@ CodecId getCodecByMovId(int object_id) {
         return CodecInvalid;
     }
 
-#define XX(name, type, value, str, mpeg_id, mp4_id) { mp4_id, name },
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) { mp4_id, name },
     static map<int, CodecId> s_map = { CODEC_MAP(XX) };
 #undef XX
     auto it = s_map.find(object_id);
@@ -95,7 +121,7 @@ CodecId getCodecByMovId(int object_id) {
 #if defined(ENABLE_HLS) || defined(ENABLE_RTPPROXY)
 int getMpegIdByCodec(CodecId codec) {
     switch (codec) {
-#define XX(name, type, value, str, mpeg_id, mp4_id) case name : return mpeg_id;
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) case name : return mpeg_id;
         CODEC_MAP(XX)
 #undef XX
         default : return PSI_STREAM_RESERVED;
@@ -109,7 +135,7 @@ CodecId getCodecByMpegId(int mpeg_id) {
         return CodecInvalid;
     }
 
-#define XX(name, type, value, str, mpeg_id, mp4_id) { mpeg_id, name },
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) { mpeg_id, name },
     static map<int, CodecId> s_map = { CODEC_MAP(XX) };
 #undef XX
     auto it = s_map.find(mpeg_id);
@@ -124,14 +150,14 @@ CodecId getCodecByMpegId(int mpeg_id) {
 
 const char *getCodecName(CodecId codec) {
     switch (codec) {
-#define XX(name, type, value, str, mpeg_id, mp4_id) case name : return str;
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) case name : return str;
         CODEC_MAP(XX)
 #undef XX
         default : return "invalid";
     }
 }
 
-#define XX(name, type, value, str, mpeg_id, mp4_id) {str, name},
+#define XX(name, type, value, str, mpeg_id, mp4_id, mkv_id) {str, name},
 static map<string, CodecId, StrCaseCompare> codec_map = { CODEC_MAP(XX) };
 #undef XX
 

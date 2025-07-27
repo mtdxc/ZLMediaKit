@@ -48,6 +48,21 @@ set(MediaServer_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/media-server")
 
 # 添加 mov、flv 库用于 MP4 录制
 if (ENABLE_MP4)
+  # MKV webm
+  set(MediaServer_MKV_ROOT ${MediaServer_ROOT}/libmkv)
+  aux_source_directory(${MediaServer_MKV_ROOT}/include MKV_SRC_LIST)
+  aux_source_directory(${MediaServer_MKV_ROOT}/src MKV_SRC_LIST)
+  #list(APPEND MKV_SRC_LIST ${MediaServer_MKV_ROOT}/test/mkv-file-buffer.c)
+  
+  add_library(mkv STATIC ${MKV_SRC_LIST})
+  add_library(MediaServer::mkv ALIAS mkv)
+  target_compile_options(mkv PRIVATE ${COMPILE_OPTIONS_DEFAULT})
+  target_include_directories(mkv
+          PRIVATE
+          "$<BUILD_INTERFACE:${MediaServer_MKV_ROOT}/include>"
+          PUBLIC
+          "$<BUILD_INTERFACE:${MediaServer_MKV_ROOT}/include>")
+
   # MOV
   set(MediaServer_MOV_ROOT ${MediaServer_ROOT}/libmov)
   aux_source_directory(${MediaServer_MOV_ROOT}/include MOV_SRC_LIST)
@@ -74,7 +89,7 @@ if (ENABLE_MP4)
           PUBLIC
           "$<BUILD_INTERFACE:${MediaServer_FLV_ROOT}/include>")
 
-  update_cached_list(MK_LINK_LIBRARIES MediaServer::flv MediaServer::mov)
+  update_cached_list(MK_LINK_LIBRARIES MediaServer::flv MediaServer::mov MediaServer::mkv)
 
   if (ENABLE_MP4)
     message(STATUS "ENABLE_MP4 defined")
