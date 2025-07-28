@@ -52,7 +52,7 @@ if (ENABLE_MP4)
   set(MediaServer_MKV_ROOT ${MediaServer_ROOT}/libmkv)
   aux_source_directory(${MediaServer_MKV_ROOT}/include MKV_SRC_LIST)
   aux_source_directory(${MediaServer_MKV_ROOT}/src MKV_SRC_LIST)
-  list(APPEND MKV_SRC_LIST ${MediaServer_MKV_ROOT}/test/mkv-file-buffer.c)
+  #list(APPEND MKV_SRC_LIST ${MediaServer_MKV_ROOT}/test/mkv-file-buffer.c)
   
   add_library(mkv STATIC ${MKV_SRC_LIST})
   add_library(MediaServer::mkv ALIAS mkv)

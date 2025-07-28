@@ -3,8 +3,6 @@
 #include <iostream>
 #include "Util/logger.h"
 #include "Util/File.h"
-#include "mkv-reader.h"
-#include "mkv-writer.h"
 #include "mkv-format.h"
 using namespace toolkit;
 namespace mediakit {
@@ -18,14 +16,8 @@ WebmMuxer::~WebmMuxer() {
 
 void WebmMuxer::close() {
     resetTracks();
-    if (_context) {
-        mkv_writer_destroy(_context);
-        _context = nullptr;
-    }
-    if (_file) {
-        fclose(_file);
-        _file = nullptr;
-    }
+    _context = nullptr;
+    _file = nullptr;
 }
 
 void WebmMuxer::resetTracks() {
@@ -36,18 +28,9 @@ void WebmMuxer::resetTracks() {
 }
 
 bool WebmMuxer::open(const std::string &file) {
-    _file = File::create_file(file, "wb");
-    if (!_file) {
-        WarnL << "Failed to open file: " << file;
-        return false;
-    }
-    _context = mkv_writer_create(mkv_file_buffer(), _file, MKV_OPTION_WEBM);
-    if (!_context) {
-        fclose(_file);
-        _file = nullptr;
-        WarnL << "Failed to create MKV writer context";
-        return false;
-    }
+    _file = std::make_shared<MP4FileDisk>();
+    _file->openFile(file.data(), "wb");
+    _context = _file->createWebmWriter(MKV_OPTION_WEBM);
     _file_path = file;
     return true;
 }
@@ -66,7 +49,7 @@ bool WebmMuxer::addTrack(const Track::Ptr &track) {
             WarnL << "Track is not a VideoTrack: " << track->getCodecName();
             return false;
         }
-        _tracks[track->getIndex()].track_id = mkv_writer_add_video(_context, (mkv_codec_t)cid, 
+        _tracks[track->getIndex()].track_id = mkv_writer_add_video(_context.get(), (mkv_codec_t)cid, 
             video_track->getVideoWidth(), video_track->getVideoHeight(), 
             extra ? extra->data() : nullptr, extra ? extra->size() : 0);
     }
@@ -76,7 +59,7 @@ bool WebmMuxer::addTrack(const Track::Ptr &track) {
             WarnL << "Track is not an AudioTrack: " << track->getCodecName();
             return false;
         }
-        _tracks[track->getIndex()].track_id = mkv_writer_add_audio(_context, (mkv_codec_t)cid, 
+        _tracks[track->getIndex()].track_id = mkv_writer_add_audio(_context.get(), (mkv_codec_t)cid, 
             audio_track->getAudioChannel(), audio_track->getAudioSampleBit(), audio_track->getAudioSampleRate(),
             extra ? extra->data() : nullptr, extra ? extra->size() : 0);
     }
@@ -107,7 +90,7 @@ bool WebmMuxer::inputFrame(const Frame::Ptr &frame) {
                 // 取视频时间戳为TS的时间戳
                 int64_t dts_out, pts_out;
                 track.stamp.revise(dts, pts, dts_out, pts_out);
-                mkv_writer_write(_context, track.track_id, buffer->data(), buffer->size(), pts_out, dts_out, have_idr ? MKV_FLAGS_KEYFRAME : 0);
+                mkv_writer_write(_context.get(), track.track_id, buffer->data(), buffer->size(), pts_out, dts_out, have_idr ? MKV_FLAGS_KEYFRAME : 0);
             });
         }
 
@@ -118,7 +101,7 @@ bool WebmMuxer::inputFrame(const Frame::Ptr &frame) {
         default: {
             int64_t dts_out, pts_out;
             track.stamp.revise(frame->dts(), frame->pts(), dts_out, pts_out);
-            mkv_writer_write(_context, track.track_id, 
+            mkv_writer_write(_context.get(), track.track_id, 
                 frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize(), 
                 pts_out, dts_out,
                 frame->keyFrame() ? MKV_FLAGS_KEYFRAME : 0);
@@ -144,30 +127,19 @@ WebmDemuxer::~WebmDemuxer() {
 
 bool WebmDemuxer::open(const std::string &file) {
     close();
-    _file = File::create_file(file, "rb");
-    if (!_file) {
-        WarnL << "Failed to open file: " << file;
-        return false;
-    }
-    _context = mkv_reader_create(mkv_file_buffer(), _file);
-    if (!_context) {
-        fclose(_file);
-        _file = nullptr;
-        WarnL << "Failed to open file: " << file;
-        return false;
-    }
+    _file = std::make_shared<MP4FileDisk>();
+    _file->openFile(file.data(), "rb");
+    _context = _file->createWebmReader();
     getAllTracks();
-    _duration_ms = mkv_reader_getduration(_context);
+    _duration_ms = mkv_reader_getduration(_context.get());
     return true;
 }
 
 void WebmDemuxer::close() {
     if (_context) {
-        mkv_reader_destroy(_context);
         _context = nullptr;
     }
     if (_file) {
-        fclose(_file);
         _file = nullptr;
     }
     _tracks.clear();
@@ -190,7 +162,7 @@ int WebmDemuxer::getAllTracks() {
             //onsubtitle, do nothing
         }
     };
-    return mkv_reader_getinfo(_context, &s_on_track,this);
+    return mkv_reader_getinfo(_context.get(), &s_on_track,this);
 }
 
 void WebmDemuxer::onVideoTrack(uint32_t track, int object, int width, int height, const void *extra, size_t bytes) {
@@ -218,7 +190,7 @@ void WebmDemuxer::onAudioTrack(uint32_t track, int object, int channel_count, in
 }
 
 int64_t WebmDemuxer::seekTo(int64_t stamp_ms) {
-    if(0 != mkv_reader_seek(_context, &stamp_ms)){
+    if(0 != mkv_reader_seek(_context.get(), &stamp_ms)){
         return -1;
     }
     return stamp_ms;
@@ -252,7 +224,7 @@ Frame::Ptr WebmDemuxer::readFrame(bool &keyFrame, bool &eof) {
     };
 
     Context ctx(this);
-    auto ret = mkv_reader_read2(_context, mov_onalloc, &ctx);
+    auto ret = mkv_reader_read2(_context.get(), mov_onalloc, &ctx);
     switch (ret) {
         case 0 : {
             eof = true;

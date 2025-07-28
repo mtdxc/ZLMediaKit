@@ -23,6 +23,9 @@
 #include "mpeg4-aac.h"
 #include "mov-buffer.h"
 #include "mov-format.h"
+#include "mkv-buffer.h"
+#include "mkv-reader.h"
+#include "mkv-writer.h"
 
 namespace mediakit {
 
@@ -33,6 +36,8 @@ public:
     using Ptr = std::shared_ptr<MP4FileIO>;
     using Writer = std::shared_ptr<mp4_writer_t>;
     using Reader = std::shared_ptr<mov_reader_t>;
+    using WebmWriter = std::shared_ptr<mkv_writer_t>;
+    using WebmReader = std::shared_ptr<mkv_reader_t>;
 
     virtual ~MP4FileIO() = default;
 
@@ -49,6 +54,7 @@ public:
      * [AUTO-TRANSLATED:97fefe95]
      */
     virtual Writer createWriter(int flags, bool is_fmp4 = false);
+    virtual WebmWriter createWebmWriter(int flags);
 
     /**
      * 创建mp4解复用器
@@ -59,6 +65,7 @@ public:
      * [AUTO-TRANSLATED:4a303019]
      */
     virtual Reader createReader();
+    virtual WebmReader createWebmReader();
 
     /**
      * 获取文件读写位置

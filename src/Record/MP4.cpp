@@ -39,6 +39,25 @@ static struct mov_buffer_t s_io = {
         }
 };
 
+static struct mkv_buffer_t w_io = {
+        [](void *ctx, void *data, uint64_t bytes) {
+            MP4FileIO *thiz = (MP4FileIO *) ctx;
+            return thiz->onRead(data, bytes);
+        },
+        [](void *ctx, const void *data, uint64_t bytes) {
+            MP4FileIO *thiz = (MP4FileIO *) ctx;
+            return thiz->onWrite(data, bytes);
+        },
+        [](void *ctx, int64_t offset) {
+            MP4FileIO *thiz = (MP4FileIO *) ctx;
+            return thiz->onSeek(offset);
+        },
+        [](void *ctx) {
+            MP4FileIO *thiz = (MP4FileIO *) ctx;
+            return (int64_t)thiz->onTell();
+        }
+};
+
 MP4FileIO::Writer MP4FileIO::createWriter(int flags, bool is_fmp4){
     Writer writer;
     Ptr self = shared_from_this();
@@ -55,6 +74,22 @@ MP4FileIO::Writer MP4FileIO::createWriter(int flags, bool is_fmp4){
     return writer;
 }
 
+MP4FileIO::WebmWriter MP4FileIO::createWebmWriter(int flags) {
+    WebmWriter writer;
+    Ptr self = shared_from_this();
+    // 保存自己的强引用，防止提前释放  [AUTO-TRANSLATED:e8e14f60]
+    // Save a strong reference to itself to prevent premature release
+    writer.reset(mkv_writer_create(&w_io, this, flags), [self](mkv_writer_t *ptr) {
+        if (ptr) {
+            mkv_writer_destroy(ptr);
+        }
+    });
+    if (!writer) {
+        throw std::runtime_error("写入webm文件失败!");
+    }
+    return writer;
+}
+
 MP4FileIO::Reader MP4FileIO::createReader(){
     Reader reader;
     Ptr self = shared_from_this();
@@ -67,6 +102,22 @@ MP4FileIO::Reader MP4FileIO::createReader(){
     });
     if(!reader){
         throw std::runtime_error("读取mp4文件失败!");
+    }
+    return reader;
+}
+
+MP4FileIO::WebmReader MP4FileIO::createWebmReader() {
+    WebmReader reader;
+    Ptr self = shared_from_this();
+    // 保存自己的强引用，防止提前释放  [AUTO-TRANSLATED:e8e14f60]
+    // Save a strong reference to itself to prevent premature release
+    reader.reset(mkv_reader_create(&w_io, this), [self](mkv_reader_t *ptr) {
+        if (ptr) {
+            mkv_reader_destroy(ptr);
+        }
+    });
+    if (!reader) {
+        throw std::runtime_error("读取Webm文件失败!");
     }
     return reader;
 }

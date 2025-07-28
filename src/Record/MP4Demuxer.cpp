@@ -29,14 +29,20 @@ void MP4Demuxer::open(const string &file) {
     close();
     _mp4_file = std::make_shared<MP4FileDisk>();
     _mp4_file->openFile(file.data(), "rb+");
-    _mov_reader = _mp4_file->createReader();
+    if (file.find(".webm") != std::string::npos) {
+        _mkv_reader = _mp4_file->createWebmReader();
+        _duration_ms = mkv_reader_getduration(_mkv_reader.get());
+    } else {
+        _mov_reader = _mp4_file->createReader();
+        _duration_ms = mov_reader_getduration(_mov_reader.get());
+    }
     getAllTracks();
-    _duration_ms = mov_reader_getduration(_mov_reader.get());
 }
 
 void MP4Demuxer::close() {
     _mov_reader.reset();
     _mp4_file.reset();
+    _mkv_reader.reset();
 }
 
 int MP4Demuxer::getAllTracks() {
@@ -55,11 +61,30 @@ int MP4Demuxer::getAllTracks() {
                 //onsubtitle, do nothing
             }
     };
-    return mov_reader_getinfo(_mov_reader.get(),&s_on_track,this);
+    static mkv_reader_trackinfo_t w_on_track = {
+            [](void *param, uint32_t track, mkv_codec_t object, int width, int height, const void *extra, size_t bytes) {
+                //onvideo
+                MP4Demuxer *thiz = (MP4Demuxer *)param;
+                thiz->onVideoTrack(track,object,width,height,extra,bytes);
+            },
+            [](void *param, uint32_t track, mkv_codec_t object, int channel_count, int bit_per_sample, int sample_rate, const void *extra, size_t bytes) {
+                //onaudio
+                MP4Demuxer *thiz = (MP4Demuxer *)param;
+                thiz->onAudioTrack(track,object,channel_count,bit_per_sample,sample_rate,extra,bytes);
+            },
+            [](void *param, uint32_t track, mkv_codec_t object, const void *extra, size_t bytes) {
+                //onsubtitle, do nothing
+            }
+    };
+    if (_mov_reader)
+        return mov_reader_getinfo(_mov_reader.get(),&s_on_track,this);
+    if (_mkv_reader)
+        return mkv_reader_getinfo(_mkv_reader.get(), &w_on_track, this);
+    return 0;
 }
 
-void MP4Demuxer::onVideoTrack(uint32_t track, uint8_t object, int width, int height, const void *extra, size_t bytes) {
-    auto video = Factory::getTrackByCodecId(getCodecByMovId(object));
+void MP4Demuxer::onVideoTrack(uint32_t track, int object, int width, int height, const void *extra, size_t bytes) {
+    auto video = Factory::getTrackByCodecId(_mov_reader?getCodecByMovId(object):getCodecByMkvId(object));
     if (!video) {
         return;
     }
@@ -70,8 +95,8 @@ void MP4Demuxer::onVideoTrack(uint32_t track, uint8_t object, int width, int hei
     }
 }
 
-void MP4Demuxer::onAudioTrack(uint32_t track, uint8_t object, int channel_count, int bit_per_sample, int sample_rate, const void *extra, size_t bytes) {
-    auto audio = Factory::getTrackByCodecId(getCodecByMovId(object), sample_rate, channel_count, bit_per_sample / channel_count);
+void MP4Demuxer::onAudioTrack(uint32_t track, int object, int channel_count, int bit_per_sample, int sample_rate, const void *extra, size_t bytes) {
+    auto audio = Factory::getTrackByCodecId(_mov_reader?getCodecByMovId(object):getCodecByMkvId(object), sample_rate, channel_count, bit_per_sample / channel_count);
     if (!audio) {
         return;
     }
@@ -83,8 +108,13 @@ void MP4Demuxer::onAudioTrack(uint32_t track, uint8_t object, int channel_count,
 }
 
 int64_t MP4Demuxer::seekTo(int64_t stamp_ms) {
-    if(0 != mov_reader_seek(_mov_reader.get(),&stamp_ms)){
-        return -1;
+    if (_mov_reader) {
+        if (0 != mov_reader_seek(_mov_reader.get(), &stamp_ms))
+            return -1;
+    }
+    if (_mkv_reader) {
+        if (0 != mkv_reader_seek(_mkv_reader.get(), &stamp_ms))
+            return -1;
     }
     return stamp_ms;
 }
@@ -117,7 +147,11 @@ Frame::Ptr MP4Demuxer::readFrame(bool &keyFrame, bool &eof) {
     };
 
     Context ctx(this);
-    auto ret = mov_reader_read2(_mov_reader.get(), mov_onalloc, &ctx);
+    int ret = 0;
+    if (_mov_reader)
+        ret = mov_reader_read2(_mov_reader.get(), mov_onalloc, &ctx);
+    if (_mkv_reader)
+        ret = mkv_reader_read2(_mkv_reader.get(), mov_onalloc, &ctx);
     switch (ret) {
         case 0 : {
             eof = true;

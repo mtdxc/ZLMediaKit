@@ -8,10 +8,8 @@
 #include "Extension/Track.h"
 #include "Common/MediaSink.h"
 #include "Util/ResourcePool.h"
+#include "MP4.h"
 
-struct mkv_buffer_t;
-struct mkv_reader_t;
-struct mkv_writer_t;
 namespace mediakit {
 
 // This class is used to generate WebM files
@@ -51,8 +49,8 @@ public:
 private:
     bool _started = false;
     bool _have_video = false;
-    mkv_writer_t *_context = nullptr;
-    FILE *_file = nullptr;
+    MP4FileIO::WebmWriter _context;
+    MP4FileDisk::Ptr _file;
     std::string _file_path;
 
     class FrameMergerImp : public FrameMerger {
@@ -119,8 +117,8 @@ private:
 
 private:
     uint64_t _duration_ms = 0;
-    mkv_reader_t* _context = nullptr;
-    FILE* _file = nullptr;
+    MP4FileIO::WebmReader _context;
+    MP4FileDisk::Ptr _file;
     std::unordered_map<int, Track::Ptr> _tracks;
     toolkit::ResourcePool<toolkit::BufferRaw> _buffer_pool;
 };
