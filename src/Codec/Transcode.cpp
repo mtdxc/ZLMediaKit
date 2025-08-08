@@ -353,14 +353,51 @@ static inline const AVCodec *getCodecByName(const std::vector<std::string> &code
     return ret;
 }
 
+#define CODEC_MAP(XX)                                                                                                                                          \
+    XX(CodecH264, AV_CODEC_ID_H264)                                                                                                                            \
+    XX(CodecH265, AV_CODEC_ID_HEVC)                                                                                                                            \
+    XX(CodecAAC, AV_CODEC_ID_AAC)                                                                                                                              \
+    XX(CodecG711A, AV_CODEC_ID_PCM_ALAW)                                                                                                                       \
+    XX(CodecG711U, AV_CODEC_ID_PCM_MULAW)                                                                                                                      \
+    XX(CodecL16, AV_CODEC_ID_PCM_S16LE)                                                                                                                        \
+    XX(CodecOpus, AV_CODEC_ID_OPUS)                                                                                                                            \
+    XX(CodecVP8, AV_CODEC_ID_VP8)                                                                                                                              \
+    XX(CodecVP9, AV_CODEC_ID_VP9)                                                                                                                              \
+    XX(CodecAV1, AV_CODEC_ID_AV1)                                                                                                                              \
+    XX(CodecJPEG, AV_CODEC_ID_MJPEG)
+
+int CodecToAvId(CodecId codec) {
+    switch (codec) {
+#define XX(cid, av_id)                                                                                                                                         \
+    case cid: return av_id;
+        CODEC_MAP(XX)
+#undef XX
+        default: return AV_CODEC_ID_NONE;
+    }
+}
+
+CodecId AvToCodecId(int codec) {
+    switch (codec) {
+#define XX(cid, av_id)                                                                                                                                         \
+    case av_id: return cid;
+        CODEC_MAP(XX)
+#undef XX
+        default: return CodecInvalid;
+    }
+}
+
+template <bool decoder = true>
+static inline const AVCodec *getCodec(CodecId id) {
+    return getCodec_l<decoder>((AVCodecID)CodecToAvId(id));
+}
+
 FFmpegDecoder::FFmpegDecoder(const Track::Ptr &track, int thread_num, const std::vector<std::string> &codec_name) {
     setupFFmpeg();
     _codecId = track->getCodecId();
     const AVCodec *codec = nullptr;
-    const AVCodec *codec_default = nullptr;
+    const AVCodec *codec_default = getCodec(_codecId);
     switch (track->getCodecId()) {
         case CodecH264:
-            codec_default = getCodec({AV_CODEC_ID_H264});
             if (codec_name.size()) {
                 codec = getCodecByName(codec_name);
             } else {
@@ -369,7 +406,6 @@ FFmpegDecoder::FFmpegDecoder(const Track::Ptr &track, int thread_num, const std:
             }
             break;
         case CodecH265:
-            codec_default = getCodec({AV_CODEC_ID_HEVC});
             if (codec_name.size()) {
                 codec = getCodecByName(codec_name);
             } else {
@@ -377,49 +413,8 @@ FFmpegDecoder::FFmpegDecoder(const Track::Ptr &track, int thread_num, const std:
                 codec = getCodecByName(h265DecList);
             }
             break;
-        case CodecAAC:
-            if (codec && codec->id == AV_CODEC_ID_AAC) {
-                break;
-            }
-            codec = getCodec({AV_CODEC_ID_AAC});
+        default: 
             break;
-        case CodecG711A:
-            if (codec && codec->id == AV_CODEC_ID_PCM_ALAW) {
-                break;
-            }
-            codec = getCodec({AV_CODEC_ID_PCM_ALAW});
-            break;
-        case CodecG711U:
-            if (codec && codec->id == AV_CODEC_ID_PCM_MULAW) {
-                break;
-            }
-            codec = getCodec({AV_CODEC_ID_PCM_MULAW});
-            break;
-        case CodecOpus:
-            if (codec && codec->id == AV_CODEC_ID_OPUS) {
-                break;
-            }
-            codec = getCodec({AV_CODEC_ID_OPUS});
-            break;
-        case CodecJPEG:
-            if (codec && codec->id == AV_CODEC_ID_MJPEG) {
-                break;
-            }
-            codec = getCodec({AV_CODEC_ID_MJPEG});
-            break;
-        case CodecVP8:
-            if (codec && codec->id == AV_CODEC_ID_VP8) {
-                break;
-            }
-            codec = getCodec({AV_CODEC_ID_VP8});
-            break;
-        case CodecVP9:
-            if (codec && codec->id == AV_CODEC_ID_VP9) {
-                break;
-            }
-            codec = getCodec({AV_CODEC_ID_VP9});
-            break;
-        default: codec = nullptr; break;
     }
 
     codec = codec ? codec : codec_default;
@@ -930,12 +925,11 @@ static void limitSize(int &width, int &height) {
 
 FFmpegEncoder::FFmpegEncoder(const Track::Ptr &cfg, int thread_num, int format, const std::vector<std::string> &codec_name) {
     setupFFmpeg();
-    const AVCodec *codec = nullptr;
-    const AVCodec *codec_default = nullptr;
     _codecId = cfg->getCodecId();
+    const AVCodec *codec = nullptr;
+    const AVCodec *codec_default = getCodec<false>(_codecId);
     switch (_codecId) {
     case CodecH264:
-        codec_default = getCodec<false>({ AV_CODEC_ID_H264 });
         if (codec_name.size()) {
             codec = getCodecByName<false>(codec_name);
         } else {
@@ -944,7 +938,6 @@ FFmpegEncoder::FFmpegEncoder(const Track::Ptr &cfg, int thread_num, int format, 
         }
         break;
     case CodecH265:
-        codec_default = getCodec<false>({ AV_CODEC_ID_HEVC });
         if (codec_name.size()) {
             codec = getCodecByName<false>(codec_name);
         } else {
@@ -952,31 +945,10 @@ FFmpegEncoder::FFmpegEncoder(const Track::Ptr &cfg, int thread_num, int format, 
             codec = getCodecByName<false>(h265EncList);
         }
         break;
-    case CodecAAC:
-        codec = getCodec<false>({ AV_CODEC_ID_AAC });
-        break;
-    case CodecG711A:
-        codec = getCodec<false>({ AV_CODEC_ID_PCM_ALAW });
-        break;
-    case CodecG711U:
-        codec = getCodec<false>({ AV_CODEC_ID_PCM_MULAW });
-        break;
-    case CodecOpus:
-        codec = getCodec<false>({ AV_CODEC_ID_OPUS });
-        break;
-    case CodecJPEG:
-        codec = getCodec<false>({ AV_CODEC_ID_MJPEG });
-        break;
-    case CodecVP8:
-        codec = getCodec<false>({ AV_CODEC_ID_VP8 });
-        break;
-    case CodecVP9:
-        codec = getCodec<false>({ AV_CODEC_ID_VP9 });
-        break;
-    default:
+    default: 
         break;
     }
-
+    codec = codec ? codec : codec_default;
     if (!codec) {
         throw std::runtime_error("未找到编码器");
     }
@@ -999,7 +971,7 @@ FFmpegEncoder::FFmpegEncoder(const Track::Ptr &cfg, int thread_num, int format, 
                 limitSize(_context->width, _context->height);                
                 _context->pix_fmt = (AVPixelFormat)selectVideoFormat(codec, format);
 
-                _context->framerate = { fps, 1 };
+                _context->framerate = { 1, fps };
                 _context->time_base = { 1, 1000 };
                 _context->bit_rate = cfg->getBitRate();
                 _context->gop_size = fps * 2;
@@ -1048,6 +1020,9 @@ FFmpegEncoder::FFmpegEncoder(const Track::Ptr &cfg, int thread_num, int format, 
         } else {
             av_dict_set(&dict, "threads", to_string(MIN(thread_num, thread::hardware_concurrency())).data(), 0);
         }
+        // 降低vp9和av1编码延迟：-lag-in-frames 0 禁用前瞻帧，显著降低延迟但会降低压缩效率
+        av_dict_set(&dict, "lag-in-frames", "0", 0);
+        // 降低264编码延迟
         av_dict_set(&dict, "zerolatency", "1", 0);
         av_dict_set(&dict, "strict", "-2", 0);
         if (strcmp(codec->name, "libx264") == 0 || strcmp(codec->name, "libx265") == 0) {
