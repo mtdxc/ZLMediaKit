@@ -210,9 +210,9 @@ public:
     const ProtocolOption &getOption() const;
     const MediaTuple &getMediaTuple() const;
     std::string shortUrl() const;
-
+#if defined(ENABLE_RTPPROXY)
     void forEachRtpSender(const std::function<void(const std::string &ssrc, const RtpSender &sender)> &cb) const;
-
+#endif // ENABLE_RTPPROXY
     bool link(Track::Ptr track);
 protected:
     std::weak_ptr<Track> _links[CodecMax];
@@ -265,7 +265,9 @@ private:
     toolkit::Ticker _last_check;
     std::unordered_map<int, Stamp> _stamps;
     std::weak_ptr<Listener> _track_listener;
+#if defined(ENABLE_RTPPROXY)
     std::unordered_multimap<std::string, std::tuple<RingType::RingReader::Ptr, std::weak_ptr<RtpSender>>> _rtp_sender;
+#endif // ENABLE_RTPPROXY
     std::shared_ptr<FMP4MediaSourceMuxer> _fmp4;
     std::shared_ptr<RtmpMediaSourceMuxer> _rtmp;
     std::shared_ptr<RtspMediaSourceMuxer> _rtsp;
