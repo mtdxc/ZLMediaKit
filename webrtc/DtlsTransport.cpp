@@ -655,13 +655,12 @@ namespace RTC
         MS_ASSERT(
           localRole == Role::CLIENT || localRole == Role::SERVER,
           "local DTLS role must be 'client' or 'server'");
+        DebugL << ((localRole == RTC::DtlsTransport::Role::SERVER)? "Server" : "Client");
 
         Role previousLocalRole = this->localRole;
-
         if (localRole == previousLocalRole)
         {
             MS_ERROR("same local DTLS role provided, doing nothing");
-
             return;
         }
 
@@ -669,7 +668,6 @@ namespace RTC
         if (previousLocalRole == Role::CLIENT || previousLocalRole == Role::SERVER)
         {
             MS_DEBUG_TAG(dtls, "resetting DTLS due to local role change");
-
             Reset();
         }
 

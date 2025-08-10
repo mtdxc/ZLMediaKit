@@ -125,7 +125,8 @@ private:
 class WebRtcPlayer : public WebRtcTransportImp {
 public:
     using Ptr = std::shared_ptr<WebRtcPlayer>;
-    static Ptr create(const EventPoller::Ptr &poller, const RtspMediaSource::Ptr &src, const MediaInfo &info);
+    static Ptr create(const EventPoller::Ptr &poller, const RtspMediaSource::Ptr &src, const MediaInfo &info, 
+                      WebRtcTransport::Role role, WebRtcTransport::SignalingProtocols signaling_protocols);
     MediaInfo getMediaInfo() { return _media_info; }
 
 protected:
