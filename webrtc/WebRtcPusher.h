@@ -22,14 +22,9 @@ public:
     using Ptr = std::shared_ptr<WebRtcPusher>;
     static Ptr create(const EventPoller::Ptr &poller, const RtspMediaSource::Ptr &src,
                       const std::shared_ptr<void> &ownership, const MediaInfo &info, const ProtocolOption &option, 
-                      WebRtcTransport::Role role, WebRtcTransport::SignalingProtocols signaling_protocols);
+                      WebRtcTransport::Role role, SignalingProtocols signaling_protocols);
 
-    void setMediaSource(const RtspMediaSource::Ptr src) override {
-        _push_src = src;
-        if (_push_src && canRecvRtp()) {
-            _push_src->setSdp(_answer_sdp->toRtspSdp());
-        }
-    }
+    void setMediaSource(const RtspMediaSource::Ptr src) override;
 
     std::vector<Track::Ptr> getTracks(bool ready) const;
 

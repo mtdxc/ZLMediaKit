@@ -66,7 +66,7 @@ public:
     virtual void setPreferredTcp(bool flag) {}
     virtual void setMediaSource(const RtspMediaSource::Ptr src) {}
 
-    using onGatheringCandidateCB = std::function<void(const std::string& transport_identifier, const std::string& candidate, const std::string& ufrag, const std::string& pwd)>;
+    using onGatheringCandidateCB = std::function<void(const std::string& identifier, const std::string& candidate, const std::string& ufrag, const std::string& pwd)>;
     virtual void gatheringCandidate(IceServerInfo::Ptr ice_server, onGatheringCandidateCB cb = nullptr) = 0;
 };
 
@@ -99,6 +99,13 @@ private:
     SockException _ex;
 };
 
+enum class SignalingProtocols {
+    Invalid   = -1,
+    WHEP_WHIP = 0,
+    WEBSOCKET = 1,  //FOR P2P
+};
+const char* SignalingProtocolsStr(SignalingProtocols protocol);
+
 class WebRtcTransport : public WebRtcInterface, public RTC::DtlsTransport::Listener, public IceTransport::Listener, public std::enable_shared_from_this<WebRtcTransport>
 #ifdef ENABLE_SCTP
     , public RTC::SctpAssociation::Listener
@@ -110,12 +117,7 @@ public:
         CLIENT,
         PEER,
     };
-
-    enum class SignalingProtocols {
-        Invalid   = -1,
-        WHEP_WHIP = 0,
-        WEBSOCKET = 1,  //FOR P2P
-    };
+    static const char* RoleStr(Role role);
 
     using WeakPtr = std::weak_ptr<WebRtcTransport>;
     using Ptr = std::shared_ptr<WebRtcTransport>;
@@ -306,6 +308,8 @@ public:
     uint64_t getDuration() const;
     bool canSendRtp() const;
     bool canRecvRtp() const;
+    bool canSendRtp(const RtcMedia& media) const;
+    bool canRecvRtp(const RtcMedia& media) const;
     void onSendRtp(const RtpPacket::Ptr &rtp, bool flush, bool rtx = false);
 
     void createRtpChannel(const std::string &rid, uint32_t ssrc, MediaTrack &track);

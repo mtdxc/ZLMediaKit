@@ -20,8 +20,7 @@ using namespace std;
 
 namespace mediakit {
 
-WebRtcProxyPlayer::WebRtcProxyPlayer(const EventPoller::Ptr &poller) 
-    : WebRtcClient(poller) {
+WebRtcProxyPlayer::WebRtcProxyPlayer(const EventPoller::Ptr &poller) : WebRtcClient(poller) {
     DebugL;
 }
 
@@ -33,13 +32,10 @@ void WebRtcProxyPlayer::play(const string &strUrl) {
     DebugL;
     try {
         _url.parse(strUrl, isPlayer());
+        startConnect();
     } catch (std::exception &ex) {
         onResult(SockException(Err_other, StrPrinter << "illegal webrtc url:" << ex.what()));
-        return;
     }
-
-    startConnect();
-    return;
 }
 
 void WebRtcProxyPlayer::teardown() {
@@ -75,7 +71,6 @@ void WebRtcProxyPlayer::onResult(const SockException &ex) {
             onShutdown(ex);
         }
     }
-    return;
 }
 
 float WebRtcProxyPlayer::getTimeOutSec() {
@@ -121,7 +116,6 @@ void WebRtcProxyPlayerImp::onResult(const SockException &ex) {
 void WebRtcProxyPlayerImp::onPlayResult(const toolkit::SockException &ex) {
     DebugL;
     Super::onPlayResult(ex);
-    return;
 }
 
 std::vector<Track::Ptr> WebRtcProxyPlayerImp::getTracks(bool ready /*= true*/) const {

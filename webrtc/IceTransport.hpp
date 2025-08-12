@@ -45,26 +45,24 @@ class CandidateAddr {
 public:
     std::string _host;
     uint16_t    _port = 0;
+    std::string toString() const { return _host + ":" + std::to_string(_port); }
 };
 
+enum class AddressType {
+    INVALID = 0,
+    HOST = 1,
+    SRFLX,  // server reflx
+    PRFLX,  // peer reflx
+    RELAY,
+};
+std::string AddressTypeToStr(AddressType type);
+AddressType StrToAddressType(const std::string &type);
 
 class CandidateTuple {
 public:
     using Ptr = std::shared_ptr<CandidateTuple>;
     CandidateTuple() = default;
     virtual ~CandidateTuple() = default;
-
-    enum class AddressType {
-        HOST = 1,
-        SRFLX, //server reflexive
-        PRFLX, //peer reflexive
-        RELAY,
-    };
-
-    enum class SecureType {
-        NOT_SECURE = 1,
-        SECURE,
-    };
 
     enum class TransportType {
         UDP = 1,
@@ -84,7 +82,7 @@ public:
     struct ClassHash {
         std::size_t operator()(const CandidateTuple& t) const {
             std::string str = t._addr._host + std::to_string(t._addr._port) +
-                std::to_string((uint32_t)t._transport) + std::to_string((uint32_t)t._secure);
+                std::to_string((uint32_t)t._transport) + std::to_string(t._secure);
             return std::hash<std::string>()(str);
         }
     };
@@ -97,15 +95,27 @@ public:
                     &&(a._secure == b._secure));
         }
     };
+    std::string toString() const { 
+        return StrPrinter << (_transport == TransportType::UDP ? "udp" : "tcp") << (_secure ? "s " : " ") << _addr.toString();
+    }
 
 public:
     CandidateAddr _addr;
     uint32_t      _priority  = 0;
     TransportType _transport = TransportType::UDP;
-    SecureType    _secure    = SecureType::NOT_SECURE;
+    bool _secure = false;
     std::string   _ufrag;
     std::string   _pwd;
 };
+
+enum class CandidateState {
+    Frozen = 1, //尚未check,并还不需要check
+    Waiting, //尚未发送check,但也不是Frozen
+    InProgress, //已经发起check,但是仍在进行中
+    Succeeded, // check success
+    Failed, // check failed
+};
+std::string CandidateStateStr(CandidateState state);
 
 class CandidateInfo : public CandidateTuple {
 public:
@@ -113,48 +123,15 @@ public:
     CandidateInfo() = default;
     virtual ~CandidateInfo() = default;
 
-    enum class AddressType {
-        INVALID = 0,
-        HOST = 1,
-        SRFLX,  // server reflx
-        PRFLX,  // peer reflx
-        RELAY,
-    };
-
-    enum class State {
-        Frozen = 1,         //尚未check,并还不需要check
-        Waiting,            //尚未发送check,但也不是Frozen
-        InProgress,         //已经发起check,但是仍在进行中
-        Succeeded,          //check success
-        Failed,             //check failed
-    };
-
     bool operator==(const CandidateInfo& rhs) const {
-        return ((_addr._host == rhs._addr._host) && (_addr._port == rhs._addr._port)
-        && (_type == rhs._type) && (_priority == rhs._priority)
-        && (_transport == rhs._transport) && (_secure == rhs._secure));
-    }
-    std::string getAddressTypeStr() {
-        switch (_type) {
-            case AddressType::HOST: return "host";
-            case AddressType::SRFLX: return "srflx";
-            case AddressType::PRFLX: return "reflx";
-            case AddressType::RELAY: return "relay";
-            default: break;
-        }
-        return "invalid";
+        return (_type == rhs._type) && CandidateTuple::operator==(rhs);
     }
 
-    static std::string getStateStr(State state) {
-        switch (state) {
-            case State::Frozen: return "frozen";
-            case State::Waiting: return "waiting";
-            case State::InProgress: return "in_progress";
-            case State::Succeeded: return "succeeded";
-            case State::Failed: return "failed";
-            default: break;
-        }
-        return "unknown";
+    std::string typeStr() const {
+        return AddressTypeToStr(_type);
+    }
+    std::string typeAddr() const { 
+        return typeStr() + "." + CandidateInfo::toString();
     }
 
 public:
@@ -167,6 +144,7 @@ public:
     using Ptr = std::shared_ptr<IceServerInfo>;
     IceServerInfo() = default;
     virtual ~IceServerInfo() = default;
+
     IceServerInfo(const std::string &url) { parse(url); }
     void parse(const std::string &url);
 
@@ -192,34 +170,25 @@ public:
 
         Pair() = default;
         Pair(toolkit::SocketHelper::Ptr socket) : _socket(socket) {}
-        Pair(toolkit::SocketHelper::Ptr socket, std::string peer_host, uint16_t peer_port,
+        Pair(toolkit::SocketHelper::Ptr socket, const std::string& peer_host, uint16_t peer_port,
              std::shared_ptr<sockaddr_storage> realyed_addr = nullptr) : 
             _socket(socket), _peer_host(peer_host), _peer_port(peer_port), _realyed_addr(realyed_addr) {
         }
 
         Pair(Pair &that) {
-            // DebugL;
             _socket = that._socket;
             _peer_host = that._peer_host;
             _peer_port = that._peer_port;
-            _realyed_addr = nullptr;
-            if (that._realyed_addr) {
-                // DebugL;
-                _realyed_addr = std::make_shared<sockaddr_storage>();
-                memcpy(_realyed_addr.get(), that._realyed_addr.get(), sizeof(sockaddr_storage));
-            }
+            _realyed_addr = that._realyed_addr;
         }
         virtual ~Pair() = default;
 
         void get_peer_addr(sockaddr_storage &peer_addr) {
-            memset(&peer_addr, 0, sizeof(peer_addr));
-            sockaddr_storage dummy_peer_addr;
             if (!_peer_host.empty()) {
-                dummy_peer_addr = toolkit::SockUtil::make_sockaddr(_peer_host.data(), _peer_port);
+                peer_addr = toolkit::SockUtil::make_sockaddr(_peer_host.data(), _peer_port);
             } else {
-                dummy_peer_addr = toolkit::SockUtil::make_sockaddr(_socket->get_peer_ip().data(), _socket->get_peer_port());
+                peer_addr = toolkit::SockUtil::make_sockaddr(_socket->get_peer_ip().data(), _socket->get_peer_port());
             }
-            memcpy(&peer_addr, &dummy_peer_addr, sizeof(peer_addr));
         }
 
         bool get_realyed_addr(sockaddr_storage &peerAddr) {
@@ -232,42 +201,53 @@ public:
             return true;
         }
 
-        std::string get_local_ip() {
+        std::string get_local_ip() const {
             return _socket->get_local_ip();
         }
 
-        uint16_t get_local_port() {
+        uint16_t get_local_port() const {
             return _socket->get_local_port();
         };
 
-        std::string get_peer_ip() {
+        std::string get_peer_ip() const {
             return !_peer_host.empty()? _peer_host : _socket->get_peer_ip();
         }
 
-        uint16_t get_peer_port() {
+        uint16_t get_peer_port() const {
             return !_peer_host.empty()? _peer_port : _socket->get_peer_port();
         }
 
-        std::string get_realyed_ip() {
+        std::string get_realyed_ip() const {
             if (_realyed_addr) {
                 return toolkit::SockUtil::inet_ntoa((const struct sockaddr*)_realyed_addr.get());
             }
             return "";
         }
 
-        uint16_t get_realyed_port() {
+        uint16_t get_realyed_port() const {
             if (_realyed_addr) {
                 return toolkit::SockUtil::inet_port((const struct sockaddr*)_realyed_addr.get());
             }
             return 0;
         };
 
-        static bool is_same_realyed_addr(Pair* a, Pair* b) {
-            if (a->_realyed_addr != nullptr && b->_realyed_addr != nullptr) {
-                return toolkit::SockUtil::is_same_addr(reinterpret_cast<const struct sockaddr*>(a->_realyed_addr.get()), 
-                reinterpret_cast<const struct sockaddr*>(b->_realyed_addr.get()));
+        std::string toString(char send) const { 
+            toolkit::_StrPrinter sp;
+            static const char* sendTempl[] = { "<-", "->", "<->" };
+            sp << (_socket->getSock()->sockType() == toolkit::SockNum::Sock_TCP ? "tcp" : "udp") << " "
+               << get_local_ip() << ":" << get_local_port() << sendTempl[send] << get_peer_ip() << ":" << get_peer_port();
+            if (_realyed_addr && send == 2) {
+                sp << " relay " << get_realyed_ip() << ":" << get_realyed_port();
             }
-            return (a->_realyed_addr == b->_realyed_addr);
+            return sp;
+        }
+
+        static bool is_same_realyed_addr(Pair* a, Pair* b) {
+            bool ret = (a->_realyed_addr == b->_realyed_addr);
+            if (!ret && a->_realyed_addr != nullptr && b->_realyed_addr != nullptr) {
+                ret = toolkit::SockUtil::is_same_addr((const struct sockaddr*)a->_realyed_addr.get(), (const struct sockaddr*)b->_realyed_addr.get());
+            }
+            return ret;
         }
 
         static bool is_same(Pair* a, Pair* b) {
@@ -282,7 +262,7 @@ public:
 
         toolkit::SocketHelper::Ptr _socket;
         std::string _peer_host;
-        uint16_t _peer_port;
+        uint16_t _peer_port = 0;
 
         std::shared_ptr<sockaddr_storage> _realyed_addr = nullptr;
     };
@@ -309,12 +289,9 @@ public:
         uint64_t _next_timeout;          // 下次超时时间(毫秒)
         uint32_t _retry_count;           // 当前重传次数
         uint32_t _rto;                   // 当前RTO值(毫秒)
-
-        static const uint32_t INITIAL_RTO = 500;    // 初始RTO 500ms
-        static const uint32_t MAX_RETRIES = 7;      // 最大重传次数
         
         RequestInfo(StunPacket::Ptr req, MsgHandler h, Pair::Ptr p)
-            : _request(req), _handler(h), _pair(p), _retry_count(0), _rto(INITIAL_RTO) {
+            : _request(req), _handler(h), _pair(p), _retry_count(0), _rto(500) {
             _send_time = toolkit::getCurrentMillisecond();
             _next_timeout = _send_time + _rto;
         }
@@ -342,14 +319,15 @@ protected:
     virtual void processStunPacket(const StunPacket::Ptr packet, Pair::Ptr pair);
     virtual void processRequest(const StunPacket::Ptr packet, Pair::Ptr pair);
     virtual void processResponse(const StunPacket::Ptr packet, Pair::Ptr pair);
-    virtual bool processChannelData(const uint8_t* data, size_t len, Pair::Ptr pair);
     virtual StunPacket::Authentication checkRequestAuthentication(const StunPacket::Ptr packet, Pair::Ptr pair);
     StunPacket::Authentication checkResponseAuthentication(const StunPacket::Ptr request, const StunPacket::Ptr packet, Pair::Ptr pair);
     void processUnauthorizedResponse(const StunPacket::Ptr response, StunPacket::Ptr request, Pair::Ptr pair, MsgHandler handler);
     virtual void handleBindingRequest(const StunPacket::Ptr packet, Pair::Ptr pair);
-    virtual void handleChannelData(uint16_t channel_number, const char* data, size_t len, Pair::Ptr pair) {};
 
+    virtual bool processChannelData(const uint8_t* data, size_t len, Pair::Ptr pair);
+    virtual void handleChannelData(uint16_t channel_number, const char* data, size_t len, Pair::Ptr pair) {};
     void sendChannelData(uint16_t channel_number, const toolkit::Buffer::Ptr &buffer, Pair::Ptr pair);
+
     virtual void sendUnauthorizedResponse(const StunPacket::Ptr packet, Pair::Ptr pair);
     void sendErrorResponse(const StunPacket::Ptr packet, Pair::Ptr pair, StunAttrErrorCode::Code errorCode);
     void sendRequest(const StunPacket::Ptr packet, Pair::Ptr pair, MsgHandler handler);
@@ -431,7 +409,6 @@ protected:
 };
 
 class IceAgent : public IceTransport {
-
 public:
     using Ptr = std::shared_ptr<IceAgent>;
     
@@ -441,14 +418,16 @@ public:
         CandidateInfo _remote_candidate;      // 远程候选者信息
         CandidateInfo _local_candidate;       // 本地候选者信息
         uint64_t _priority;                   // 候选者对优先级（64位，符合RFC 8445）
-        CandidateInfo::State _state;          // 连通性检查状态
+        CandidateState _state;                // 连通性检查状态
         bool _nominated = false;
         
         CandidatePair(Pair::Ptr local_pair, const CandidateInfo& remote, const CandidateInfo& local) 
-            : _local_pair(local_pair), _remote_candidate(remote), _local_candidate(local), _state(CandidateInfo::State::Frozen) {
+            : _local_pair(local_pair), _remote_candidate(remote), _local_candidate(local), _state(CandidateState::Frozen) {
             _priority = calCandidatePairPriority(local._priority, remote._priority);
         }
-        
+        std::string toString() const {
+            return "local " + _local_candidate.typeAddr() + " <-> remote " + _remote_candidate.typeAddr();
+        }
         // 比较操作符，用于优先级排序（高优先级在前）
         bool operator<(const CandidatePair& other) const {
             return _priority > other._priority;
@@ -489,12 +468,12 @@ public:
     void initialize() override;
 
     void setIceServer(IceServerInfo::Ptr ice_server) {
+        InfoL << ice_server->_full_url;
         _ice_server = ice_server;
     }
-
+    bool has_remote_candidate(const CandidateInfo &info) const { return _remote_candidates.count(info); }
     void gatheringCandidate(CandidateTuple::Ptr candidate_tuple, bool gathering_rflx, bool gathering_realy);
     void connectivityCheck(CandidateInfo candidate);
-    void Checks(CandidateInfo candidate);
     void nominated(Pair::Ptr pair, CandidateTuple candidate);
 
     void sendSocketData(toolkit::Buffer::Ptr buf, Pair::Ptr pair, bool flush = true) override;
@@ -503,8 +482,8 @@ public:
         return _implementation;
     }
 
-    void setgetImplementation(IceAgent::Implementation implementation) { 
-        InfoL << (uint32_t)implementation;
+    void setImplementation(IceAgent::Implementation implementation) { 
+        InfoL << (implementation == Implementation::Lite ? "Lite" : "Full");
         _implementation = implementation;
     }
 
@@ -547,8 +526,6 @@ protected:
     void sendCreatePermissionRequest(Pair::Ptr pair, const sockaddr_storage& peer_addr);
     void sendChannelBindRequest(Pair::Ptr pair, uint16_t channel_number, const sockaddr_storage& peer_addr);
 
-    void processRequest(const StunPacket::Ptr packet, Pair::Ptr pair) override;
-
     void handleBindingRequest(const StunPacket::Ptr packet, Pair::Ptr pair) override;
     void handleGatheringCandidateResponse(const StunPacket::Ptr packet, Pair::Ptr pair);
     void handleConnectivityCheckResponse(const StunPacket::Ptr packet, Pair::Ptr pair, CandidateTuple candidate);
@@ -584,7 +561,7 @@ protected:
     Implementation _implementation = Implementation::Full;
     Role  _role  = Role::Controlling;            //ice role
     uint64_t _tiebreaker = 0;                    // 8 bytes unsigned integer.
-    State _state = IceAgent::State::Running;     //ice session state
+    State _state = State::Running;               //ice session state
  
     Pair::Ptr _selected_pair = nullptr;
     Pair::Ptr _nominated_pair = nullptr;
@@ -603,7 +580,7 @@ protected:
         std::set<toolkit::SocketHelper::Ptr> _host_sockets;    // HOST类型socket
         std::set<toolkit::SocketHelper::Ptr> _relay_sockets;   // RELAY类型socket
 
-        bool _has_realyed_cnadidate = false;
+        bool _has_realyed_candidate = false;
         
         // 添加映射关系，带5元组重复检查
         bool addMapping(toolkit::SocketHelper::Ptr socket, const CandidateInfo& candidate) {
@@ -616,11 +593,12 @@ protected:
             candidate_to_socket[candidate] = socket;
             
             // 按类型分组
-            if (candidate._type != CandidateInfo::AddressType::RELAY) {
-                addHostSocket(socket);
-            } else if (candidate._type == CandidateInfo::AddressType::RELAY) {
+            if (candidate._type == AddressType::RELAY) {
                 addRelaySocket(socket);
             }
+            else {
+                addHostSocket(socket);
+            } 
             
             return true;
         }
@@ -712,7 +690,7 @@ protected:
     CandidateSet _remote_candidates;
 
     //TODO:当前仅支持多数据流复用一个checklist
-    std::vector<std::shared_ptr<CandidatePair>> _checklist;
+    std::vector<std::shared_ptr<CandidatePair>> _check_list;
     std::vector<std::shared_ptr<CandidatePair>> _valid_list;
 
 };

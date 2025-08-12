@@ -22,7 +22,7 @@ WebRtcPusher::Ptr WebRtcPusher::create(const EventPoller::Ptr &poller,
                                        const MediaInfo &info,
                                        const ProtocolOption &option,
                                        WebRtcTransport::Role role, 
-                                       WebRtcTransport::SignalingProtocols signaling_protocols) {
+                                       SignalingProtocols signaling_protocols) {
     WebRtcPusher::Ptr pusher(new WebRtcPusher(poller, src, ownership, info, option), [](WebRtcPusher *ptr) {
         ptr->onDestory();
         delete ptr;
@@ -135,10 +135,17 @@ void WebRtcPusher::setAnswerSdp(const std::string &answer) {
     }
 }
 
+void WebRtcPusher::setMediaSource(const RtspMediaSource::Ptr src) {
+    _push_src = src;
+    if (_push_src && canRecvRtp()) {
+        _push_src->setSdp(_answer_sdp->toRtspSdp());
+    }
+}
+
 void WebRtcPusher::onStartWebRTC() {
     WebRtcTransportImp::onStartWebRTC();
     _simulcast = _answer_sdp->supportSimulcast();
-#if 0
+#if 1
     if (canRecvRtp()) {
         if (_push_src) {
             _push_src->setSdp(_answer_sdp->toRtspSdp());

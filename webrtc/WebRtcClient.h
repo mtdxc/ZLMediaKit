@@ -32,9 +32,8 @@ public:
     std::string _delete_url;   //for whep or whip
     std::string _target_secret;
     std::string _host;
-    uint16_t _port;
-    WebRtcTransport::SignalingProtocols _signaling_protocols 
-    = WebRtcTransport::SignalingProtocols::WHEP_WHIP;
+    uint16_t _port = 0;
+    SignalingProtocols _signaling_protocols = SignalingProtocols::WHEP_WHIP;
     std::string _peer_room_id;    //peer room_id
 
 public:
@@ -43,16 +42,8 @@ public:
 private:
 };
 
-namespace Rtc {
-typedef enum {
-    Signaling_Invalid   = -1,
-    Signaling_WHEP_WHIP = 0,
-    Signaling_WEBSOCKET = 1,
-} eSignalingProtocols;
-}//namespace RTC
-
 // 实现了webrtc代理功能
-class WebRtcClient : public std::enable_shared_from_this<WebRtcClient>{
+class WebRtcClient : public std::enable_shared_from_this<WebRtcClient> {
 public:
     using Ptr = std::shared_ptr<WebRtcClient>;
 
@@ -93,9 +84,6 @@ protected:
     WebRtcSignalingPeer::Ptr _peer = nullptr;
     WebRtcTransport::Ptr _transport = nullptr;
     bool _is_negotiate_finished = false;
-
-private:
-    std::map<std::string /*candidate key*/, SocketHelper::Ptr> _socket_map;
 };
 
 } /*namespace mediakit */

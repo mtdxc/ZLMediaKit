@@ -48,12 +48,10 @@ void IceSession::onRecv(const Buffer::Ptr &buffer) {
     // TraceL;
     auto pair = std::make_shared<IceTransport::Pair>(shared_from_this());
     _ice_transport->processSocketData((const uint8_t *)buffer->data(), buffer->size(), pair);
-    return;
 }
 
 void IceSession::onError(const SockException &err) {
     InfoL;
-    return;
 }
 
 void IceSession::onManager() {

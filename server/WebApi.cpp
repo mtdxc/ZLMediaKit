@@ -284,11 +284,13 @@ static inline void addHttpListener(){
                 }
 
                 auto &content = parser.content();
-                log << "# content:\r\n" << (content.size() > 4 * 1024 ? content.substr(0, 4 * 1024) : content) << "\r\n";
+                if (content.length()) {
+                    log << "# content:\r\n" << (content.size() > 4 * 1024 ? content.substr(0, 4 * 1024) : content) << "\r\n";
+                }
 
                 if (size > 0 && size < 4 * 1024) {
                     auto response = body->readData(size);
-                    log << "# response:\r\n" << response->data() << "\r\n";
+                    log << "\r\n# response:\r\n" << response->data() << "\r\n";
                     invoker(code, headerOut, response);
                 } else {
                     log << "# response size:" << size << "\r\n";

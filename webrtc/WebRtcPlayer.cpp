@@ -171,7 +171,7 @@ WebRtcPlayer::Ptr WebRtcPlayer::create(const EventPoller::Ptr &poller,
                                        const RtspMediaSource::Ptr &src,
                                        const MediaInfo &info,
                                        WebRtcTransport::Role role,
-                                       WebRtcTransport::SignalingProtocols signaling_protocols) {
+                                       SignalingProtocols signaling_protocols) {
     WebRtcPlayer::Ptr ret(new WebRtcPlayer(poller, src, info), [](WebRtcPlayer *ptr) {
         ptr->onDestory();
         delete ptr;

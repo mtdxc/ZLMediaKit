@@ -20,8 +20,8 @@ using namespace std;
 namespace mediakit {
 
 WebRtcProxyPusher::WebRtcProxyPusher(const EventPoller::Ptr &poller, const RtspMediaSource::Ptr &src) : WebRtcClient(poller) {
-    _push_src = src;
     DebugL;
+    _push_src = src;
 }
 
 WebRtcProxyPusher::~WebRtcProxyPusher(void) {
@@ -33,13 +33,10 @@ void WebRtcProxyPusher::publish(const string &strUrl) {
     DebugL;
     try {
         _url.parse(strUrl, isPlayer());
+        startConnect();
     } catch (std::exception &ex) {
         onResult(SockException(Err_other, StrPrinter << "illegal webrtc url:" << ex.what()));
-        return;
     }
-
-    startConnect();
-    return;
 }
 
 void WebRtcProxyPusher::teardown() {
@@ -66,7 +63,6 @@ void WebRtcProxyPusher::onResult(const SockException &ex) {
             onShutdown(ex);
         }
     }
-    return;
 }
 
 float WebRtcProxyPusher::getTimeOutSec() {
