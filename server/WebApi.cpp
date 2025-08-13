@@ -2204,7 +2204,10 @@ void installWebApi() {
         //server_host: 信令服务器host
         //server_post: 信令服务器host
         //room_id: 注册的id,信令服务器会对该id进行唯一性检查
-        addWebrtcRoomKeeper(allArgs["server_host"], allArgs["server_port"], allArgs["room_id"],
+        bool server_ssl = false;
+        if (allArgs["server_ssl"])
+            server_ssl = allArgs["server_ssl"];
+        addWebrtcRoomKeeper(allArgs["server_host"], allArgs["server_port"], server_ssl, allArgs["room_id"],
             [val, headerOut, invoker](const SockException &ex, const string &key) mutable {
                 if (ex) {
                     val["code"] = API::OtherFailed;

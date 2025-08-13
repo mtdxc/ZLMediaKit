@@ -35,8 +35,9 @@ public:
             return h;
         }
     };
+    
     using Ptr = std::shared_ptr<WebRtcSignalingPeer>;
-    WebRtcSignalingPeer(const std::string &host, uint16_t port, const std::string& room_id, const EventPoller::Ptr &poller = nullptr);
+    WebRtcSignalingPeer(const std::string &host, uint16_t port, bool ssl, const std::string& room_id, const EventPoller::Ptr &poller = nullptr);
     virtual ~WebRtcSignalingPeer();
 
     void connect();
@@ -48,7 +49,6 @@ public:
     void candidate(const std::string& transport_identifier, const std::string& candidate, const std::string& ice_ufrag, const std::string& ice_pwd);
 
     void processOffer(SIGNALING_MSG_ARGS, WebRtcInterface &transport);
-    void answer(const std::string& guest_id, const MediaTuple &tuple, const std::string& identifier, const std::string& sdp, bool is_play, const std::string& transaction_id);
 
     std::string getRoomKey() {
         return _room_key;
@@ -78,7 +78,11 @@ protected:
     void createResponseExpireTimer();
 
     using ResponseTrigger = std::function<void(const SockException &ex, std::string /*msg*/)>;
-    using ResponseTuple = std::tuple<TimePoint /*expire time*/, std::string /*method*/, ResponseTrigger /*cb*/>;
+    struct ResponseTuple {
+        TimePoint expire_time;
+        std::string method;
+        ResponseTrigger cb;
+    };
 
 #define TRANSACTION_ID_ANY std::string()
 #define EXPIRE_NEVER TimePoint::max()
@@ -93,8 +97,8 @@ protected:
     void handleUnregisterAccept(SIGNALING_MSG_ARGS);
     void handleUnregisterReject(SIGNALING_MSG_ARGS);
 
-    void sendCallRequest(const std::string& peer_room_id, const std::string& guest_id, const MediaTuple &tuple, const std::string& sdp, bool is_play, ResponseTrigger trigger);
-    void sendCallAccept(const std::string& peer_guest_id, const MediaTuple &tuple, const std::string& sdp, bool is_play, const std::string& transaction_id);
+    void sendCallRequest(const std::string& peer_room_id, const std::string& guest_id, const MediaTuple &tuple, const std::string& sdp, const std::string& type, ResponseTrigger trigger);
+    void sendCallAccept(const std::string& peer_guest_id, const MediaTuple &tuple, const std::string& sdp, const std::string& type, const std::string& transaction_id);
     void handleCallRequest(SIGNALING_MSG_ARGS);
     void handleCallAccept(SIGNALING_MSG_ARGS);
     void handleCallReject(SIGNALING_MSG_ARGS);
@@ -128,7 +132,7 @@ private:
     Timer::Ptr _offer_timeout_timer = nullptr;
 };
 
-void addWebrtcRoomKeeper(const std::string &host, uint16_t port, const std::string& room_id,
+void addWebrtcRoomKeeper(const std::string &host, uint16_t port, bool ssl, const std::string& room_id,
                          const std::function<void(const SockException &ex, const std::string &key)> &cb);
 void delWebrtcRoomKeeper(const std::string &key, const std::function<void(const SockException &ex)> &cb);
 void listWebrtcRoomKeepers(const std::function<void(const std::string& key, const WebRtcSignalingPeer::Ptr& p)> &cb);
