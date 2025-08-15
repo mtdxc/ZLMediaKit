@@ -170,24 +170,32 @@ public:
 
         Pair() = default;
         Pair(toolkit::SocketHelper::Ptr socket) : _socket(socket) {}
-        Pair(toolkit::SocketHelper::Ptr socket, const std::string& peer_host, uint16_t peer_port,
+        Pair(toolkit::SocketHelper::Ptr socket, const sockaddr* peer_addr,
              std::shared_ptr<sockaddr_storage> realyed_addr = nullptr) : 
-            _socket(socket), _peer_host(peer_host), _peer_port(peer_port), _realyed_addr(realyed_addr) {
+            _socket(socket), _realyed_addr(realyed_addr) {
+            if (peer_addr) {
+                _peer_addr = std::make_shared<sockaddr_storage>();
+                memcpy(_peer_addr.get(), peer_addr, toolkit::SockUtil::get_sock_len(peer_addr));
+            }
         }
 
         Pair(Pair &that) {
             _socket = that._socket;
-            _peer_host = that._peer_host;
-            _peer_port = that._peer_port;
+            _peer_addr = that._peer_addr;
             _realyed_addr = that._realyed_addr;
         }
         virtual ~Pair() = default;
 
         void get_peer_addr(sockaddr_storage &peer_addr) {
-            if (!_peer_host.empty()) {
-                peer_addr = toolkit::SockUtil::make_sockaddr(_peer_host.data(), _peer_port);
+            if (_peer_addr) {
+                peer_addr = *_peer_addr;
             } else {
-                peer_addr = toolkit::SockUtil::make_sockaddr(_socket->get_peer_ip().data(), _socket->get_peer_port());
+                auto addr = _socket->get_peer_addr();
+                int len = toolkit::SockUtil::get_sock_len(addr);
+                memcpy(&peer_addr, addr, len);
+                // 不能返回这个地址，因为get_peer_ip(), 对于与ipv4兼容ipv6套接口会返回ipv4地址，导致这会udp包发送失败，
+                // 为此特地在toolkit::SocketHelper中增加了get_peer_addr()来返回原始的ipv6地址
+                // peer_addr = toolkit::SockUtil::make_sockaddr(_socket->get_peer_ip().data(), _socket->get_peer_port());
             }
         }
 
@@ -210,11 +218,11 @@ public:
         };
 
         std::string get_peer_ip() const {
-            return !_peer_host.empty()? _peer_host : _socket->get_peer_ip();
+            return _peer_addr ? toolkit::SockUtil::inet_ntoa((const struct sockaddr *)_peer_addr.get()) : _socket->get_peer_ip();
         }
 
         uint16_t get_peer_port() const {
-            return !_peer_host.empty()? _peer_port : _socket->get_peer_port();
+            return _peer_addr ? toolkit::SockUtil::inet_port((const struct sockaddr *)_peer_addr.get()) : _socket->get_peer_port();
         }
 
         std::string get_realyed_ip() const {
@@ -261,9 +269,7 @@ public:
         }
 
         toolkit::SocketHelper::Ptr _socket;
-        std::string _peer_host;
-        uint16_t _peer_port = 0;
-
+        std::shared_ptr<sockaddr_storage> _peer_addr = nullptr;
         std::shared_ptr<sockaddr_storage> _realyed_addr = nullptr;
     };
 
@@ -466,7 +472,7 @@ public:
     virtual ~IceAgent() {}
     
     void initialize() override;
-
+    void shutdown();
     void setIceServer(IceServerInfo::Ptr ice_server) {
         InfoL << ice_server->_full_url;
         _ice_server = ice_server;

@@ -704,7 +704,7 @@ void WebRtcTransport::onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer,
 void WebRtcTransport::inputSockData(char *buf, int len, SocketHelper::Ptr socket, struct sockaddr *addr, int addr_len) {
     IceTransport::Pair::Ptr pair;
     if (addr != nullptr) {
-        pair = std::make_shared<IceTransport::Pair>(socket, SockUtil::inet_ntoa(addr), SockUtil::inet_port(addr));
+        pair = std::make_shared<IceTransport::Pair>(socket, addr);
     } else {
         pair = std::make_shared<IceTransport::Pair>(socket);
     }
@@ -1540,6 +1540,7 @@ void WebRtcTransportImp::onShutdown(const SockException &ex) {
     WarnL << ex;
     unrefSelf();
     WebRtcTransport::onShutdown(ex);
+    _ice_agent->shutdown();
 }
 
 uint64_t WebRtcTransportImp::getBytesUsage() const {
