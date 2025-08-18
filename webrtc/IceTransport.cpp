@@ -1060,17 +1060,16 @@ IceAgent::IceAgent(Listener* listener, Implementation implementation, Role role,
     _tiebreaker = makeRandNum();
     _request_handlers.emplace(std::make_pair(StunPacket::Class::INDICATION, StunPacket::Method::DATA),
         std::bind(&IceAgent::handleDataIndication, this, placeholders::_1, placeholders::_2));
+}
 
+void IceAgent::initialize() {
+    IceTransport::initialize();
     // 创建定时器，每分钟检查一次权限和通道绑定是否需要刷新
     _refresh_timer = std::make_shared<Timer>(60.0f, [this]() {
         refreshPermissions();
         refreshChannelBindings();
         return true;
     }, getPoller());
-}
-
-void IceAgent::initialize() {
-    IceTransport::initialize();
 }
 
 void IceAgent::gatheringCandidate(CandidateTuple::Ptr candidate_tuple, bool gathering_rflx, bool gathering_realy) {
@@ -1118,7 +1117,11 @@ void IceAgent::connectivityCheck(CandidateInfo candidate) {
     setState(IceAgent::State::Running);
     auto ret = _remote_candidates.emplace(candidate);
     if (ret.second) {
+        bool udp = candidate._transport == CandidateTuple::TransportType::UDP;
         for (auto socket: _socket_candidate_manager._host_sockets) {
+            if (udp != (socket->getSock()->sockType() == SockNum::Sock_UDP)) {
+                continue;
+            }
             auto addr = toolkit::SockUtil::make_sockaddr(candidate._addr._host.data(), candidate._addr._port);
             auto pair = std::make_shared<Pair>(socket, (sockaddr*)&addr);
             addToChecklist(pair, candidate);
