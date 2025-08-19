@@ -138,7 +138,8 @@ protected:
 class StunAttrMappedAddress : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrMappedAddress>;
-    StunAttrMappedAddress() : StunAttribute(StunAttribute::Type::MAPPED_ADDRESS) {};
+    static const Type TYPE = StunAttribute::Type::MAPPED_ADDRESS;
+    StunAttrMappedAddress() : StunAttribute(TYPE) {};
     virtual ~StunAttrMappedAddress() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -149,7 +150,8 @@ public:
 class StunAttrUserName : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrUserName>;
-    StunAttrUserName() : StunAttribute(StunAttribute::Type::USERNAME) {};
+    static const Type TYPE = StunAttribute::Type::USERNAME;
+    StunAttrUserName() : StunAttribute(TYPE) {};
     virtual ~StunAttrUserName() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -160,7 +162,7 @@ public:
         _username = username;
     }
 
-    std::string getUsername() {
+    const std::string& getUsername() const {
         return _username;
     }
 
@@ -171,29 +173,32 @@ private:
 class StunAttrMessageIntegrity : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrMessageIntegrity>;
-    StunAttrMessageIntegrity() : StunAttribute(StunAttribute::Type::MESSAGE_INTEGRITY) {};
+    static const Type TYPE = StunAttribute::Type::MESSAGE_INTEGRITY;
+    StunAttrMessageIntegrity() : StunAttribute(TYPE) {};
     virtual ~StunAttrMessageIntegrity() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
     bool storeToData() override;
     // std::string dump() override;
     //
-    void setHmac(toolkit::BufferLikeString hmac) {
+    void setHmac(const std::string& hmac) {
         _hmac = hmac;
     }
 
-    toolkit::BufferLikeString getHmac() {
+    const std::string& getHmac() const {
         return _hmac;
     }
-
-    toolkit::BufferLikeString _hmac;
+private:
+    std::string _hmac;
 };
 
 class StunAttrErrorCode : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrErrorCode>;
-    StunAttrErrorCode() : StunAttribute(StunAttribute::Type::ERROR_CODE) {};
+    static const Type TYPE = StunAttribute::Type::ERROR_CODE;
+    StunAttrErrorCode() : StunAttribute(TYPE) {};
     virtual ~StunAttrErrorCode() = default;
+
     enum class Code : uint16_t {
         Invalid                     = 0,   //
         TryAlternate                = 300, //尝试备用服务器
@@ -222,17 +227,18 @@ public:
         _error_code = error_code;
     }
 
-    Code getErrorCode() {
+    Code getErrorCode() const {
         return _error_code;
     }
-
+private:
     Code _error_code;
 };
 
 class StunAttrChannelNumber : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrChannelNumber>;
-    StunAttrChannelNumber() : StunAttribute(StunAttribute::Type::CHANNEL_NUMBER) {};
+    static const Type TYPE = StunAttribute::Type::CHANNEL_NUMBER;
+    StunAttrChannelNumber() : StunAttribute(TYPE) {};
     virtual ~StunAttrChannelNumber() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -242,7 +248,7 @@ public:
         _channel_number = channel_number;
     }
 
-    uint16_t getChannelNumber() {
+    uint16_t getChannelNumber() const {
         return _channel_number;
     }
 
@@ -253,7 +259,8 @@ private:
 class StunAttrLifeTime : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrLifeTime>;
-    StunAttrLifeTime() : StunAttribute(StunAttribute::Type::LIFETIME) {};
+    static const Type TYPE = StunAttribute::Type::LIFETIME;
+    StunAttrLifeTime() : StunAttribute(TYPE) {};
     ~StunAttrLifeTime() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -264,7 +271,7 @@ public:
         _lifetime = lifetime;
     }
 
-    uint32_t getLifetime() {
+    uint32_t getLifetime() const {
         return _lifetime;
     }
 
@@ -286,106 +293,113 @@ private:
 class StunAttrXorPeerAddress : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrXorPeerAddress>;
-    StunAttrXorPeerAddress(toolkit::BufferLikeString transaction_id) : StunAttribute(StunAttribute::Type::XOR_PEER_ADDRESS), _transaction_id(transaction_id) {};
+    static const Type TYPE = StunAttribute::Type::XOR_PEER_ADDRESS;
+    StunAttrXorPeerAddress(std::string transaction_id) : StunAttribute(TYPE), _transaction_id(transaction_id) {};
     virtual ~StunAttrXorPeerAddress() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
     bool storeToData() override;
     // std::string dump() override;
  
-    void setAddr(struct sockaddr_storage addr) {
+    void setAddr(const sockaddr_storage& addr) {
         _addr = addr;
     }
 
-    struct sockaddr_storage getAddr() {
+    const sockaddr_storage& getAddr() const {
         return _addr;
     }
 
-    std::string getAddrString() {
+    std::string getAddrString() const {
         return toolkit::SockUtil::inet_ntoa((struct sockaddr *)&_addr);
     }
 
-    uint16_t getPort() {
+    uint16_t getPort() const {
         return toolkit::SockUtil::inet_port((struct sockaddr *)&_addr);
     }
 
 protected:
     struct sockaddr_storage _addr;
-    toolkit::BufferLikeString _transaction_id;
+    std::string _transaction_id;
 };
 
 class StunAttrData : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrData>;
-    StunAttrData() : StunAttribute(StunAttribute::Type::DATA) {};
+    static const Type TYPE = StunAttribute::Type::DATA;
+    StunAttrData() : StunAttribute(TYPE) {};
     virtual ~StunAttrData() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
     bool storeToData() override;
-
-    void setData(const toolkit::BufferLikeString &data) {
+    
+    void setData(const std::string &data) {
         _data_content = data;
     }
-
-    toolkit::BufferLikeString getData() {
+    void setData(const char* data, int size) {
+        _data_content.assign(data, size);
+    }
+    const std::string& getData() const {
         return _data_content;
     }
 
 private:
-    toolkit::BufferLikeString _data_content;
+    std::string _data_content;
 };
 
 class StunAttrRealm : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrRealm>;
-    StunAttrRealm() : StunAttribute(StunAttribute::Type::REALM) {};
+    static const Type TYPE = StunAttribute::Type::REALM;
+    StunAttrRealm() : StunAttribute(TYPE) {};
     virtual ~StunAttrRealm() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
     bool storeToData() override;
     // std::string dump() override;
 
-    void setRealm(toolkit::BufferLikeString realm) {
+    void setRealm(const std::string& realm) {
         _realm = realm;
     }
 
-    toolkit::BufferLikeString getRealm() {
+    const std::string& getRealm() const {
         return _realm;
     }
 
 private:
-    //必须要少于128字符
-    toolkit::BufferLikeString _realm;
+    // 长度小于128字符
+    std::string _realm;
 };
 
 class StunAttrNonce : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrNonce>;
-    StunAttrNonce() : StunAttribute(StunAttribute::Type::NONCE) {};
+    static const Type TYPE = StunAttribute::Type::NONCE;
+    StunAttrNonce() : StunAttribute(TYPE) {};
     virtual ~StunAttrNonce() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
     bool storeToData() override;
     // std::string dump() override;
 
-    void setNonce(toolkit::BufferLikeString nonce) {
+    void setNonce(std::string nonce) {
         _nonce = nonce;
     }
 
-    toolkit::BufferLikeString getNonce() {
+    const std::string& getNonce() const {
         return _nonce;
     }
 
 private:
-    //必须要少于128字符
-    toolkit::BufferLikeString _nonce;
+    // 长度小于128字符
+    std::string _nonce;
 };
 
 class StunAttrXorRelayedAddress : public StunAttrXorPeerAddress {
 public:
     using Ptr = std::shared_ptr<StunAttrXorRelayedAddress>;
-    StunAttrXorRelayedAddress(toolkit::BufferLikeString transaction_id) : StunAttrXorPeerAddress(transaction_id) {
-        _type = StunAttribute::Type::XOR_RELAYED_ADDRESS;
+    static const Type TYPE = StunAttribute::Type::XOR_RELAYED_ADDRESS;
+    StunAttrXorRelayedAddress(std::string transaction_id) : StunAttrXorPeerAddress(transaction_id) {
+        _type = TYPE;
     }
     virtual ~StunAttrXorRelayedAddress() = default;
 };
@@ -401,7 +415,8 @@ public:
 class StunAttrRequestedTransport : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrRequestedTransport>;
-    StunAttrRequestedTransport() : StunAttribute(StunAttribute::Type::REQUESTED_TRANSPORT) {};
+    static const Type TYPE = StunAttribute::Type::REQUESTED_TRANSPORT;
+    StunAttrRequestedTransport() : StunAttribute(TYPE) {};
     virtual ~StunAttrRequestedTransport() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -417,7 +432,7 @@ public:
         _protocol = protocol;
     }
 
-    Protocol getProtocol() {
+    Protocol getProtocol() const {
         return _protocol;
     }
 
@@ -428,8 +443,9 @@ private:
 class StunAttrXorMappedAddress : public StunAttrXorPeerAddress {
 public:
     using Ptr = std::shared_ptr<StunAttrXorPeerAddress>;
-    StunAttrXorMappedAddress(toolkit::BufferLikeString transaction_id) : StunAttrXorPeerAddress(transaction_id) {
-        _type = StunAttribute::Type::XOR_MAPPED_ADDRESS;
+    static const Type TYPE = StunAttribute::Type::XOR_MAPPED_ADDRESS;
+    StunAttrXorMappedAddress(std::string transaction_id) : StunAttrXorPeerAddress(transaction_id) {
+        _type = TYPE;
     }
     virtual ~StunAttrXorMappedAddress() = default;
 };
@@ -437,7 +453,8 @@ public:
 class StunAttrPriority : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrPriority>;
-    StunAttrPriority() : StunAttribute(StunAttribute::Type::PRIORITY) {};
+    static const Type TYPE = StunAttribute::Type::PRIORITY;
+    StunAttrPriority() : StunAttribute(TYPE) {};
     virtual ~StunAttrPriority() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -448,7 +465,7 @@ public:
         _priority = priority;
     }
 
-    uint64_t getPriority() {
+    uint64_t getPriority() const {
         return _priority;
     }
 
@@ -459,7 +476,8 @@ private:
 class StunAttrUseCandidate : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrUseCandidate>;
-    StunAttrUseCandidate() : StunAttribute(StunAttribute::Type::USE_CANDIDATE) {};
+    static const Type TYPE = StunAttribute::Type::USE_CANDIDATE;
+    StunAttrUseCandidate() : StunAttribute(TYPE) {};
     virtual ~StunAttrUseCandidate() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -470,7 +488,8 @@ public:
 class StunAttrFingerprint : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrFingerprint>;
-    StunAttrFingerprint() : StunAttribute(StunAttribute::Type::FINGERPRINT) {};
+    static const Type TYPE = StunAttribute::Type::FINGERPRINT;
+    StunAttrFingerprint() : StunAttribute(TYPE) {};
     virtual ~StunAttrFingerprint() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -481,7 +500,7 @@ public:
         _fingerprint = fingerprint;
     }
 
-    uint32_t getFingerprint() {
+    uint32_t getFingerprint() const {
         return _fingerprint;
     }
 
@@ -492,7 +511,8 @@ private:
 class StunAttrIceControlled : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrIceControlled>;
-    StunAttrIceControlled() : StunAttribute(StunAttribute::Type::ICE_CONTROLLED) {};
+    static const Type TYPE = StunAttribute::Type::ICE_CONTROLLED;
+    StunAttrIceControlled() : StunAttribute(TYPE) {};
     virtual ~StunAttrIceControlled() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -503,7 +523,7 @@ public:
         _tiebreaker = tiebreaker;
     }
 
-    uint64_t getTiebreaker() {
+    uint64_t getTiebreaker() const {
         return _tiebreaker;
     }
 private:
@@ -513,7 +533,8 @@ private:
 class StunAttrIceControlling : public StunAttribute {
 public:
     using Ptr = std::shared_ptr<StunAttrIceControlling>;
-    StunAttrIceControlling() : StunAttribute(StunAttribute::Type::ICE_CONTROLLING) {};
+    static const Type TYPE = StunAttribute::Type::ICE_CONTROLLING;
+    StunAttrIceControlling() : StunAttribute(TYPE) {};
     virtual ~StunAttrIceControlling() = default;
 
     bool loadFromData(const uint8_t *buf, size_t len) override;
@@ -524,7 +545,7 @@ public:
         _tiebreaker = tiebreaker;
     }
 
-    uint64_t getTiebreaker() {
+    uint64_t getTiebreaker() const {
         return _tiebreaker;
     }
 
@@ -617,15 +638,17 @@ public:
         return _method;
     }
 
-    std::string getClassStr() {
+    std::string getClassStr() const {
         return StrPrinter << mappingClassEnum2Str(_klass) << "(" << (uint32_t)_klass << ")";
     }
 
-    std::string getMethodStr() {
+    std::string getMethodStr() const {
         return StrPrinter << mappingMethodEnum2Str(_method) << "(" << (uint32_t)_method << ")";
     }
 
-    const toolkit::BufferLikeString getTransactionId() {
+    std::string ToString(int trans = 0) const;
+
+    const std::string& getTransactionId() const {
         return _transaction_id;
     }
 
@@ -633,7 +656,7 @@ public:
         _ufrag = ufrag;
     }
 
-    const std::string getUfrag() {
+    const std::string& getUfrag() const {
         return _ufrag;
     }
 
@@ -641,7 +664,7 @@ public:
         _password = password;
     }
 
-    const std::string getPassword() {
+    const std::string& getPassword() const {
         return _password;
     }
 
@@ -649,7 +672,7 @@ public:
         _peer_ufrag = peer_ufrag;
     }
 
-    const std::string getPeerUfrag() {
+    const std::string& getPeerUfrag() const {
         return _peer_ufrag;
     }
 
@@ -657,7 +680,7 @@ public:
         _peer_password = peer_password;
     }
 
-    const std::string getPeerPassword() {
+    const std::string& getPeerPassword() const {
         return _peer_password;
     }
 
@@ -665,7 +688,7 @@ public:
         _need_message_integrity = flag;
     }
 
-    bool getNeedMessageIntegrity() {
+    bool getNeedMessageIntegrity() const {
         return _need_message_integrity;
     }
 
@@ -673,22 +696,29 @@ public:
         _need_fingerprint = flag;
     }
 
-    bool getNeedFingerprint() {
+    bool getNeedFingerprint() const {
         return _need_fingerprint;
     }
 
     void refreshTransactionId() {
         _transaction_id = toolkit::makeRandStr(12, false);
-        return;
     }
 
     void addAttribute(StunAttribute::Ptr attr);
     void removeAttribute(StunAttribute::Type type);
-    bool hasAttribute(StunAttribute::Type type);
-    StunAttribute::Ptr getAttribute(StunAttribute::Type type);
-
-    const std::string getUsername();
-    uint64_t getPriority();
+    bool hasAttribute(StunAttribute::Type type) const;
+    StunAttribute::Ptr getAttribute(StunAttribute::Type type) const;
+    template <typename T>
+    std::shared_ptr<T> getAttribute() const {
+        auto attr = getAttribute(T::TYPE);
+        if (attr) {
+            return std::dynamic_pointer_cast<T>(attr);
+        }
+        return nullptr;
+    }
+    
+    std::string getUsername() const;
+    uint64_t getPriority() const;
     StunAttrErrorCode::Code getErrorCode() const;
 
     Authentication checkAuthentication(const std::string& ufrag, const std::string& password);
@@ -714,7 +744,7 @@ protected:
 
     Class                         _klass;
     Method                        _method;
-    toolkit::BufferLikeString     _transaction_id; // 12 bytes/96bits.
+    std::string                   _transaction_id; // 12 bytes/96bits.
     std::map<StunAttribute::Type, StunAttribute::Ptr> _attribute_map;
     toolkit::BufferRaw::Ptr       _data;
     std::string                   _ufrag;
@@ -735,14 +765,14 @@ public:
 
 class SuccessResponsePacket : public StunPacket {
 public:
-    SuccessResponsePacket(Method method, toolkit::BufferLikeString transaction_id);
+    SuccessResponsePacket(Method method, const std::string& transaction_id);
     virtual ~SuccessResponsePacket() {};
 
 };
 
 class ErrorResponsePacket : public StunPacket {
 public:
-    ErrorResponsePacket(Method method, toolkit::BufferLikeString transaction_id, StunAttrErrorCode::Code error_code);
+    ErrorResponsePacket(Method method, const std::string& transaction_id, StunAttrErrorCode::Code error_code);
     virtual ~ErrorResponsePacket() {};
 };
 

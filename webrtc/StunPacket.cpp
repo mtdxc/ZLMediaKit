@@ -76,8 +76,8 @@ inline uint32_t getCRC32(const uint8_t *data, size_t size) {
     return crc ^ ~0U;
 }
 
-static toolkit::BufferLikeString openssl_HMACsha1(const void *key, size_t key_len, const void *data, size_t data_len){
-    toolkit::BufferLikeString str;
+static std::string openssl_HMACsha1(const void *key, size_t key_len, const void *data, size_t data_len){
+    std::string str;
     str.resize(20);
     unsigned int out_len;
 #if defined(OPENSSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER > 0x10100000L)
@@ -100,8 +100,8 @@ static toolkit::BufferLikeString openssl_HMACsha1(const void *key, size_t key_le
     return str;
 }
 
-static toolkit::BufferLikeString openssl_MD5(const void *data, size_t data_len) {
-    toolkit::BufferLikeString str;
+static std::string openssl_MD5(const void *data, size_t data_len) {
+    std::string str;
     str.resize(16);
     unsigned int out_len;
 #if defined(OPENSSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER > 0x10100000L)
@@ -541,6 +541,14 @@ StunPacket::~StunPacket() {
     MS_TRACE();
 }
 
+std::string StunPacket::ToString(int trans) const {
+    std::string ret = "class=" + getClassStr() + ", method=" + getMethodStr();
+    if (trans) {
+        ret += ", transaction=" + hexdump(_transaction_id.data(), _transaction_id.size());
+    }
+    return ret;
+}
+
 void StunPacket::addAttribute(StunAttribute::Ptr attr) {
     _attribute_map.emplace(attr->type(), std::move(attr));
 }
@@ -549,11 +557,11 @@ void StunPacket::removeAttribute(StunAttribute::Type type) {
     _attribute_map.erase(type);
 }
 
-bool StunPacket::hasAttribute(StunAttribute::Type type) {
+bool StunPacket::hasAttribute(StunAttribute::Type type) const {
     return _attribute_map.count(type) > 0;
 }
 
-StunAttribute::Ptr StunPacket::getAttribute(StunAttribute::Type type) {
+StunAttribute::Ptr StunPacket::getAttribute(StunAttribute::Type type) const {
     auto it = _attribute_map.find(type);
     if (it != _attribute_map.end()) {
         return it->second;
@@ -561,37 +569,25 @@ StunAttribute::Ptr StunPacket::getAttribute(StunAttribute::Type type) {
     return nullptr;
 }
 
-const std::string StunPacket::getUsername() {
-    auto it = _attribute_map.find(StunAttribute::Type::USERNAME);
-    if (it != _attribute_map.end()) {
-        auto user_attr = std::dynamic_pointer_cast<StunAttrUserName>(it->second);
-        return user_attr->getUsername();
-    }
-    return "";
+std::string StunPacket::getUsername() const {
+    auto attr = getAttribute<StunAttrUserName>();
+    return attr ? attr->getUsername() : "";
 }
 
-uint64_t StunPacket::getPriority() {
-    auto it = _attribute_map.find(StunAttribute::Type::PRIORITY);
-    if (it != _attribute_map.end()) {
-        auto priority_attr = std::dynamic_pointer_cast<StunAttrPriority>(it->second);
-        return priority_attr->getPriority();
-    }
-    return 0;
+uint64_t StunPacket::getPriority() const {
+    auto attr = getAttribute<StunAttrPriority>();
+    return attr ? attr->getPriority() : 0;
 }
 
 StunAttrErrorCode::Code StunPacket::getErrorCode() const {
-    auto it = _attribute_map.find(StunAttribute::Type::ERROR_CODE);
-    if (it != _attribute_map.end()) {
-        auto errorcode_attr = std::dynamic_pointer_cast<StunAttrErrorCode>(it->second);
-        return errorcode_attr->getErrorCode();
-    }
-    return StunAttrErrorCode::Code::Invalid;
+    auto attr = getAttribute<StunAttrErrorCode>();
+    return attr ? attr->getErrorCode() : StunAttrErrorCode::Code::Invalid;
 }
 
 StunPacket::Authentication StunPacket::checkAuthentication(const std::string& ufrag, const std::string& password) {
     MS_TRACE();
 
-    auto attr_message_integrity = dynamic_pointer_cast<StunAttrMessageIntegrity>(getAttribute(StunAttribute::Type::MESSAGE_INTEGRITY));
+    auto attr_message_integrity = getAttribute<StunAttrMessageIntegrity>();
     switch (_klass) {
         case Class::REQUEST: {
             if (!attr_message_integrity) {
@@ -626,7 +622,7 @@ StunPacket::Authentication StunPacket::checkAuthentication(const std::string& uf
             return Authentication::OK;
         case Class::SUCCESS_RESPONSE:
         case Class::ERROR_RESPONSE:
-        break;
+            break;
     }
 
     if (attr_message_integrity) {
@@ -637,8 +633,8 @@ StunPacket::Authentication StunPacket::checkAuthentication(const std::string& uf
             Byte::Set2Bytes((uint8_t*)_data->data(), 2, _data->size() - HEADER_SIZE - 8);
         }
 
-        auto attr_realm = dynamic_pointer_cast<StunAttrRealm>(getAttribute(StunAttribute::Type::REALM));
-        auto attr_nonce = dynamic_pointer_cast<StunAttrNonce>(getAttribute(StunAttribute::Type::NONCE));
+        auto attr_realm = getAttribute<StunAttrRealm>();
+        auto attr_nonce = getAttribute<StunAttrNonce>();
 
         BufferLikeString key = password;
         if (attr_nonce && attr_realm) {
@@ -665,7 +661,7 @@ StunPacket::Authentication StunPacket::checkAuthentication(const std::string& uf
         // DebugL << "_hmac: " << toolkit::hexdump(attr_message_integrity->_hmac.data(), attr_message_integrity->_hmac.size());
         // DebugL << "cal: " << toolkit::hexdump(computedMessageIntegrity.data(), computedMessageIntegrity.size());
 
-        if (std::memcmp(attr_message_integrity->_hmac.data(), computedMessageIntegrity.data(), computedMessageIntegrity.size()) != 0) {
+        if (std::memcmp(attr_message_integrity->getHmac().data(), computedMessageIntegrity.data(), computedMessageIntegrity.size()) != 0) {
             return Authentication::UNAUTHORIZED;
         } 
 
@@ -676,13 +672,13 @@ StunPacket::Authentication StunPacket::checkAuthentication(const std::string& uf
 
     // FINGERPRINT验证
     if (hasAttribute(StunAttribute::Type::FINGERPRINT)) {
-        auto attr_fingerprint = dynamic_pointer_cast<StunAttrFingerprint>(getAttribute(StunAttribute::Type::FINGERPRINT));
+        auto attr_fingerprint = getAttribute<StunAttrFingerprint>();
         if (attr_fingerprint) {
             // 计算FINGERPRINT：对除FINGERPRINT属性外的整个包计算CRC32
             uint32_t computedFingerprint = getCRC32((uint8_t*)_data->data(), _data->size() - 8) ^ 0x5354554e;
             if (attr_fingerprint->getFingerprint() != computedFingerprint) {
                 // DebugL << "FINGERPRINT verification failed, expected: " << std::hex << computedFingerprint 
-                       // << ", got: " << attr_fingerprint->getFingerprint();
+                //        << ", got: " << attr_fingerprint->getFingerprint();
                 return Authentication::UNAUTHORIZED;
             } else {
                 TraceL << "FINGERPRINT verification passed";
@@ -754,8 +750,8 @@ void StunPacket::serialize() {
         }
 
         // Add MESSAGE-INTEGRITY.
-        auto attr_nonce = dynamic_pointer_cast<StunAttrNonce>(getAttribute(StunAttribute::Type::NONCE));
-        auto attr_realm = dynamic_pointer_cast<StunAttrRealm>(getAttribute(StunAttribute::Type::REALM));
+        auto attr_nonce = getAttribute<StunAttrNonce>();
+        auto attr_realm = getAttribute<StunAttrRealm>();
         //FIXME: need use SASLprep(password) replace password
         // 根据RFC 5766标准：key = MD5(username ":" realm ":" SASLprep(password))
         BufferLikeString key = password;
@@ -801,8 +797,6 @@ void StunPacket::serialize() {
         attr_fingerprint->storeToData();
         memcpy((unsigned char*)_data->data() + HEADER_SIZE + attr_size + message_integrity_size, attr_fingerprint->data(), attr_fingerprint->size());
     }
-
-    return;
 }
 
 StunPacket::Ptr StunPacket::createSuccessResponse()
@@ -826,30 +820,21 @@ StunPacket::Ptr StunPacket::createSuccessResponse()
         packet->addAttribute(attr_nonce);
         DebugL << "Copied NONCE attribute to response";
     }
-    
     return packet;
 }
 
 StunPacket::Ptr StunPacket::createErrorResponse(StunAttrErrorCode::Code errorCode) {
     MS_TRACE();
-
     MS_ASSERT(_klass == Class::REQUEST, "attempt to create an error response for a non Request STUN packet");
-
-    auto packet = std::make_shared<ErrorResponsePacket>(_method, _transaction_id, errorCode);
-    return packet;
+    return std::make_shared<ErrorResponsePacket>(_method, _transaction_id, errorCode);
 }
 
 char *StunPacket::data() const {
-    if (!_data)
-        return nullptr;
-    return _data->data();
+    return _data ? _data->data() : nullptr;
 }
 
 size_t StunPacket::size() const {
-    if (!_data) {
-        return 0;
-    }
-    return _data->size();
+    return _data ? _data->size() : 0;
 }
 
 bool StunPacket::loadFromData(const uint8_t *buf, size_t len) {
@@ -970,14 +955,14 @@ size_t StunPacket::getAttrSize() {
     return size;
 }
 
-SuccessResponsePacket::SuccessResponsePacket(Method method, toolkit::BufferLikeString transaction_id) :
+SuccessResponsePacket::SuccessResponsePacket(Method method, const std::string& transaction_id) :
     StunPacket(Class::SUCCESS_RESPONSE, method) {
     _transaction_id = transaction_id;
 }
 
-ErrorResponsePacket::ErrorResponsePacket(Method method, toolkit::BufferLikeString transaction_id, StunAttrErrorCode::Code error_code) :
+ErrorResponsePacket::ErrorResponsePacket(Method method, const std::string& transaction_id, StunAttrErrorCode::Code error_code) :
     StunPacket(Class::ERROR_RESPONSE, method) {
-    DebugL;
+    DebugL << (int)error_code;
 
     _transaction_id = transaction_id;
 	auto attr = std::make_shared<StunAttrErrorCode>();
