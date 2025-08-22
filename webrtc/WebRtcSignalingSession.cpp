@@ -14,7 +14,6 @@
 #include "WebRtcTransport.h"
 #include "Util/util.h"
 #include "Common/config.h"
-#include "server/WebApi.h"
 
 using namespace std;
 

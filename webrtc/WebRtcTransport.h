@@ -27,7 +27,7 @@
 #include "SctpAssociation.hpp"
 #include "Rtcp/RtcpContext.h"
 #include "Rtsp/RtspMediaSource.h"
-#include "server/WebApi.h"
+
 using namespace RTC;
 namespace mediakit {
 
@@ -220,7 +220,7 @@ private:
     void setRemoteDtlsFingerprint(SdpType type, const RtcSession &remote);
 
 protected:
-    SignalingProtocols  _signaling_protocols = SignalingProtocols::WHEP_WHIP;
+    SignalingProtocols _signaling_protocols = SignalingProtocols::WHEP_WHIP;
     Role _role = Role::PEER;
     RtcSession::Ptr _offer_sdp;
     RtcSession::Ptr _answer_sdp;
@@ -409,34 +409,6 @@ class WebRtcArgs : public std::enable_shared_from_this<WebRtcArgs> {
 public:
     virtual ~WebRtcArgs() = default;
     virtual variant operator[](const std::string &key) const = 0;
-};
-
-template<typename Args>
-class WebRtcArgsImp : public WebRtcArgs {
-public:
-    WebRtcArgsImp(const HttpAllArgs<Args> &args, const std::string& session_id)
-        : _args(args)
-        , _session_id(std::move(session_id)) {}
-    ~WebRtcArgsImp() override = default;
-
-    variant operator[](const std::string &key) const override {
-        if (key == "url") {
-            return getUrl();
-        }
-        return _args[key];
-    }
-
-private:
-    std::string getUrl() const{
-        auto &allArgs = _args;
-        CHECK_ARGS("app", "stream");
-        return StrPrinter << RTC_SCHEMA << "://" << (_args["Host"].empty()? (std::string)DEFAULT_VHOST : _args["Host"]) << "/" << _args["app"] << "/"
-        << _args["stream"] << "?" << _args.getParser().params() + "&session=" + _session_id;
-    }
-
-private:
-    HttpAllArgs<Args> _args;
-    std::string _session_id;
 };
 
 using onCreateWebRtc = std::function<void(const WebRtcInterface &rtc)>;
