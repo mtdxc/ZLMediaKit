@@ -30,7 +30,7 @@ public:
 
 protected:
     ///////WebRtcTransportImp override///////
-    void setAnswerSdp(const std::string &answer) override;
+    void onCheckSdp(SdpType type, RtcSession &sdp) override;
     void onStartWebRTC() override;
     void onDestory() override;
     void onRtcConfigure(RtcConfigure &configure) const override;

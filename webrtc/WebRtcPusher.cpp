@@ -123,35 +123,26 @@ void WebRtcPusher::onRecvRtp(MediaTrack &track, const string &rid, RtpPacket::Pt
     }
 }
 
-void WebRtcPusher::setAnswerSdp(const std::string &answer) {
-    WebRtcTransport::setAnswerSdp(answer);
-
-    if (canRecvRtp()) {
-        if (_push_src) {
-            _push_src->setSdp(_answer_sdp->toRtspSdp());
-        }
+void WebRtcPusher::onCheckSdp(SdpType type, RtcSession &sdp) {
+    WebRtcTransportImp::onCheckSdp(type, sdp);
+    if (type == SdpType::answer && canRecvRtp()) {
         _demuxer = std::make_shared<RtspDemuxer>();
-        _demuxer->loadSdp(_answer_sdp->toRtspSdp());
+        _demuxer->loadSdp(sdp.toRtspSdp());
     }
 }
 
 void WebRtcPusher::setMediaSource(const RtspMediaSource::Ptr src) {
     _push_src = src;
-    if (_push_src && canRecvRtp()) {
-        _push_src->setSdp(_answer_sdp->toRtspSdp());
-    }
 }
 
 void WebRtcPusher::onStartWebRTC() {
     WebRtcTransportImp::onStartWebRTC();
     _simulcast = _answer_sdp->supportSimulcast();
-#if 1
     if (canRecvRtp()) {
         if (_push_src) {
             _push_src->setSdp(_answer_sdp->toRtspSdp());
         }
     }
-#endif
 }
 
 void WebRtcPusher::onDestory() {
