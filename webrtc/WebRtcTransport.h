@@ -7,7 +7,8 @@
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
-
+#ifndef ZLMEDIAKIT_WEBRTC_TRANSPORT_H
+#define ZLMEDIAKIT_WEBRTC_TRANSPORT_H
 #pragma once
 
 #include <memory>
@@ -46,6 +47,7 @@ extern const std::string kTcpPort;
 extern const std::string kTimeOutSec;
 extern const std::string kSignalingPort;
 extern const std::string kIcePort;
+extern const std::string kIceTcpPort;
 extern const std::string kEnableTurn;
 extern const std::string kIceTransportPolicy;
 extern const std::string kIceUfrag;
@@ -439,3 +441,5 @@ private:
 void translateIPFromEnv(std::vector<std::string> &v);
 
 }// namespace mediakit
+
+#endif // ZLMEDIAKIT_WEBRTC_TRANSPORT_H

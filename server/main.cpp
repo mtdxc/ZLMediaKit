@@ -373,10 +373,12 @@ int start_main(int argc,char *argv[]) {
 		
         auto signaleSrv = std::make_shared<TcpServer>();
         auto iceSrv = std::make_shared<UdpServer>();
+        auto iceTcpSrv = std::make_shared<TcpServer>();
         uint16_t rtcPort = mINI::Instance()[Rtc::kPort];
         uint16_t rtcTcpPort = mINI::Instance()[Rtc::kTcpPort];
         uint16_t signalingPort = mINI::Instance()[Rtc::kSignalingPort];
         uint16_t icePort = mINI::Instance()[Rtc::kIcePort];
+        uint16_t iceTcpPort = mINI::Instance()[Rtc::kIceTcpPort];
 #endif//defined(ENABLE_WEBRTC)
 
 
@@ -444,8 +446,9 @@ int start_main(int argc,char *argv[]) {
              
             //webrtc 信令服务器
             if (signalingPort) { signaleSrv->start<WebRtcWebcosktSignalingSession>(signalingPort);}
-			//STUN/TURN服务
+            //STUN/TURN服务
             if (icePort) { iceSrv->start<IceSession>(icePort);}
+            if (iceTcpPort) { iceTcpSrv->start<IceSession>(iceTcpPort);}
 			
 #endif//defined(ENABLE_WEBRTC)
 

@@ -62,6 +62,7 @@ const string kTcpPort = RTC_FIELD "tcpPort";
 const string kSignalingPort = RTC_FIELD "signalingPort";
 // webrtc iceServer udp server
 const string kIcePort = RTC_FIELD "icePort";
+const string kIceTcpPort = RTC_FIELD "iceTcpPort";
 // webrtc enable turn or only enable stun
 const string kEnableTurn = RTC_FIELD "enableTurn";
 // webrtc ice ufrag and pwd  [AUTO-TRANSLATED:2f0d1b3c]
@@ -94,6 +95,7 @@ static onceToken token([]() {
 
     mINI::Instance()[kSignalingPort] = 3000;
     mINI::Instance()[kIcePort] = 3478;
+    mINI::Instance()[kIceTcpPort] = 3478;
     mINI::Instance()[kEnableTurn] = 1;
     mINI::Instance()[kIceTransportPolicy] = 0;  // 默认值：不限制(kAll)
     mINI::Instance()[kIceUfrag] = "ZLMediaKit";

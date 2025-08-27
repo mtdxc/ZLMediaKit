@@ -32,7 +32,7 @@ IceSession::Ptr queryIceTransport(uint8_t *data, size_t size, const EventPoller:
 ///
 IceSession::IceSession(const Socket::Ptr &sock) : Session(sock) {
     TraceL;
-
+    _over_tcp = sock->sockType() == SockNum::Sock_TCP;
     GET_CONFIG(string, iceUfrag, Rtc::kIceUfrag);
     GET_CONFIG(string, icePwd, Rtc::kIcePwd);
     _ice_transport = std::make_shared<IceServer>(this, iceUfrag, icePwd, getPoller());
@@ -46,10 +46,19 @@ EventPoller::Ptr IceSession::queryPoller(const Buffer::Ptr &buffer) {
 
 void IceSession::onRecv(const Buffer::Ptr &buffer) {
     // TraceL;
+    if (_over_tcp) {
+        input(buffer->data(), buffer->size());
+    }
+    else{
+        onRecv_l(buffer->data(), buffer->size());
+    }
+}
+
+void IceSession::onRecv_l(const char* buffer, size_t size) {
     if (!_session_pair) {
         _session_pair = std::make_shared<IceTransport::Pair>(shared_from_this());
     }
-    _ice_transport->processSocketData((const uint8_t *)buffer->data(), buffer->size(), _session_pair);
+    _ice_transport->processSocketData((const uint8_t *)buffer, size, _session_pair);
 }
 
 void IceSession::onError(const SockException &err) {
@@ -59,6 +68,25 @@ void IceSession::onError(const SockException &err) {
 
 void IceSession::onManager() {
     return;
+}
+
+ssize_t IceSession::onRecvHeader(const char *data, size_t len) {
+    onRecv_l(data + 2, len - 2);
+    return 0;
+}
+
+const char *IceSession::onSearchPacketTail(const char *data, size_t len) {
+    if (len < 2) {
+        // Not enough data
+        return nullptr;
+    }
+    uint16_t length = (((uint8_t *)data)[0] << 8) | ((uint8_t *)data)[1];
+    if (len < (size_t)(length + 2)) {
+        // Not enough data
+        return nullptr;
+    }
+    // Return the end of the RTP packet
+    return data + 2 + length;
 }
 
 ////////////  IceSessionManager //////////////////////////
