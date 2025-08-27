@@ -400,7 +400,7 @@ void WebRtcTransport::onIceTransportDisconnected() {
     InfoL << getIdentifier();
 }
 
-void WebRtcTransport::onIceTransportGatheringCandidate(IceTransport::Pair::Ptr pair, CandidateInfo candidate) {
+void WebRtcTransport::onIceTransportGatheringCandidate(const IceTransport::Pair::Ptr& pair, const CandidateInfo& candidate) {
     InfoL << getIdentifier() << " get local candidate type "  << candidate.typeAddr();
     if (_on_gathering_candidate) {
         auto type = AddressTypeToStr(candidate._type);
@@ -697,7 +697,7 @@ static bool isDtls(char *buf) {
     return ((*buf > 19) && (*buf < 64));
 }
 
-void WebRtcTransport::onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer, IceTransport::Pair::Ptr pair) {
+void WebRtcTransport::onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer,const IceTransport::Pair::Ptr& pair) {
     return inputSockData(buffer->data(), buffer->size(), pair);
 }
 

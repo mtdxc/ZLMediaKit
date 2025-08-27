@@ -89,8 +89,10 @@ void WebRtcSession::onRecv_l(const char *data, size_t len) {
     }
     _ticker.resetTime();
     CHECK(_transport);
-    auto pair = std::make_shared<IceTransport::Pair>(shared_from_this());
-    _transport->inputSockData((char *)data, len, pair);
+    if (!_pair) {
+        _pair = std::make_shared<IceTransport::Pair>(shared_from_this());
+    }
+    _transport->inputSockData((char *)data, len, _pair);
 }
 
 void WebRtcSession::onRecv(const Buffer::Ptr &buffer) {
@@ -109,7 +111,7 @@ void WebRtcSession::onError(const SockException &err) {
     // 本WebRtcSession对象将在超时后自动销毁  [AUTO-TRANSLATED:bc903a06]
     // This WebRtcSession object will be automatically destroyed after timeout
     WarnP(this) << err;
-
+    _pair = nullptr;
     if (!_transport) {
         return;
     }

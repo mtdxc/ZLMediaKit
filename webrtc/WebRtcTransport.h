@@ -169,8 +169,8 @@ public:
 protected:
     // for ICE
     // IceTransport::Listener.
-    void onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer, IceTransport::Pair::Ptr pair) override;
-    void onIceTransportGatheringCandidate(IceTransport::Pair::Ptr pair, CandidateInfo candidate) override;
+    void onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer, const IceTransport::Pair::Ptr& pair) override;
+    void onIceTransportGatheringCandidate(const IceTransport::Pair::Ptr& pair, const CandidateInfo& candidate) override;
     void onIceTransportDisconnected() override;
     void onIceTransportCompleted() override;
 

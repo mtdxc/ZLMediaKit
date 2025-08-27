@@ -46,12 +46,15 @@ EventPoller::Ptr IceSession::queryPoller(const Buffer::Ptr &buffer) {
 
 void IceSession::onRecv(const Buffer::Ptr &buffer) {
     // TraceL;
-    auto pair = std::make_shared<IceTransport::Pair>(shared_from_this());
-    _ice_transport->processSocketData((const uint8_t *)buffer->data(), buffer->size(), pair);
+    if (!_session_pair) {
+        _session_pair = std::make_shared<IceTransport::Pair>(shared_from_this());
+    }
+    _ice_transport->processSocketData((const uint8_t *)buffer->data(), buffer->size(), _session_pair);
 }
 
 void IceSession::onError(const SockException &err) {
     InfoL;
+    _session_pair = nullptr;
 }
 
 void IceSession::onManager() {
@@ -85,11 +88,11 @@ void IceSessionManager::removeItem(const std::string& key) {
     _map.erase(key);
 }
 
-void IceSession::onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer, IceTransport::Pair::Ptr pair) {
+void IceSession::onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer, const IceTransport::Pair::Ptr& pair) {
     _ice_transport->processSocketData((const uint8_t *)buffer->data(), buffer->size(), pair);
 }
 
-void IceSession::onIceTransportGatheringCandidate(IceTransport::Pair::Ptr pair, CandidateInfo candidate) {
+void IceSession::onIceTransportGatheringCandidate(const IceTransport::Pair::Ptr& pair, const CandidateInfo& candidate) {
     DebugL;
 }
 

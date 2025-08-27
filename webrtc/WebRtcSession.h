@@ -36,7 +36,7 @@ public:
 
 protected:
     WebRtcTransportImp::Ptr _transport;
-
+    IceTransport::Pair::Ptr _pair;
 private:
     //// HttpRequestSplitter override ////
     ssize_t onRecvHeader(const char *data, size_t len) override;
