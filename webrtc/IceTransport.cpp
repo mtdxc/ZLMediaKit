@@ -425,7 +425,7 @@ void IceTransport::handleBindingRequest(const StunPacket::Ptr& packet, const Pai
     response->setPassword(_password);
 
     sockaddr_storage peer_addr;
-    if (!pair->get_realyed_addr(peer_addr)) {
+    if (!pair->get_relayed_addr(peer_addr)) {
         pair->get_peer_addr(peer_addr);
     }
 
@@ -704,7 +704,7 @@ onceToken PortManager_token([](){
 });
 
 std::unordered_map<sockaddr_storage /*peer ip:port*/, IceServer::WeakPtr,
-toolkit::SockUtil::SockAddrHash, toolkit::SockUtil::SockAddrEqual> _realyed_session;
+toolkit::SockUtil::SockAddrHash, toolkit::SockUtil::SockAddrEqual> _relayed_session;
 
 IceServer::IceServer(Listener* listener, const std::string& ufrag, const std::string& password, const toolkit::EventPoller::Ptr &poller) 
     : IceTransport(listener, ufrag, password, poller) {
@@ -772,7 +772,7 @@ void IceServer::handleAllocateRequest(const StunPacket::Ptr& packet, const Pair:
     response->addAttribute(std::move(attr_xor_mapped_address));
 
     // Add XOR-RELAYED-ADDRESS.
-    auto socket = allocateRealyed(pair);
+    auto socket = allocateRelayed(pair);
     sockaddr_storage relayed_addr = SockUtil::make_sockaddr(socket->get_local_ip().data(), socket->get_local_port());
 	auto attr_xor_relayed_address = std::make_shared<StunAttrXorRelayedAddress>(response->getTransactionId());
     attr_xor_relayed_address->setAddr(relayed_addr);
@@ -940,7 +940,7 @@ void IceServer::sendDataIndication(const sockaddr_storage& peer_addr, const Buff
     return;
 }
 
-SocketHelper::Ptr IceServer::allocateRealyed(const Pair::Ptr& pair) {
+SocketHelper::Ptr IceServer::allocateRelayed(const Pair::Ptr& pair) {
     // DebugL;
 
     //only support udp
@@ -962,14 +962,14 @@ SocketHelper::Ptr IceServer::allocateRealyed(const Pair::Ptr& pair) {
         extern_ip = extern_ips.front();
     }
 
-    auto socket = createRealyedUdpSocket(pair->get_peer_ip(), pair->get_peer_port(), extern_ip, *port);
-    auto realyed_pair = std::make_shared<Pair>(socket);
+    auto socket = createRelayedUdpSocket(pair->get_peer_ip(), pair->get_peer_port(), extern_ip, *port);
+    auto relayed_pair = std::make_shared<Pair>(socket);
     auto peer_addr = SockUtil::make_sockaddr(pair->get_peer_ip().data(), pair->get_peer_port());
     weak_ptr<IceServer> weak_self = static_pointer_cast<IceServer>(shared_from_this());
-    _realyed_pairs.emplace(peer_addr, std::make_pair(port, realyed_pair));
-    _realyed_session.emplace(peer_addr, weak_self);
+    _relayed_pairs.emplace(peer_addr, std::make_pair(port, relayed_pair));
+    _relayed_session.emplace(peer_addr, weak_self);
 
-    InfoL << "Alloc realyed pair: " << realyed_pair->get_local_ip() << ":" <<  realyed_pair->get_local_port() 
+    InfoL << "Alloc relayed pair: " << relayed_pair->get_local_ip() << ":" <<  relayed_pair->get_local_port() 
         << " for peer pair: " << pair->get_peer_ip() << ":" << pair->get_peer_port();
     return socket;
 }
@@ -977,12 +977,12 @@ SocketHelper::Ptr IceServer::allocateRealyed(const Pair::Ptr& pair) {
 void IceServer::relayForwordingData(const toolkit::Buffer::Ptr& buffer, struct sockaddr_storage peer_addr) {
     TraceL;
     getPoller()->async([=]() {
-        auto it = _realyed_pairs.find(peer_addr);
-        if (it == _realyed_pairs.end()) {
+        auto it = _relayed_pairs.find(peer_addr);
+        if (it == _relayed_pairs.end()) {
 #if 0
             //不是当前对象的转发,交给其他对象转发
-            auto forword_it = _realyed_session.find(peer_addr);
-            if (forword_it == _realyed_session.end()) {
+            auto forword_it = _relayed_session.find(peer_addr);
+            if (forword_it == _relayed_session.end()) {
                 WarnL << "not relayed addr for peer addr: " << addrToStr(peer_addr);
             }
 
@@ -1015,8 +1015,8 @@ void IceServer::relayBackingData(const toolkit::Buffer::Ptr& buffer, const Pair:
     sockaddr_storage addr;
     pair->get_peer_addr(addr);
 
-    auto it = _realyed_pairs.find(addr);
-    if (it == _realyed_pairs.end()) {
+    auto it = _relayed_pairs.find(addr);
+    if (it == _relayed_pairs.end()) {
         WarnL << "not relayed addr for peer addr: " << addrToStr(addr);
         return;
     }
@@ -1026,7 +1026,7 @@ void IceServer::relayBackingData(const toolkit::Buffer::Ptr& buffer, const Pair:
     // DebugL << "relay backing" << forward_pair->toString(1);
 }
 
-SocketHelper::Ptr IceServer::createRealyedUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+SocketHelper::Ptr IceServer::createRelayedUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
     auto socket = std::make_shared<UdpClient>(getPoller());
 
     weak_ptr<IceServer> weak_self = static_pointer_cast<IceServer>(shared_from_this());
@@ -1124,13 +1124,13 @@ void IceAgent::connectivityCheck(CandidateInfo candidate) {
             addToChecklist(pair, candidate);
         }
 
-        if (_socket_candidate_manager._has_realyed_candidate) {
-            localRealyedConnectivityCheck(candidate);
+        if (_socket_candidate_manager._has_relayed_candidate) {
+            localRelayedConnectivityCheck(candidate);
         }
     }
 }
 
-void IceAgent::localRealyedConnectivityCheck(CandidateInfo candidate) {
+void IceAgent::localRelayedConnectivityCheck(CandidateInfo candidate) {
     TraceL;
     for (auto socket: _socket_candidate_manager._relay_sockets) {
         auto addr = toolkit::SockUtil::make_sockaddr(_ice_server->_addr._host.data(), _ice_server->_addr._port);
@@ -1138,7 +1138,7 @@ void IceAgent::localRealyedConnectivityCheck(CandidateInfo candidate) {
         auto peer_addr = SockUtil::make_sockaddr(candidate._addr._host.data(), candidate._addr._port);
         sendCreatePermissionRequest(local_realy_pair, peer_addr);
 
-        local_realy_pair->_realyed_addr = std::make_shared<sockaddr_storage>(peer_addr);
+        local_realy_pair->_relayed_addr = std::make_shared<sockaddr_storage>(peer_addr);
         addToChecklist(local_realy_pair, candidate);
     }
 }
@@ -1344,7 +1344,7 @@ void IceAgent::handleBindingRequest(const StunPacket::Ptr& packet, const Pair::P
     response->setPassword(_password);
 
     sockaddr_storage peer_addr;
-    if (!pair->get_realyed_addr(peer_addr)) {
+    if (!pair->get_relayed_addr(peer_addr)) {
         pair->get_peer_addr(peer_addr);
     }
 
@@ -1593,7 +1593,7 @@ void IceAgent::handleDataIndication(const StunPacket::Ptr& packet, const Pair::P
     DebugL << "Received Data indication from peer: " << addrToStr(addr) << ", size: " << buffer.size();
 
     // 通知上层收到数据
-    pair->_realyed_addr = std::make_shared<sockaddr_storage>(addr);
+    pair->_relayed_addr = std::make_shared<sockaddr_storage>(addr);
     _listener->onIceTransportRecvData(recv_buffer, pair);
 }
 
@@ -1615,7 +1615,7 @@ void IceAgent::handleChannelData(uint16_t channel_number, const char* data, size
     buffer->assign(data, len);
 
     // 通知上层收到数据
-    pair->_realyed_addr = std::make_shared<sockaddr_storage>(addr);
+    pair->_relayed_addr = std::make_shared<sockaddr_storage>(addr);
     _listener->onIceTransportRecvData(buffer, pair);
 }
 
@@ -1633,9 +1633,9 @@ void IceAgent::onGatheringCandidate(const Pair::Ptr& pair, CandidateInfo candida
 
     //如果是REALY,当前的所有PEER Candidate进行CreatePermission
     if (candidate._type == AddressType::RELAY) {
-        _socket_candidate_manager._has_realyed_candidate = true;
+        _socket_candidate_manager._has_relayed_candidate = true;
         for (auto remote_candidate : _remote_candidates) {
-            localRealyedConnectivityCheck(remote_candidate);
+            localRelayedConnectivityCheck(remote_candidate);
         }
     }
 }
@@ -1811,7 +1811,7 @@ void IceAgent::sendSocketData(const toolkit::Buffer::Ptr& buf, const Pair::Ptr& 
     }
 
     //auto use_pair = std::make_shared<Pair>(*pair);
-    if (pair->_realyed_addr) {
+    if (pair->_relayed_addr) {
         sendRealyPacket(buf, pair, flush);
     } else {
         sendSocketData_l(buf, pair, flush);
@@ -1820,8 +1820,8 @@ void IceAgent::sendSocketData(const toolkit::Buffer::Ptr& buf, const Pair::Ptr& 
 
 void IceAgent::sendRealyPacket(const toolkit::Buffer::Ptr& buffer, const Pair::Ptr& pair, bool flush) {
     // TraceL;
-    auto peer_addr = std::move(pair->_realyed_addr);
-    pair->_realyed_addr = nullptr;
+    auto peer_addr = std::move(pair->_relayed_addr);
+    pair->_relayed_addr = nullptr;
 
     if (!hasPermission(*peer_addr)) {
         WarnL << "No permission exists for peer: " << addrToStr(*peer_addr);
@@ -1973,9 +1973,9 @@ Json::Value IceAgent::getChecklistInfo() const {
         Json::Value active_pair;
         active_pair["local"] = _selected_pair->get_local_ip() + ":" + std::to_string(_selected_pair->get_local_port());
         
-        // 优先使用realyed地址，如果没有则使用peer地址
-        if (_selected_pair->_realyed_addr) {
-            active_pair["remote"] = _selected_pair->get_realyed_ip() + ":" + std::to_string(_selected_pair->get_realyed_port());
+        // 优先使用relayed地址，如果没有则使用peer地址
+        if (_selected_pair->_relayed_addr) {
+            active_pair["remote"] = _selected_pair->get_relayed_ip() + ":" + std::to_string(_selected_pair->get_relayed_port());
         }
         else{
             active_pair["remote"] = _selected_pair->get_peer_ip() + ":" + std::to_string(_selected_pair->get_peer_port());
