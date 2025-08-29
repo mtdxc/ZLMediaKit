@@ -339,9 +339,6 @@ protected:
     bool hasChannelBind(uint16_t channel_number);
     bool hasChannelBind(const sockaddr_storage& addr, uint16_t& channel_number);
     void addChannelBind(uint16_t channel_number, const sockaddr_storage& addr);
-
-    toolkit::SocketHelper::Ptr createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
-    toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
     
     void checkRequestTimeouts();
     void retransmitRequest(const std::string& transaction_id, RequestInfo& req_info);
@@ -512,6 +509,10 @@ public:
     Json::Value getChecklistInfo() const;
 
 protected:
+    toolkit::SocketHelper::Ptr createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
+    toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
+    toolkit::SocketHelper::Ptr createTcpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
+
     void gatheringSrflxCandidate(const Pair::Ptr& pair);
     void gatheringRealyCandidate(const Pair::Ptr& pair);
     void localRelayedConnectivityCheck(CandidateInfo candidate);
@@ -649,9 +650,19 @@ protected:
             return _relay_sockets;
         }
         
+        void delMapping(toolkit::SocketHelper::Ptr socket) {
+            auto it = socket_to_candidates.find(socket);
+            if (it != socket_to_candidates.end()) {
+                for (auto cand : it->second) {
+                    candidate_to_socket.erase(cand);
+                }
+                socket_to_candidates.erase(it);
+            }
+        }
         // 移除host socket
-        void removeHostSocket(toolkit::SocketHelper::Ptr socket) {
+        void removeHostSocket(toolkit::SocketHelper::Ptr socket) { 
             _host_sockets.erase(socket);
+            delMapping(socket);
         }
         
         // 移除relay socket

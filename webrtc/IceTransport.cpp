@@ -26,6 +26,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "IceTransport.hpp"
 #include "WebRtcTransport.h"
 #include "Network/UdpClient.h"
+#include "Network/TcpClient.h"
 #include "Util/Byte.hpp"
 #include "json/json.h"
 
@@ -227,11 +228,8 @@ void IceTransport::sendSocketData_l(const toolkit::Buffer::Ptr& buf, const Pair:
     if (pair->_socket->getSock()->sockType() == SockNum::Sock_TCP) {
         // 增加tcp两字节头  [AUTO-TRANSLATED:62159f79]
         // Add two-byte header to tcp
-        auto len = buf->size();
-        char tcp_len[2] = { 0 };
-        tcp_len[0] = (len >> 8) & 0xff;
-        tcp_len[1] = len & 0xff;
-        pair->_socket->SockSender::send(tcp_len, 2);
+        short len = htonl(buf->size());
+        pair->_socket->SockSender::send((const char *)&len, 2);
     }
 
 #if 0
@@ -505,18 +503,100 @@ void IceTransport::addChannelBind(uint16_t channel_number, const sockaddr_storag
     _channel_binding_times[channel_number] = toolkit::getCurrentMillisecond();
 }
 
-SocketHelper::Ptr IceTransport::createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+class IceTcpClient: public TcpClient {
+public:
+    using Ptr = std::shared_ptr<IceTcpClient>;
+    IceTcpClient(toolkit::EventPoller::Ptr eventLoop) : TcpClient(eventLoop) {}
+    ~IceTcpClient(){}
+
+    using DataCB = std::function<void(const uint8_t *data, size_t len, const IceTransport::Pair::Ptr &pair)>;
+    void setDataCb(DataCB cb) { onRecvData = std::move(cb); }
+
+    using CloseCB = std::function<void(toolkit::SocketHelper::Ptr, const SockException &ex)>;
+    void setOnClose(CloseCB cb) { onClose = std::move(cb);}
+protected:
+    CloseCB onClose;
+    DataCB onRecvData;
+
+    toolkit::BufferLikeString _buffer;
+    IceTransport::Pair::Ptr _pair;
+
+    void onConnect(const SockException &ex) override {
+        InfoP(this) << (ex ? ex.what() : "success");
+        if (ex) {
+            onClose(shared_from_this(), ex);
+        }
+    }
+    void onError(const SockException &ex) override {
+        //断开连接事件，一般是EOF
+        _pair = nullptr;
+        WarnP(this) << ex;
+        if (onClose) {
+            onClose(shared_from_this(), ex);
+        }
+    }
+    void onRecv(const Buffer::Ptr &pBuf) override {
+        // Data received event
+        _buffer.append(pBuf->data(), pBuf->size());
+        int pos = 0;
+        while (_buffer.size() - pos > 2) {
+            uint16_t data_len = Byte::Get2Bytes((uint8_t *)_buffer.data(), pos);
+            if (_buffer.size() - pos >= data_len + 2) {
+                //收到完整数据包
+                if (onRecvData) {
+                    if (!_pair) {
+                        _pair = std::make_shared<IceTransport::Pair>(shared_from_this());
+                    }
+                    onRecvData((const uint8_t *)_buffer.data() + pos + 2, data_len, _pair);
+                }
+                pos += data_len + 2;
+            }
+        }
+        if (pos > 0) {
+            _buffer.erase(0, pos);
+        }
+    }
+    void onFlush() override {
+        //发送阻塞后，缓存清空事件
+    }
+    void onManager() override {
+    }
+};
+
+SocketHelper::Ptr IceAgent::createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
     if (type == CandidateTuple::TransportType::UDP) {
         return createUdpSocket(peer_host, peer_port, local_ip, local_port);
     } else {
-        throw std::invalid_argument("not support transport type: TCP");
+        // throw std::invalid_argument("not support transport type: TCP");
+        return createTcpSocket(peer_host, peer_port, local_ip, local_port);
     }
 }
 
-SocketHelper::Ptr IceTransport::createUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+SocketHelper::Ptr IceAgent::createTcpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+    auto socket = std::make_shared<IceTcpClient>(getPoller());
+    weak_ptr<IceAgent> weak_self = static_pointer_cast<IceAgent>(shared_from_this());
+    socket->setDataCb([weak_self](const uint8_t *data, size_t len, const IceTransport::Pair::Ptr &pair) {
+        // Handle received data
+        if (auto strong_self = weak_self.lock()) {
+            toolkit::Buffer::Ptr buffer = std::make_shared<toolkit::BufferString>((const char *)data, len);
+            strong_self->_listener->onIceTransportRecvData(buffer, pair);
+        }
+    });
+    socket->setOnClose([weak_self](toolkit::SocketHelper::Ptr sock, const SockException &ex) {
+        if (auto strong_self = weak_self.lock()) {
+            //strong_self->_socket_candidate_manager.removeHostSocket(sock);
+        }
+    });
+
+    socket->setNetAdapter(local_ip);
+    socket->startConnect(peer_host, peer_port, local_port);
+    return socket;
+}
+
+SocketHelper::Ptr IceAgent::createUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
     auto socket = std::make_shared<UdpClient>(getPoller());
 
-    weak_ptr<IceTransport> weak_self = static_pointer_cast<IceTransport>(shared_from_this());
+    weak_ptr<IceAgent> weak_self = static_pointer_cast<IceAgent>(shared_from_this());
     socket->setOnRecvFrom([weak_self, socket](const Buffer::Ptr &buffer, struct sockaddr *addr, int addr_len){
         auto strong_self = weak_self.lock();
         if (!strong_self) {
@@ -527,7 +607,7 @@ SocketHelper::Ptr IceTransport::createUdpSocket(const std::string &peer_host, ui
     });
 
     socket->setOnError([weak_self](const SockException &err) {
-        WarnL;
+        WarnL << err.what();
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
@@ -536,7 +616,6 @@ SocketHelper::Ptr IceTransport::createUdpSocket(const std::string &peer_host, ui
 
     socket->setNetAdapter(local_ip);
     socket->startConnect(peer_host, peer_port, local_port);
-
     return socket;
 }
 
@@ -1073,7 +1152,7 @@ void IceAgent::initialize() {
 }
 
 void IceAgent::gatheringCandidate(CandidateTuple::Ptr candidate_tuple, bool gathering_rflx, bool gathering_realy) {
-    // TraceL;
+    DebugL << candidate_tuple->toString();
     auto interfaces = SockUtil::getInterfaceList();
     for (auto obj : interfaces) {
         std::string local_ip = obj["ip"];
@@ -1087,6 +1166,7 @@ void IceAgent::gatheringCandidate(CandidateTuple::Ptr candidate_tuple, bool gath
             candidate._type = AddressType::HOST;
             candidate._ufrag = getUfrag();
             candidate._pwd = getPassword();
+            candidate._transport = candidate_tuple->_transport;
 
             auto socket = createSocket(candidate_tuple->_transport, candidate_tuple->_addr._host, candidate_tuple->_addr._port, local_ip);
             _socket_candidate_manager.addHostSocket(socket);
@@ -1113,7 +1193,7 @@ void IceAgent::gatheringCandidate(CandidateTuple::Ptr candidate_tuple, bool gath
 }
 
 void IceAgent::connectivityCheck(CandidateInfo candidate) {
-    TraceL;
+    TraceL << candidate.toString();
     setState(IceAgent::State::Running);
     auto ret = _remote_candidates.emplace(candidate);
     if (ret.second) {
@@ -1134,7 +1214,7 @@ void IceAgent::connectivityCheck(CandidateInfo candidate) {
 }
 
 void IceAgent::localRelayedConnectivityCheck(CandidateInfo candidate) {
-    TraceL;
+    TraceL << candidate.toString();
     for (auto socket: _socket_candidate_manager._relay_sockets) {
         auto addr = toolkit::SockUtil::make_sockaddr(_ice_server->_addr._host.data(), _ice_server->_addr._port);
         auto local_realy_pair = std::make_shared<Pair>(socket, (sockaddr *)&addr);
