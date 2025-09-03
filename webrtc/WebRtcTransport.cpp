@@ -137,33 +137,6 @@ static std::string getServerPrefix() {
     return ret;
 }
 
-static std::string mappingCandidateTypeEnum2Str(CandidateInfo::AddressType type) {
-    switch (type) {
-        case CandidateInfo::AddressType::HOST: return "host";
-        case CandidateInfo::AddressType::SRFLX: return "srflx";
-        case CandidateInfo::AddressType::PRFLX: return "prflx";
-        case CandidateInfo::AddressType::RELAY: return "relay";
-        default: break;
-    }
-    return "invalid";
-}
-
-static CandidateInfo::AddressType mappingCandidateTypeStr2Enum(const std::string &type) {
-    if (strcasecmp(type.c_str(), "host") == 0) {
-        return CandidateInfo::AddressType::HOST;
-    }
-    if (strcasecmp(type.c_str(), "srflx") == 0) {
-        return CandidateInfo::AddressType::SRFLX;
-    }
-    if (strcasecmp(type.c_str(), "prflx") == 0) {
-        return CandidateInfo::AddressType::PRFLX;
-    }
-    if (strcasecmp(type.c_str(), "relay") == 0) {
-        return CandidateInfo::AddressType::RELAY;
-    }
-    return CandidateInfo::AddressType::INVALID;
-}
-
 // 根据RFC 5245标准计算foundation
 // 1. IP地址类型（IPv4/IPv6）
 // 2. 传输协议（UDP/TCP）
@@ -208,7 +181,7 @@ static SdpAttrCandidate::Ptr makeIceCandidate(std::string ip, uint16_t port, uin
 
 static CandidateInfo::Ptr makeCandidateInfoBySdpAttr(const SdpAttrCandidate& candidate_attr, const std::string& ufrag, const std::string& pwd) {
     auto candidate = std::make_shared<CandidateInfo>();
-    candidate->_type = mappingCandidateTypeStr2Enum(candidate_attr.type);
+    candidate->_type = StrToAddressType(candidate_attr.type);
     candidate->_priority = candidate_attr.priority;
 
     candidate->_addr._host = candidate_attr.address;
@@ -229,10 +202,8 @@ static CandidateInfo::Ptr makeCandidateInfoBySdpAttr(const SdpAttrCandidate& can
 
     if (strcasecmp(candidate_attr.transport.c_str(), "udp") == 0) {
         candidate->_transport = CandidateTuple::TransportType::UDP;
-        candidate->_secure = CandidateTuple::SecureType::NOT_SECURE;
     } else if (strcasecmp(candidate_attr.transport.c_str(), "tcp") == 0) {
         candidate->_transport = CandidateTuple::TransportType::TCP;
-        candidate->_secure = CandidateTuple::SecureType::NOT_SECURE;
     }
 
     return candidate;
@@ -354,12 +325,13 @@ void WebRtcTransport::connectivityCheck(SdpAttrCandidate candidate_attr, const s
 void WebRtcTransport::connectivityCheckForSFU() {
     DebugL;
     // Connectivity Checks 连通性测试
-
     auto answer_sdp = answerSdp();
     // TODO: 暂不支持每个媒体源,RTP,RTCP独立的candidates
     for (auto &media : answer_sdp->media) {
         for (auto &item : media.candidate) {
             auto candidate = makeCandidateInfoBySdpAttr(item, media.ice_ufrag, media.ice_pwd);
+            if (_ice_agent->has_remote_candidate(*candidate)) 
+                 continue;
             _ice_agent->gatheringCandidate(candidate, false, false);
             _ice_agent->connectivityCheck(*candidate);
         }
@@ -406,9 +378,9 @@ void WebRtcTransport::onIceTransportDisconnected() {
 }
 
 void WebRtcTransport::onIceTransportGatheringCandidate(const IceTransport::Pair::Ptr &pair, const CandidateInfo &candidate) {
-    InfoL << getIdentifier() << " get local candidate type " << candidate.dumpString();
+    InfoL << getIdentifier() << " get local candidate: "  << candidate.dumpString();
     if (_on_gathering_candidate) {
-        auto type = mappingCandidateTypeEnum2Str(candidate._type);
+        auto type = AddressTypeToStr(candidate._type);
         auto sdpAttrCandidate = makeIceCandidate(candidate._addr._host, candidate._addr._port, candidate._priority, "udp", type);
         _on_gathering_candidate(getIdentifier(), sdpAttrCandidate->toString(), candidate._ufrag, candidate._pwd);
     }
@@ -588,6 +560,7 @@ void WebRtcTransport::onShutdown(const SockException &ex) {
                 pair->_socket->shutdown(ex);
             }
         }
+        _ice_agent->shutdown();
     }
 }
 
@@ -712,9 +685,7 @@ static bool isDtls(const char *buf) {
 void WebRtcTransport::inputSockData(const char *buf, int len, const SocketHelper::Ptr& socket, struct sockaddr *addr, int addr_len) {
     IceTransport::Pair::Ptr pair;
     if (addr != nullptr) {
-        auto peer_host = SockUtil::inet_ntoa(addr);
-        auto peer_port = SockUtil::inet_port(addr);
-        pair = std::make_shared<IceTransport::Pair>(socket, std::move(peer_host), peer_port);
+        pair = std::make_shared<IceTransport::Pair>(socket, addr);
     } else {
         pair = std::make_shared<IceTransport::Pair>(socket);
     }
@@ -1026,40 +997,33 @@ void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
     }
 
     //P2P的不直接在answer中返回candication
-    if (getSignalingProtocols() == SignalingProtocols::WHEP_WHIP) {
+    if (getSignalingProtocols() != SignalingProtocols::WHEP_WHIP) {
+        return;
+    }
 
-        GET_CONFIG(uint16_t, local_udp_port, Rtc::kPort);
-        GET_CONFIG(uint16_t, local_tcp_port, Rtc::kTcpPort);
-        // 添加接收端口candidate信息  [AUTO-TRANSLATED:cc9a6a90]
-        // Add the receiving port candidate information
-        GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, Rtc::kExternIP, [](string str) {
-            std::vector<std::string> ret;
-            if (str.length()) {
-                ret = split(str, ",");
-            }
-            translateIPFromEnv(ret);
-            return ret;
-        });
-        if (extern_ips.empty()) {
-            std::string local_ip = _local_ip.empty() ? SockUtil::get_local_ip() : _local_ip;
-            if (local_udp_port) {
-                configure.addCandidate(*makeIceCandidate(local_ip, local_udp_port, 120, "udp"));
-            }
-            if (local_tcp_port) {
-                configure.addCandidate(*makeIceCandidate(local_ip, local_tcp_port, _preferred_tcp ? 125 : 115, "tcp"));
-            }
+    GET_CONFIG(uint16_t, local_udp_port, Rtc::kPort);
+    GET_CONFIG(uint16_t, local_tcp_port, Rtc::kTcpPort);
+    // 添加接收端口candidate信息  [AUTO-TRANSLATED:cc9a6a90]
+    // Add the receiving port candidate information
+    GET_CONFIG_FUNC(std::vector<std::string>, extern_ips, Rtc::kExternIP, [](string str) {
+        std::vector<std::string> ret;
+        if (str.length()) {
+            ret = split(str, ",");
+        }
+        translateIPFromEnv(ret);
+        return ret;
+    });
+    if (extern_ips.empty()) {
+        std::string local_ip = _local_ip.empty() ? SockUtil::get_local_ip() : _local_ip;
+        if (local_udp_port) { configure.addCandidate(*makeIceCandidate(local_ip, local_udp_port, 120, "udp")); }
+        if (local_tcp_port) { configure.addCandidate(*makeIceCandidate(local_ip, local_tcp_port, _preferred_tcp ? 125 : 115, "tcp")); }
         } else {
             const uint32_t delta = 10;
             uint32_t priority = 100 + delta * extern_ips.size();
             for (auto ip : extern_ips) {
-                if (local_udp_port) {
-                    configure.addCandidate(*makeIceCandidate(ip, local_udp_port, priority, "udp"));
-                }
-                if (local_tcp_port) {
-                    configure.addCandidate(*makeIceCandidate(ip, local_tcp_port, priority - (_preferred_tcp ? -5 : 5), "tcp"));
-                }
-                priority -= delta;
-            }
+            if (local_udp_port) { configure.addCandidate(*makeIceCandidate(ip, local_udp_port, priority, "udp")); }
+            if (local_tcp_port) { configure.addCandidate(*makeIceCandidate(ip, local_tcp_port, priority - (_preferred_tcp ? -5 : 5), "tcp")); }
+              priority -= delta;
         }
     }
 }

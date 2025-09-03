@@ -44,7 +44,6 @@ public:
     void candidate(const std::string& transport_identifier, const std::string& candidate, const std::string& ice_ufrag, const std::string& ice_pwd);
 
     void processOffer(SIGNALING_MSG_ARGS, WebRtcInterface &transport);
-    void answer(const std::string& guest_id, const MediaTuple &tuple, const std::string& identifier, const std::string& sdp, bool is_play, const std::string& transaction_id);
 
     const std::string& getRoomKey() const {
         return _room_key;
@@ -94,8 +93,8 @@ protected:
     void handleUnregisterAccept(SIGNALING_MSG_ARGS);
     void handleUnregisterReject(SIGNALING_MSG_ARGS);
 
-    void sendCallRequest(const std::string& peer_room_id, const std::string& guest_id, const MediaTuple &tuple, const std::string& sdp, bool is_play, ResponseTrigger trigger);
-    void sendCallAccept(const std::string& peer_guest_id, const MediaTuple &tuple, const std::string& sdp, bool is_play, const std::string& transaction_id);
+    void sendCallRequest(const std::string& peer_room_id, const std::string& guest_id, const MediaTuple &tuple, const std::string& sdp, const std::string& type, ResponseTrigger trigger);
+    void sendCallAccept(const std::string& peer_guest_id, const MediaTuple &tuple, const std::string& sdp, const std::string& type, const std::string& transaction_id);
     void handleCallRequest(SIGNALING_MSG_ARGS);
     void handleCallAccept(SIGNALING_MSG_ARGS);
     void handleCallReject(SIGNALING_MSG_ARGS);

@@ -134,6 +134,7 @@ protected:
     void onStartWebRTC() override;
     void onDestory() override;
     void onRtcConfigure(RtcConfigure &configure) const override;
+    void onShutdown(const toolkit::SockException &ex) override;
 
 private:
     WebRtcPlayer(const toolkit::EventPoller::Ptr &poller, const RtspMediaSource::Ptr &src, const MediaInfo &info);

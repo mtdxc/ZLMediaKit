@@ -24,35 +24,22 @@
 namespace mediakit {
 
 // 解析webrtc 信令url的工具类
-class WebRTCUrl {
+class WebRTCUrl : public MediaTuple {
 public:
     bool _is_ssl;
     std::string _full_url;
     std::string _negotiate_url; // for whep or whip
     std::string _delete_url; // for whep or whip
     std::string _target_secret;
-    std::string _params;
     std::string _host;
-    uint16_t _port;
-    std::string _vhost;
-    std::string _app;
-    std::string _stream;
+    uint16_t _port = 0;
     WebRtcTransport::SignalingProtocols _signaling_protocols = WebRtcTransport::SignalingProtocols::WHEP_WHIP;
-    std::string _peer_room_id; // peer room_id
+    std::string _peer_room_id;    //peer room_id
 
 public:
     void parse(const std::string &url, bool isPlayer);
-
-private:
+    bool isWhep() const {return _signaling_protocols == WebRtcTransport::SignalingProtocols::WHEP_WHIP;}
 };
-
-namespace Rtc {
-typedef enum {
-    Signaling_Invalid   = -1,
-    Signaling_WHEP_WHIP = 0,
-    Signaling_WEBSOCKET = 1,
-} eSignalingProtocols;
-} // namespace Rtc
 
 // 实现了webrtc代理功能
 class WebRtcClient : public std::enable_shared_from_this<WebRtcClient> {
@@ -96,9 +83,6 @@ protected:
     WebRtcSignalingPeer::Ptr _peer = nullptr;
     WebRtcTransport::Ptr _transport = nullptr;
     bool _is_negotiate_finished = false;
-
-private:
-    std::map<std::string /*candidate key*/, toolkit::SocketHelper::Ptr> _socket_map;
 };
 
 } /*namespace mediakit */

@@ -108,7 +108,7 @@ void WebRtcSignalingPeer::unregist(const function<void(const SockException &ex)>
         if (auto strong_self = weak_self.lock()) {
             strong_self->sendUnregisterRequest(std::move(trigger));
         }
-    });
+        });
 }
 
 void WebRtcSignalingPeer::checkIn(const std::string& peer_room_id, const MediaTuple &tuple, const std::string& identifier,
@@ -125,10 +125,10 @@ void WebRtcSignalingPeer::checkIn(const std::string& peer_room_id, const MediaTu
                 auto strong_self = weak_self.lock();
                 if (ex && strong_self) {
                     strong_self->_tours.erase(peer_room_id);
-                }
-                return cb(ex, msg);
-            });
-            strong_self->sendCallRequest(peer_room_id, guest_id, tuple, offer, is_play, std::move(trigger));
+            }
+            return cb(ex, msg);
+        });
+            strong_self->sendCallRequest(peer_room_id, guest_id, tuple, offer, is_play? TYPE_VALUE_PLAY : TYPE_VALUE_PUSH, std::move(trigger));
         }
     });
 }
@@ -144,7 +144,7 @@ void WebRtcSignalingPeer::checkOut(const std::string& peer_room_id) {
                 auto &guest_id = it->second.first;
                 strong_self->sendByeIndication(peer_room_id, guest_id);
                 strong_self->_tours.erase(it);
-            }
+        }
         }
     });
 }
@@ -160,13 +160,19 @@ void WebRtcSignalingPeer::candidate(const std::string& transport_identifier, con
 
 void WebRtcSignalingPeer::processOffer(SIGNALING_MSG_ARGS, WebRtcInterface &transport) {
     try {
-        auto sdp = transport.getAnswerSdp((const std::string )allArgs[SDP_KEY]);
-        auto tuple = MediaTuple(allArgs[CALL_VHOST_KEY], allArgs[CALL_APP_KEY], allArgs[CALL_STREAM_KEY]);
-        answer(allArgs[GUEST_ID_KEY], tuple, transport.getIdentifier(), sdp, allArgs[TYPE_KEY] == TYPE_VALUE_PLAY, allArgs[TRANSACTION_ID_KEY]);
+        auto sdp = transport.getAnswerSdp(allArgs[SDP_KEY]);
+        MediaTuple tuple;
+        tuple.vhost = allArgs[CALL_VHOST_KEY];
+        tuple.app = allArgs[CALL_APP_KEY];
+        tuple.stream = allArgs[CALL_STREAM_KEY];
+
+        std::string guest_id = allArgs[GUEST_ID_KEY];
+        _peer_guests.emplace(guest_id, transport.getIdentifier());
+        sendCallAccept(guest_id, tuple, sdp, allArgs[TYPE_KEY], allArgs[TRANSACTION_ID_KEY]);
 
         std::weak_ptr<WebRtcSignalingPeer> weak_self = std::static_pointer_cast<WebRtcSignalingPeer>(shared_from_this());
         transport.gatheringCandidate(_ice_server, [weak_self](const std::string& transport_identifier,
-                                                              const std::string& candidate, const std::string& ufrag, const std::string& pwd) {
+            const std::string& candidate, const std::string& ufrag, const std::string& pwd) {
             if (auto strong_self = weak_self.lock()) {
                 strong_self->candidate(transport_identifier, candidate, ufrag, pwd);
             }
@@ -182,11 +188,6 @@ void WebRtcSignalingPeer::processOffer(SIGNALING_MSG_ARGS, WebRtcInterface &tran
         body[TYPE_KEY] = allArgs[TYPE_KEY];
         sendRefusesResponse(body, allArgs[TRANSACTION_ID_KEY], ex.what());
     }
-}
-
-void WebRtcSignalingPeer::answer(const std::string& guest_id, const MediaTuple &tuple, const std::string& identifier, const std::string& sdp, bool is_play, const std::string& transaction_id) {
-    _peer_guests.emplace(guest_id, identifier);
-    sendCallAccept(guest_id, tuple, sdp, is_play, transaction_id);
 }
 
 void WebRtcSignalingPeer::setOnConnect(function<void(const SockException &ex)> cb) {
@@ -366,12 +367,12 @@ void WebRtcSignalingPeer::handleUnregisterReject(SIGNALING_MSG_ARGS) {
     trigger(ex, getRoomKey());
 }
 
-void WebRtcSignalingPeer::sendCallRequest(const std::string& peer_room_id, const std::string& guest_id, const MediaTuple &tuple, const std::string& sdp, bool is_play, ResponseTrigger trigger) {
+void WebRtcSignalingPeer::sendCallRequest(const std::string& peer_room_id, const std::string& guest_id, const MediaTuple &tuple, const std::string& sdp, const std::string& type, ResponseTrigger trigger) {
     DebugL;
     Json::Value body;
     body[CLASS_KEY]       = CLASS_VALUE_REQUEST;
     body[METHOD_KEY]      = METHOD_VALUE_CALL;
-    body[TYPE_KEY]        = is_play? TYPE_VALUE_PLAY : TYPE_VALUE_PUSH;
+    body[TYPE_KEY]        = type;
     body[GUEST_ID_KEY]    = guest_id; //our guest id
     body[ROOM_ID_KEY]     = peer_room_id;
     body[CALL_VHOST_KEY]  = tuple.vhost;
@@ -381,13 +382,13 @@ void WebRtcSignalingPeer::sendCallRequest(const std::string& peer_room_id, const
     sendRequest(body, std::move(trigger));
 }
 
-void WebRtcSignalingPeer::sendCallAccept(const std::string& peer_guest_id, const MediaTuple &tuple, const std::string& sdp, bool is_play, const std::string& transaction_id) {
+void WebRtcSignalingPeer::sendCallAccept(const std::string& peer_guest_id, const MediaTuple &tuple, const std::string& sdp, const std::string& type, const std::string& transaction_id) {
     DebugL;
     Json::Value body;
     body[CLASS_KEY]          = CLASS_VALUE_ACCEPT;
     body[METHOD_KEY]         = METHOD_VALUE_CALL;
     body[TRANSACTION_ID_KEY] = transaction_id;
-    body[TYPE_KEY]           = is_play? TYPE_VALUE_PLAY : TYPE_VALUE_PUSH;
+    body[TYPE_KEY]           = type;
     body[GUEST_ID_KEY]       = peer_guest_id;
     body[ROOM_ID_KEY]        = _room_id;       //our room id
     body[CALL_VHOST_KEY]     = tuple.vhost;
@@ -409,10 +410,10 @@ void WebRtcSignalingPeer::handleCallRequest(SIGNALING_MSG_ARGS) {
     auto args = std::make_shared<WebRtcArgsImp<Json::Value>>(allArgs, allArgs[GUEST_ID_KEY]);
     std::weak_ptr<WebRtcSignalingPeer> weak_self = std::static_pointer_cast<WebRtcSignalingPeer>(shared_from_this());
     WebRtcPluginManager::Instance().negotiateSdp(*this, allArgs[TYPE_KEY], *args, [allArgs, weak_self](const WebRtcInterface &exchanger) mutable {
-        if (auto strong_self = weak_self.lock()) {
+            if (auto strong_self = weak_self.lock()) {
             strong_self->processOffer(allArgs, const_cast<WebRtcInterface &>(exchanger));
-        }
-    });
+            }
+        });
 }
 
 void WebRtcSignalingPeer::handleCallAccept(SIGNALING_MSG_ARGS) {
@@ -676,9 +677,9 @@ void WebRtcSignalingPeer::checkResponseExpired() {
         }
         // over time
         WarnL << "transaction_id: " << it->first << ", method: " << tuple.method << " recv response over time";
-        tuple.cb(SockException(Err_timeout, "recv response timeout"), "");
+            tuple.cb(SockException(Err_timeout, "recv response timeout"), "");
         it = _response_list.erase(it);
-    }
+        }
 }
 
 }// namespace mediakit

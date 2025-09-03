@@ -52,6 +52,15 @@ public:
     uint16_t    _port = 0;
 };
 
+enum class AddressType {
+    INVALID = 0,
+    HOST = 1,
+    SRFLX,  // server reflx
+    PRFLX,  // peer reflx
+    RELAY,
+};
+std::string AddressTypeToStr(AddressType type);
+AddressType StrToAddressType(const std::string &type);
 
 class CandidateTuple {
 public:
@@ -59,37 +68,30 @@ public:
     CandidateTuple() = default;
     virtual ~CandidateTuple() = default;
 
-    enum class AddressType {
-        HOST = 1,
-        SRFLX, //server reflexive
-        PRFLX, //peer reflexive
-        RELAY,
-    };
-
-    enum class SecureType {
-        NOT_SECURE = 1,
-        SECURE,
-    };
-
     enum class TransportType {
         UDP = 1,
         TCP,
     };
-
+    static std::string TransportTypeStr(TransportType type) {
+        switch (type) {
+            case TransportType::UDP: return "udp";
+            case TransportType::TCP: return "tcp";
+            default: return "unknown";
+        }
+    }
     bool operator<(const CandidateTuple& rhs) const {
         return (_priority < rhs._priority);
     }
 
     bool operator==(const CandidateTuple& rhs) const {
-        return ((_addr == rhs._addr)
-            && (_priority == rhs._priority)
+        return ((_addr == rhs._addr) && (_priority == rhs._priority) 
             && (_transport == rhs._transport) && (_secure == rhs._secure));
     }
 
     struct ClassHash {
         std::size_t operator()(const CandidateTuple& t) const {
             std::string str = t._addr._host + std::to_string(t._addr._port) +
-                std::to_string((uint32_t)t._transport) + std::to_string((uint32_t)t._secure);
+                std::to_string((uint32_t)t._transport) + std::to_string(t._secure);
             return std::hash<std::string>()(str);
         }
     };
@@ -100,14 +102,27 @@ public:
         }
     };
 
+    std::string dumpString() const { 
+        return StrPrinter << TransportTypeStr(_transport) << (_secure ? "s " : " ") << _addr.dumpString();
+    }
+
 public:
     CandidateAddr _addr;
     uint32_t      _priority  = 0;
     TransportType _transport = TransportType::UDP;
-    SecureType    _secure    = SecureType::NOT_SECURE;
+    bool _secure = false;
     std::string   _ufrag;
     std::string   _pwd;
 };
+
+enum class CandidateState {
+    Frozen = 1, //尚未check,并还不需要check
+    Waiting, //尚未发送check,但也不是Frozen
+    InProgress, //已经发起check,但是仍在进行中
+    Succeeded, // check success
+    Failed, // check failed
+};
+std::string CandidateStateStr(CandidateState state);
 
 class CandidateInfo : public CandidateTuple {
 public:
@@ -115,55 +130,15 @@ public:
     CandidateInfo() = default;
     virtual ~CandidateInfo() = default;
 
-    enum class AddressType {
-        INVALID = 0,
-        HOST = 1,
-        SRFLX,  // server reflx
-        PRFLX,  // peer reflx
-        RELAY,
-    };
-
-    enum class State {
-        Frozen = 1,         //尚未check,并还不需要check
-        Waiting,            //尚未发送check,但也不是Frozen
-        InProgress,         //已经发起check,但是仍在进行中
-        Succeeded,          //check success
-        Failed,             //check failed
-    };
-
     bool operator==(const CandidateInfo& rhs) const {
         return CandidateTuple::operator==(rhs) && (_type == rhs._type);
     }
 
-    std::string getAddressTypeStr() const {
-        return getAddressTypeStr(_type);
+    std::string typeStr() const {
+        return AddressTypeToStr(_type);
     }
-
-    // 获取候选者地址类型字符串的静态函数
-    static std::string getAddressTypeStr(CandidateInfo::AddressType type) {
-        switch (type) {
-            case CandidateInfo::AddressType::HOST: return "host";
-            case CandidateInfo::AddressType::SRFLX: return "srflx";
-            case CandidateInfo::AddressType::PRFLX: return "reflx";
-            case CandidateInfo::AddressType::RELAY: return "relay";
-            default: return "invalid";
-        }
-    }
-
-    static std::string getStateStr(State state) {
-        switch (state) {
-            case State::Frozen: return "frozen";
-            case State::Waiting: return "waiting";
-            case State::InProgress: return "in_progress";
-            case State::Succeeded: return "succeeded";
-            case State::Failed: return "failed";
-            default: break;
-        }
-        return "unknown";
-    }
-
-    std::string dumpString() const {
-        return getAddressTypeStr() + " " + _base_addr.dumpString();
+    std::string dumpString() const { 
+        return typeStr() + "." + CandidateTuple::dumpString();
     }
 
 public:
@@ -171,17 +146,12 @@ public:
     CandidateAddr _base_addr;
 };
 
-// ice stun/turn服务器配置
-// 格式为: (stun/turn)[s]:host:port[?transport=(tcp/udp)], 默认udp模式
-// 例如:
-// stun:stun.l.google.com:19302 → 谷歌的 STUN 服务器（UDP）。
-// turn:turn.example.com:3478?transport=tcp → 使用 TCP 的 TURN 服务器。
-// turns:turn.example.com:5349 → 使用 TLS 的 TURN 服务器。
 class IceServerInfo : public CandidateTuple {
 public:
     using Ptr = std::shared_ptr<IceServerInfo>;
     IceServerInfo() = default;
     virtual ~IceServerInfo() = default;
+
     IceServerInfo(const std::string &url) { parse(url); }
     void parse(const std::string &url);
 
@@ -206,38 +176,39 @@ public:
 
         Pair() = default;
         Pair(toolkit::SocketHelper::Ptr socket) : _socket(std::move(socket)) {}
-        Pair(toolkit::SocketHelper::Ptr socket, std::string peer_host, uint16_t peer_port,
-             std::shared_ptr<sockaddr_storage> relayed_addr = nullptr) :
-            _socket(std::move(socket)), _peer_host(std::move(peer_host)), _peer_port(peer_port), _relayed_addr(std::move(relayed_addr)) {
+        Pair(toolkit::SocketHelper::Ptr socket, const sockaddr* peer_addr,
+             std::shared_ptr<sockaddr_storage> relayed_addr = nullptr) : 
+            _socket(std::move(socket)), _relayed_addr(std::move(relayed_addr)) {
+            if (peer_addr) {
+                _peer_addr = std::make_shared<sockaddr_storage>();
+                memcpy(_peer_addr.get(), peer_addr, toolkit::SockUtil::get_sock_len(peer_addr));
+            }
         }
 
         Pair(Pair &that) {
             _socket = that._socket;
-            _peer_host = that._peer_host;
-            _peer_port = that._peer_port;
-            _relayed_addr = nullptr;
-            if (that._relayed_addr) {
-                _relayed_addr = std::make_shared<sockaddr_storage>();
-                memcpy(_relayed_addr.get(), that._relayed_addr.get(), sizeof(sockaddr_storage));
-            }
+            _peer_addr = that._peer_addr;
+            _relayed_addr = that._relayed_addr;
         }
         virtual ~Pair() = default;
 
         void get_peer_addr(sockaddr_storage &peer_addr) const {
-            if (!_peer_host.empty()) {
-                peer_addr = toolkit::SockUtil::make_sockaddr(_peer_host.data(), _peer_port);
+            if (_peer_addr) {
+                peer_addr = *_peer_addr;
             } else {
                 auto addr = _socket->get_peer_addr();
                 memcpy(&peer_addr, addr, toolkit::SockUtil::get_sock_len(addr));
+                // 不能返回这个地址，因为get_peer_ip(), 对于与ipv4兼容ipv6套接口会返回ipv4地址，导致这会udp包发送失败，
+                // 为此特地在toolkit::SocketHelper中增加了get_peer_addr()来返回原始的ipv6地址
+                // peer_addr = toolkit::SockUtil::make_sockaddr(_socket->get_peer_ip().data(), _socket->get_peer_port());
             }
         }
 
-        bool get_relayed_addr(sockaddr_storage &peerAddr) const {
+        bool get_relayed_addr(sockaddr_storage &addr) const {
             if (!_relayed_addr) {
                 return false;
             }
-
-            memcpy(&peerAddr, _relayed_addr.get(), sizeof(peerAddr));
+            addr = *_relayed_addr;
             return true;
         }
 
@@ -245,24 +216,33 @@ public:
 
         uint16_t get_local_port() const { return _socket->get_local_port(); }
 
-        std::string get_peer_ip() const { return !_peer_host.empty() ? _peer_host : _socket->get_peer_ip(); }
+        std::string get_peer_ip() const {
+            return _peer_addr ? toolkit::SockUtil::inet_ntoa((const struct sockaddr *)_peer_addr.get()) : _socket->get_peer_ip();
+        }
 
-        uint16_t get_peer_port() const { return !_peer_host.empty() ? _peer_port : _socket->get_peer_port(); }
+        uint16_t get_peer_port() const {
+            return _peer_addr ? toolkit::SockUtil::inet_port((const struct sockaddr *)_peer_addr.get()) : _socket->get_peer_port();
+        }
 
-        std::string get_relayed_ip() const { return _relayed_addr ? toolkit::SockUtil::inet_ntoa((const struct sockaddr *)_relayed_addr.get()) : ""; }
+        std::string get_relayed_ip() const {
+            return _relayed_addr ? toolkit::SockUtil::inet_ntoa((const struct sockaddr *)_relayed_addr.get()) : "";
+        }
 
-        uint16_t get_relayed_port() const { return _relayed_addr ? toolkit::SockUtil::inet_port((const struct sockaddr *)_relayed_addr.get()) : 0; }
+        uint16_t get_relayed_port() const {
+            return _relayed_addr ? toolkit::SockUtil::inet_port((const struct sockaddr *)_relayed_addr.get()) : 0;
+        };
 
-        static bool is_same_relayed_addr(Pair *a, Pair *b) {
-            if (a->_relayed_addr && b->_relayed_addr) {
-                return toolkit::SockUtil::is_same_addr(
-                    reinterpret_cast<const struct sockaddr *>(a->_relayed_addr.get()), reinterpret_cast<const struct sockaddr *>(b->_relayed_addr.get()));
+
+
+        static bool is_same_relayed_addr(Pair* a, Pair* b) {
+            bool ret = (a->_relayed_addr == b->_relayed_addr);
+            if (!ret && a->_relayed_addr && b->_relayed_addr) {
+                ret = toolkit::SockUtil::is_same_addr((const struct sockaddr*)a->_relayed_addr.get(), (const struct sockaddr*)b->_relayed_addr.get());
             }
-            return (a->_relayed_addr == b->_relayed_addr);
+            return ret;
         }
 
         static bool is_same(Pair* a, Pair* b) {
-            // FIXME: a->_socket == b->_socket条件成立后，后面get_peer_ip和get_peer_port一定相同
             if ((a->_socket == b->_socket)
                 && (a->get_peer_ip() == b->get_peer_ip())
                 && (a->get_peer_port() == b->get_peer_port()) 
@@ -284,12 +264,8 @@ public:
         }
     public:
         toolkit::SocketHelper::Ptr _socket;
-        //对端host:port 地址，因为多个pair会复用一个socket对象，因此可能会和_socket的创建bind信息不一致
-        std::string _peer_host;
-        uint16_t _peer_port;
-
-        //转发地址，用于实现TURN转发地址
-        std::shared_ptr<sockaddr_storage> _relayed_addr;
+        std::shared_ptr<sockaddr_storage> _peer_addr = nullptr;
+        std::shared_ptr<sockaddr_storage> _relayed_addr = nullptr;
     };
 
     class Listener {
@@ -328,6 +304,7 @@ public:
     IceTransport(Listener* listener, std::string ufrag, std::string password, toolkit::EventPoller::Ptr poller);
     virtual ~IceTransport() {}
     
+    // 初始化方法，必须在构造完成后调用
     virtual void initialize();
 
     const toolkit::EventPoller::Ptr& getPoller() const { return _poller; }
@@ -346,14 +323,15 @@ protected:
     virtual void processStunPacket(const StunPacket::Ptr& packet, const Pair::Ptr& pair);
     virtual void processRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair);
     virtual void processResponse(const StunPacket::Ptr& packet, const Pair::Ptr& pair);
-    virtual bool processChannelData(const uint8_t* data, size_t len, const Pair::Ptr& pair);
     virtual StunPacket::Authentication checkRequestAuthentication(const StunPacket::Ptr& packet, const Pair::Ptr& pair);
     StunPacket::Authentication checkResponseAuthentication(const StunPacket::Ptr& request, const StunPacket::Ptr& packet, const Pair::Ptr& pair);
     void processUnauthorizedResponse(const StunPacket::Ptr& response, const StunPacket::Ptr& request, const Pair::Ptr& pair, MsgHandler handler);
     virtual void handleBindingRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair);
-    virtual void handleChannelData(uint16_t channel_number, const char* data, size_t len, const Pair::Ptr& pair) {};
 
+    virtual bool processChannelData(const uint8_t* data, size_t len, const Pair::Ptr& pair);
+    virtual void handleChannelData(uint16_t channel_number, const char* data, size_t len, const Pair::Ptr& pair) {};
     void sendChannelData(uint16_t channel_number, const toolkit::Buffer::Ptr &buffer, const Pair::Ptr& pair);
+
     virtual void sendUnauthorizedResponse(const StunPacket::Ptr& packet, const Pair::Ptr& pair);
     void sendErrorResponse(const StunPacket::Ptr& packet, const Pair::Ptr& pair, StunAttrErrorCode::Code errorCode);
     void sendRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair, MsgHandler handler);
@@ -367,9 +345,6 @@ protected:
     bool hasChannelBind(uint16_t channel_number);
     bool hasChannelBind(const sockaddr_storage& addr, uint16_t& channel_number);
     void addChannelBind(uint16_t channel_number, const sockaddr_storage& addr);
-
-    toolkit::SocketHelper::Ptr createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
-    toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
     
     void checkRequestTimeouts();
     void retransmitRequest(const std::string& transaction_id, RequestInfo& req_info);
@@ -444,14 +419,14 @@ public:
         CandidateInfo _remote_candidate;      // 远程候选者信息
         CandidateInfo _local_candidate;       // 本地候选者信息
         uint64_t _priority;                   // 候选者对优先级（64位，符合RFC 8445）
-        CandidateInfo::State _state;          // 连通性检查状态
+        CandidateState _state;                // 连通性检查状态
         bool _nominated = false;
 
         CandidatePair(Pair::Ptr local_pair, CandidateInfo remote, CandidateInfo local)
             : _local_pair(std::move(local_pair))
             , _remote_candidate(std::move(remote))
             , _local_candidate(std::move(local))
-            , _state(CandidateInfo::State::Frozen) {
+            , _state(CandidateState::Frozen) {
             _priority = calCandidatePairPriority(local._priority, remote._priority);
         }
         std::string dumpString() const {
@@ -493,10 +468,12 @@ public:
              std::string ufrag, std::string password, toolkit::EventPoller::Ptr poller);
     virtual ~IceAgent() {}
     
+    void shutdown();
     void setIceServer(IceServerInfo::Ptr ice_server) {
+        InfoL << ice_server->_full_url;
         _ice_server = std::move(ice_server);
     }
-
+    bool has_remote_candidate(const CandidateInfo &info) const { return _remote_candidates.count(info); }
     void gatheringCandidate(const CandidateTuple::Ptr& candidate_tuple, bool gathering_rflx, bool gathering_realy);
     void connectivityCheck(CandidateInfo& candidate);
     void nominated(const Pair::Ptr& pair, CandidateTuple& candidate);
@@ -507,8 +484,8 @@ public:
         return _implementation;
     }
 
-    void setgetImplementation(IceAgent::Implementation implementation) { 
-        InfoL << (uint32_t)implementation;
+    void setImplementation(IceAgent::Implementation implementation) { 
+        InfoL << (implementation == Implementation::Lite ? "Lite" : "Full");
         _implementation = implementation;
     }
 
@@ -543,6 +520,10 @@ public:
     Json::Value getChecklistInfo() const;
 
 protected:
+    toolkit::SocketHelper::Ptr createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
+    toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
+    toolkit::SocketHelper::Ptr createTcpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
+
     void gatheringSrflxCandidate(const Pair::Ptr& pair);
     void gatheringRealyCandidate(const Pair::Ptr& pair);
     void localRelayedConnectivityCheck(CandidateInfo& candidate);
@@ -554,8 +535,6 @@ protected:
     void sendAllocateRequest(const Pair::Ptr& pair);
     void sendCreatePermissionRequest(const Pair::Ptr& pair, const sockaddr_storage& peer_addr);
     void sendChannelBindRequest(const Pair::Ptr& pair, uint16_t channel_number, const sockaddr_storage& peer_addr);
-
-    void processRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair) override;
 
     void handleBindingRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair) override;
     void handleGatheringCandidateResponse(const StunPacket::Ptr& packet, const Pair::Ptr& pair);
@@ -592,7 +571,7 @@ protected:
     Implementation _implementation = Implementation::Full;
     Role  _role  = Role::Controlling;            //ice role
     uint64_t _tiebreaker = 0;                    // 8 bytes unsigned integer.
-    State _state = IceAgent::State::Running;     //ice session state
+    State _state = State::Running;               //ice session state
  
     Pair::Ptr _selected_pair;
     Pair::Ptr _nominated_pair;
@@ -608,8 +587,8 @@ protected:
         std::unordered_map<CandidateInfo, toolkit::SocketHelper::Ptr, CandidateTuple::ClassHash, CandidateTuple::ClassEqual> candidate_to_socket;
         
         // 按类型分组的socket列表，方便遍历
-        std::vector<toolkit::SocketHelper::Ptr> _host_sockets;    // HOST类型socket
-        std::vector<toolkit::SocketHelper::Ptr> _relay_sockets;   // RELAY类型socket
+        std::set<toolkit::SocketHelper::Ptr> _host_sockets;    // HOST类型socket
+        std::set<toolkit::SocketHelper::Ptr> _relay_sockets;   // RELAY类型socket
 
         bool _has_relayed_candidate = false;
 
@@ -624,12 +603,11 @@ protected:
             candidate_to_socket[candidate] = socket;
             
             // 按类型分组
-            if (candidate._type != CandidateInfo::AddressType::RELAY) {
+            if (candidate._type != AddressType::RELAY) {
                 addHostSocket(std::move(socket));
-            } else if (candidate._type == CandidateInfo::AddressType::RELAY) {
+            } else {
                 addRelaySocket(std::move(socket));
             }
-            
             return true;
         }
         
@@ -646,11 +624,9 @@ protected:
         }
         
         // 获取所有socket（便于遍历）
-        std::vector<toolkit::SocketHelper::Ptr> getAllSockets() const {
-            std::vector<toolkit::SocketHelper::Ptr> result;
-            result.reserve(_host_sockets.size() + _relay_sockets.size());
-            result.insert(result.end(), _host_sockets.begin(), _host_sockets.end());
-            result.insert(result.end(), _relay_sockets.begin(), _relay_sockets.end());
+        std::set<toolkit::SocketHelper::Ptr> getAllSockets() const {
+            auto result = _host_sockets;
+            result.insert(_relay_sockets.begin(), _relay_sockets.end());
             return result;
         }
         
@@ -665,42 +641,43 @@ protected:
         
         // 直接添加host socket
         void addHostSocket(toolkit::SocketHelper::Ptr socket) {
-            if (std::find(_host_sockets.begin(), _host_sockets.end(), socket) == _host_sockets.end()) {
-                _host_sockets.emplace_back(std::move(socket));
-            }
+            _host_sockets.insert(socket);
         }
         
         // 直接添加relay socket
         void addRelaySocket(toolkit::SocketHelper::Ptr socket) {
-            if (std::find(_relay_sockets.begin(), _relay_sockets.end(), socket) == _relay_sockets.end()) {
-                _relay_sockets.emplace_back(std::move(socket));
-            }
+            _relay_sockets.insert(socket);
         }
         
         // 获取host sockets
-        const std::vector<toolkit::SocketHelper::Ptr>& getHostSockets() const {
+        const std::set<toolkit::SocketHelper::Ptr>& getHostSockets() const {
             return _host_sockets;
         }
         
         // 获取relay sockets
-        const std::vector<toolkit::SocketHelper::Ptr>& getRelaySockets() const {
+        const std::set<toolkit::SocketHelper::Ptr>& getRelaySockets() const {
             return _relay_sockets;
         }
         
-        // 移除host socket
-        void removeHostSocket(const toolkit::SocketHelper::Ptr& socket) {
-            auto it = std::find(_host_sockets.begin(), _host_sockets.end(), socket);
-            if (it != _host_sockets.end()) {
-                _host_sockets.erase(it);
+        void delMapping(toolkit::SocketHelper::Ptr socket) {
+            auto it = socket_to_candidates.find(socket);
+            if (it != socket_to_candidates.end()) {
+                for (auto cand : it->second) {
+                    candidate_to_socket.erase(cand);
+                }
+                socket_to_candidates.erase(it);
             }
+        }
+
+        // 移除host socket
+        void removeHostSocket(toolkit::SocketHelper::Ptr socket) { 
+            _host_sockets.erase(socket);
+            delMapping(socket);
         }
         
         // 移除relay socket
-        void removeRelaySocket(const toolkit::SocketHelper::Ptr& socket) {
-            auto it = std::find(_relay_sockets.begin(), _relay_sockets.end(), socket);
-            if (it != _relay_sockets.end()) {
-                _relay_sockets.erase(it);
-            }
+        void removeRelaySocket(toolkit::SocketHelper::Ptr socket) {
+            _relay_sockets.erase(socket);
         }
         
         // 清空host sockets

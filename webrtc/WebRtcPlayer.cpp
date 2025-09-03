@@ -270,6 +270,13 @@ void WebRtcPlayer::onStartWebRTC() {
         });
     }
 }
+
+void WebRtcPlayer::onShutdown(const SockException &ex) {
+    DebugL;
+    _reader = nullptr;
+    WebRtcTransportImp::onShutdown(ex);
+}
+
 void WebRtcPlayer::onDestory() {
     auto duration = getDuration();
     auto bytes_usage = getBytesUsage();

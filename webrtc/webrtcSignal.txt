@@ -1,5 +1,9 @@
 webrtc websocket 信令
 
+注意: 
+- room_id 这边叫peer_id或user_id会比较合适点，用户register后都会一唯一的room_id 
+- guest_id 这边叫call_id会比较合适点，作为呼叫的唯一id
+
 # register 注册
 
 ``` json
@@ -8,7 +12,7 @@ webrtc websocket 信令
 	"class" : "request",
 	"method" : "register",
 	"transaction_id" : "HFaq5Jp2agKfDjizOT5jGpiPtOQ8yays"
-	"room_id" : "room_1",
+	"room_id" : "room_1", // 可选的用户标识，没有则服务器自动分配唯一ID
 }
 #server --> client/peer
 #success
@@ -80,8 +84,8 @@ webrtc websocket 信令
 	"class" : "request",
 	"method" : "call",
 	"transaction_id" : "qUpN8C49bGiyOHk6WNanAFq2viSkk6HC",
-	"guest_id" : "guest1_EDuVWIxLUMlDDKDa",
-	"room_id" : "room_1",
+	"guest_id" : "guest1_EDuVWIxLUMlDDKDa", # 呼叫的唯一标识
+	"room_id" : "room_1", # 被叫方的id
 	"type" : "play",
 	"vhost" : "__defaultVhost__",
 	"app" : "live",
@@ -95,7 +99,7 @@ webrtc websocket 信令
 	"method" : "call",
 	"transaction_id" : "qUpN8C49bGiyOHk6WNanAFq2viSkk6HC",
 	"guest_id" : "guest1_EDuVWIxLUMlDDKDa",
-	"room_id" : "room1",
+	"room_id" : "room_1",
 	"vhost" : "__defaultVhost__",
 	"app" : "live",
 	"stream" : "test",
