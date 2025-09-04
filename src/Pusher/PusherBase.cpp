@@ -13,7 +13,7 @@
 #include "Rtsp/RtspPusher.h"
 #include "Rtmp/RtmpPusher.h"
 #ifdef ENABLE_SRT
-#include "Srt/SrtPusher.h"
+#include "../srt/SrtPusher.h"
 #endif // ENABLE_SRT
 
 using namespace toolkit;
