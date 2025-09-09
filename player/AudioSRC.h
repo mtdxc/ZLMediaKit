@@ -52,6 +52,7 @@ public:
 private:
     bool _enabled = true;
     int _buf_size = 0;
+    float _ratio = 1.0f;
     std::shared_ptr<char> _buf;
     AudioSRCDelegate *_delegate = nullptr;
     toolkit::BufferLikeString _target_buf;

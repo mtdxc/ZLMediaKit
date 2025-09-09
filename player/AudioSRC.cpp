@@ -25,17 +25,20 @@ void AudioSRC::setOutputAudioConfig(const SDL_AudioSpec &cfg) {
     int freq = _delegate->getPCMSampleRate();
     int format = _delegate->getPCMFormat();
     int channels = _delegate->getPCMChannel();
-    if (-1 == SDL_BuildAudioCVT(&_audio_cvt, format, channels, freq, cfg.format, cfg.channels, cfg.freq)) {
+    memset(&_audio_cvt, 0, sizeof(_audio_cvt));
+    int ret = SDL_BuildAudioCVT(&_audio_cvt, format, channels, freq, cfg.format, cfg.channels, cfg.freq);
+    if (ret < 0) {
         throw std::runtime_error("the format conversion is not supported");
     }
     InfoL << "audio cvt origin format, freq:" << freq << ", format:" << hex << format  << dec << ", channels:" << channels;
-    InfoL << "audio cvt info, "
-          << "needed:" << (int)_audio_cvt.needed
-          << ", src_format:" << hex << (SDL_AudioFormat)_audio_cvt.src_format
-          << ", dst_format:" << (SDL_AudioFormat)_audio_cvt.dst_format << dec
-          << ", rate_incr:" << (double)_audio_cvt.rate_incr
-          << ", len_mult:" << (int)_audio_cvt.len_mult
-          << ", len_ratio:" << (double)_audio_cvt.len_ratio;
+    if (_audio_cvt.needed) {
+        InfoL << "audio cvt info, needed:" << (int)_audio_cvt.needed << ", src_format:" << hex << (SDL_AudioFormat)_audio_cvt.src_format
+              << ", dst_format:" << (SDL_AudioFormat)_audio_cvt.dst_format << dec << ", rate_incr:" << (double)_audio_cvt.rate_incr
+              << ", len_mult:" << (int)_audio_cvt.len_mult << ", len_ratio:" << (double)_audio_cvt.len_ratio;
+        if (_audio_cvt.src_format == _audio_cvt.dst_format) {
+            _ratio = (cfg.channels * cfg.freq) * 1.0 / (channels * freq);
+        }
+    }
 }
 
 void AudioSRC::setEnableMix(bool flag) {
@@ -52,7 +55,7 @@ int AudioSRC::getPCMData(char *buf, int size) {
     }
 
     //对应的未转换前pcm的长度
-    auto original_size = (int) (size / _audio_cvt.len_ratio);
+    auto original_size = (int)(size / _ratio);
     if (original_size % 4 != 0) {
         //必须为4byte的整数(双通道16bit一个采样就4个字节)
         original_size = 4 * (original_size / 4) + 4;
@@ -67,7 +70,7 @@ int AudioSRC::getPCMData(char *buf, int size) {
         InfoL << "origin pcm buffer size is:" << original_size << ", target pcm buffer size is:" << size;
     }
 
-    auto origin_size = _delegate->getPCMData(_buf.get(), original_size );
+    auto origin_size = _delegate->getPCMData(_buf.get(), original_size);
     if (!origin_size) {
         //获取数据失败
         TraceL << "get empty pcm data";
