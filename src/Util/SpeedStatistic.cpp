@@ -1,4 +1,4 @@
-#include "SpeedStatistic.h"
+ï»¿#include "SpeedStatistic.h"
 
 namespace toolkit {
 
@@ -6,7 +6,7 @@ BytesSpeed & BytesSpeed::operator+=(size_t bytes)
 {
     _bytes += bytes;
     if (_bytes > 1024 * 1024) {
-        //Êı¾İ´óÓÚ1MB¾Í¼ÆËãÒ»´ÎÍøËÙ
+        //æ•°æ®å¤§äº1MBå°±è®¡ç®—ä¸€æ¬¡ç½‘é€Ÿ
         computeSpeed();
     }
     return *this;
@@ -15,7 +15,7 @@ BytesSpeed & BytesSpeed::operator+=(size_t bytes)
 int BytesSpeed::getSpeed()
 {
     if (_ticker.elapsedTime() < 1000) {
-        //»ñÈ¡ÆµÂÊĞ¡ÓÚ1Ãë£¬ÄÇÃ´·µ»ØÉÏ´Î¼ÆËã½á¹û
+        //è·å–é¢‘ç‡å°äº1ç§’ï¼Œé‚£ä¹ˆè¿”å›ä¸Šæ¬¡è®¡ç®—ç»“æœ
         return _speed;
     }
     return computeSpeed();

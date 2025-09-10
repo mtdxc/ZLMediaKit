@@ -410,13 +410,8 @@ FFmpegDecoder::FFmpegDecoder(const Track::Ptr &track, int thread_num) {
         av_dict_set(&dict, "zerolatency", "1", 0);
         av_dict_set(&dict, "strict", "-2", 0);
 
-        if (codec->capabilities & AV_CODEC_CAP_TRUNCATED) {
-            /* we do not send complete frames */
-            _context->flags |= AV_CODEC_FLAG_TRUNCATED;
-        } else {
-            // 此时业务层应该需要合帧
-            _do_merger = true;
-        }
+        // 此时业务层应该需要合帧
+        _do_merger = true;
 
         int ret = avcodec_open2(_context.get(), codec, &dict);
         av_dict_free(&dict);
