@@ -13,8 +13,9 @@
 
 #include <string>
 #include "Util/Byte.hpp"
-#include "Network/Buffer.h"
-#include "Network/sockutil.h"
+#include "Buffer.hpp"
+#include "hsocket.h"
+#include <map>
 
 namespace RTC {
 // reference https://rcf-editor.org/rfc/rfc8489
@@ -263,8 +264,11 @@ public:
     void setAddr(const struct sockaddr_storage &addr) { _addr = addr; }
     const struct sockaddr_storage& getAddr() const { return _addr; }
 
-    std::string getIp() const { return toolkit::SockUtil::inet_ntoa((struct sockaddr *)&_addr); }
-    uint16_t getPort() const { return toolkit::SockUtil::inet_port((struct sockaddr *)&_addr); }
+    std::string getIp() const {
+        char buff[SOCKADDR_STRLEN];
+        return sockaddr_ip((sockaddr_u *)&_addr, buff, sizeof(buff)); 
+    }
+    uint16_t getPort() const { return sockaddr_port((sockaddr_u *)&_addr); }
 
 protected:
     struct sockaddr_storage _addr;

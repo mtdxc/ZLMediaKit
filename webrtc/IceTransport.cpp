@@ -11,10 +11,10 @@
 #include <utility>
 #include <random>
 #include <algorithm>
-#include "json/json.h"
+#include "hv/json.hpp"
 #include "Util/onceToken.h"
-#include "Network/UdpClient.h"
-#include "Network/TcpClient.h"
+#include "hv/UdpClient.h"
+#include "hv/TcpClient.h"
 #include "Common/Parser.h"
 #include "Common/config.h"
 #include "IceTransport.hpp"
@@ -516,7 +516,7 @@ public:
     using DataCB = std::function<void(const uint8_t *data, size_t len, const IceTransport::Pair::Ptr &pair)>;
     void setDataCb(DataCB cb) { onRecvData = std::move(cb); }
 
-    using CloseCB = std::function<void(toolkit::SocketHelper::Ptr, const SockException &ex)>;
+    using CloseCB = std::function<void(toolkit::Session::Ptr, const SockException &ex)>;
     void setOnClose(CloseCB cb) { onClose = std::move(cb);}
 protected:
     CloseCB onClose;
@@ -567,7 +567,7 @@ protected:
     }
 };
 
-SocketHelper::Ptr IceAgent::createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+Session::Ptr IceAgent::createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
     if (type == CandidateTuple::TransportType::UDP) {
     return createUdpSocket(peer_host, peer_port, local_ip, local_port);
     } else {
@@ -576,7 +576,7 @@ SocketHelper::Ptr IceAgent::createSocket(CandidateTuple::TransportType type, con
     }
 }
 
-SocketHelper::Ptr IceAgent::createTcpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+Session::Ptr IceAgent::createTcpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
     auto socket = std::make_shared<IceTcpClient>(getPoller());
     weak_ptr<IceAgent> weak_self = static_pointer_cast<IceAgent>(shared_from_this());
     socket->setDataCb([weak_self](const uint8_t *data, size_t len, const IceTransport::Pair::Ptr &pair) {
@@ -586,7 +586,7 @@ SocketHelper::Ptr IceAgent::createTcpSocket(const std::string &peer_host, uint16
             strong_self->_listener->onIceTransportRecvData(buffer, pair);
         }
     });
-    socket->setOnClose([weak_self](toolkit::SocketHelper::Ptr sock, const SockException &ex) {
+    socket->setOnClose([weak_self](toolkit::Session::Ptr sock, const SockException &ex) {
         if (auto strong_self = weak_self.lock()) {
             //strong_self->_socket_candidate_manager.removeHostSocket(sock);
         }
@@ -597,7 +597,7 @@ SocketHelper::Ptr IceAgent::createTcpSocket(const std::string &peer_host, uint16
     return socket;
 }
 
-SocketHelper::Ptr IceAgent::createUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+Session::Ptr IceAgent::createUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
     auto socket = std::make_shared<UdpClient>(getPoller());
 
     weak_ptr<IceAgent> weak_self = static_pointer_cast<IceAgent>(shared_from_this());
@@ -1022,7 +1022,7 @@ void IceServer::sendDataIndication(const sockaddr_storage& peer_addr, const Buff
 #endif
 }
 
-SocketHelper::Ptr IceServer::allocateRelayed(const Pair::Ptr& pair) {
+Session::Ptr IceServer::allocateRelayed(const Pair::Ptr& pair) {
     // DebugL;
 
     // only support udp
@@ -1111,7 +1111,7 @@ void IceServer::relayBackingData(const toolkit::Buffer::Ptr& buffer, const Pair:
 #endif
 }
 
-SocketHelper::Ptr IceServer::createRelayedUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
+Session::Ptr IceServer::createRelayedUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port) {
     auto socket = std::make_shared<UdpClient>(getPoller());
 
     weak_ptr<IceServer> weak_self = static_pointer_cast<IceServer>(shared_from_this());
@@ -1894,7 +1894,7 @@ void IceAgent::setSelectedPair(const Pair::Ptr& pair) {
     _selected_pair = pair;
 }
 
-void IceAgent::removePair(const toolkit::SocketHelper *socket) {
+void IceAgent::removePair(const toolkit::Session *socket) {
     // TODO
 }
 
@@ -2025,13 +2025,13 @@ void IceTransport::retransmitRequest(const std::string& transaction_id, RequestI
     sendPacket(req_info._request, req_info._pair);
 }
 
-Json::Value IceAgent::getChecklistInfo() const {
-    Json::Value result;
+nlohmann::json IceAgent::getChecklistInfo() const {
+    nlohmann::json result;
 
-    Json::Value local_candidates_array(Json::arrayValue);
+    nlohmann::json local_candidates_array(Json::arrayValue);
     auto all_local_candidates = _socket_candidate_manager.getAllCandidates();
     for (const auto& local_candidate : all_local_candidates) {
-        Json::Value candidate_info;
+        nlohmann::json candidate_info;
         candidate_info["type"] = AddressTypeToStr(local_candidate._type);
         candidate_info["host"] = local_candidate._addr._host;
         candidate_info["port"] = local_candidate._addr._port;
@@ -2044,9 +2044,9 @@ Json::Value IceAgent::getChecklistInfo() const {
     }
     result["local_candidates"] = local_candidates_array;
     
-    Json::Value remote_candidates_array(Json::arrayValue);
+    nlohmann::json remote_candidates_array(Json::arrayValue);
     for (const auto& remote_candidate : _remote_candidates) {
-        Json::Value candidate_info;
+        nlohmann::json candidate_info;
         candidate_info["type"] = AddressTypeToStr(remote_candidate._type);
         candidate_info["host"] = remote_candidate._addr._host;
         candidate_info["port"] = remote_candidate._addr._port;
@@ -2059,9 +2059,9 @@ Json::Value IceAgent::getChecklistInfo() const {
     }
     result["remote_candidates"] = remote_candidates_array;
 
-    Json::Value checklist_array(Json::arrayValue);
+    nlohmann::json checklist_array(Json::arrayValue);
     for (const auto& candidate_pair : _check_list) {
-        Json::Value entry;
+        nlohmann::json entry;
         entry["candidate_pair"] = candidate_pair->dumpString();
         entry["state"] = CandidateStateStr(candidate_pair->_state);
         entry["priority"] = (Json::UInt64)candidate_pair->_priority;
@@ -2074,7 +2074,7 @@ Json::Value IceAgent::getChecklistInfo() const {
     result["ice_state"] = stateToString(_state);
     
     if (_selected_pair) {
-        Json::Value active_pair;
+        nlohmann::json active_pair;
         active_pair["local"] = _selected_pair->get_local_ip() + ":" + std::to_string(_selected_pair->get_local_port());
         
         // 优先使用relayed地址，如果没有则使用peer地址

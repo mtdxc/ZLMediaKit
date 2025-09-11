@@ -8,7 +8,6 @@
  * may be found in the AUTHORS file in the root of the source tree.
  */
 #include "WebRtcServer.h"
-#include "webrtc/IceServer.hpp"
 #include "webrtc/WebRtcTransport.h"
 #include "FMP4/FMP4MediaSource.h"
 #include "Rtmp/RtmpMediaSource.h"

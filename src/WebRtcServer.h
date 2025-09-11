@@ -25,7 +25,7 @@ class WebRtcInterface;
 class WebRtcTransportImp;
 typedef std::shared_ptr<WebRtcTransportImp> WebRtcTransportPtr;
 
-using WebRtcArgs = std::map<std::string, std::string>;
+//using WebRtcArgs = std::map<std::string, std::string>;
 
 class WebRtcServer {
 public:

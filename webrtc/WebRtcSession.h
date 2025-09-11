@@ -13,8 +13,8 @@
 #define ZLMEDIAKIT_WEBRTCSESSION_H
 
 #include "WebRtcTransport.h"
-#include "Network/Session.h"
-#include "Http/HttpRequestSplitter.h"
+#include "Session.h"
+#include "Util/HttpRequestSplitter.h"
 
 namespace toolkit {
     class TcpServer;
@@ -28,8 +28,8 @@ class WebRtcSession : public toolkit::Session, public HttpRequestSplitter {
 public:
     WebRtcSession(const toolkit::Socket::Ptr &sock);
 
-    void attachServer(const toolkit::Server &server) override;
-    void onRecv(const toolkit::Buffer::Ptr &) override;
+    //void attachServer(const toolkit::Server &server) override;
+    void onRecv(const toolkit::Buffer::Ptr &);
     void onError(const toolkit::SockException &err) override;
     void onManager() override;
     static toolkit::EventPoller::Ptr queryPoller(const toolkit::Buffer::Ptr &buffer);

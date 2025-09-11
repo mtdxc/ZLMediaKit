@@ -165,6 +165,9 @@ private:
     }
 
 std::string makeRandStr(int sz, bool printable = true);
+std::string makeUuidStr();
+uint64_t makeRandNum();
+
 std::string hexdump(const void *buf, size_t len);
 std::string hexmem(const void* buf, size_t len);
 std::string exePath(bool isExe = true);

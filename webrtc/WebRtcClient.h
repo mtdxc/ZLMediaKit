@@ -11,10 +11,8 @@
 #ifndef ZLMEDIAKIT_WEBRTC_CLIENT_H
 #define ZLMEDIAKIT_WEBRTC_CLIENT_H
 
-#include "Network/Socket.h"
-#include "Poller/Timer.h"
+#include "Session.h"
 #include "Util/TimeTicker.h"
-#include "Http/HttpRequester.h"
 #include "Sdp.h"
 #include "WebRtcTransport.h"
 #include "WebRtcSignalingPeer.h"

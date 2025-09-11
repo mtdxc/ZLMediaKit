@@ -32,7 +32,7 @@ static IceSession::Ptr queryIceTransport(uint8_t *data, size_t size) {
 ////////////  IceSession //////////////////////////
 IceSession::IceSession(const Socket::Ptr &sock) : Session(sock) {
     TraceL << getIdentifier();
-    _over_tcp = sock->sockType() == SockNum::Sock_TCP;
+    _over_tcp = hio_type(sock->io()) & HIO_TYPE_TCP;
     GET_CONFIG(string, iceUfrag, Rtc::kIceUfrag);
     GET_CONFIG(string, icePwd, Rtc::kIcePwd);
     _ice_transport = std::make_shared<IceServer>(this, iceUfrag, icePwd, getPoller());

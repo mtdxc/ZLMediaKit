@@ -14,7 +14,6 @@
 #include <cctype>
 #include <srtp2/srtp.h>
 #include "Util/base64.h"
-#include "Network/sockutil.h"
 #include "Common/config.h"
 #include "Nack.h"
 #include "RtpExt.h"
@@ -24,7 +23,7 @@
 #include "Rtsp/Rtsp.h"
 #include "Rtsp/RtpReceiver.h"
 #include "WebRtcTransport.h"
-
+#include "Util/NoticeCenter.h"
 #include "WebRtcEchoTest.h"
 #include "WebRtcPlayer.h"
 #include "WebRtcPusher.h"
@@ -267,14 +266,14 @@ const std::string &WebRtcTransport::deleteRandStr() const {
     return _delete_rand_str;
 }
 
-void WebRtcTransport::getTransportInfo(const std::function<void(Json::Value)>& callback) const {
+void WebRtcTransport::getTransportInfo(const std::function<void(nlohmann::json)> &callback) const {
     if (!callback) {
         return;
     }
 
     std::weak_ptr<const WebRtcTransport> weak_self = shared_from_this();
     _poller->async([weak_self, callback]() {
-        Json::Value result;
+        nlohmann::json result;
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             result["error"] = "Transport object destroyed";
@@ -295,10 +294,10 @@ void WebRtcTransport::getTransportInfo(const std::function<void(Json::Value)>& c
             
             // ICE 连接检查列表信息
             if (strong_self->_ice_agent) {
-                Json::Value ice_info = strong_self->_ice_agent->getChecklistInfo();
+                nlohmann::json ice_info = strong_self->_ice_agent->getChecklistInfo();
                 result["ice_checklists"] = ice_info;
             } else {
-                result["ice_checklists"] = Json::nullValue;
+                result["ice_checklists"] = nlohmann::json();
             }
             
             
@@ -541,7 +540,7 @@ Session::Ptr WebRtcTransport::getSession() const {
     return pair ? static_pointer_cast<Session>(pair->_socket->shared_from_this()) : nullptr;
 }
 
-void WebRtcTransport::removePair(const SocketHelper *socket) {
+void WebRtcTransport::removePair(const Session *socket) {
     _ice_agent->removePair(socket);
 }
 
@@ -682,7 +681,7 @@ static bool isDtls(const char *buf) {
     return ((*buf > 19) && (*buf < 64));
 }
 
-void WebRtcTransport::inputSockData(const char *buf, int len, const SocketHelper::Ptr& socket, struct sockaddr *addr, int addr_len) {
+void WebRtcTransport::inputSockData(const char *buf, int len, const Session::Ptr& socket, struct sockaddr *addr, int addr_len) {
     IceTransport::Pair::Ptr pair;
     if (addr != nullptr) {
         pair = std::make_shared<IceTransport::Pair>(socket, addr);
@@ -1590,13 +1589,13 @@ void WebRtcPluginManager::setListener(Listener cb) {
     _listener = std::move(cb);
 }
 
-void WebRtcPluginManager::negotiateSdp(SocketHelper& sender, const string &type, const WebRtcArgs &args, const onCreateWebRtc &cb_in) {
+void WebRtcPluginManager::negotiateSdp(Session& sender, const string &type, const WebRtcArgs &args, const onCreateWebRtc &cb_in) {
     onCreateWebRtc cb;
     lock_guard<mutex> lck(_mtx_creator);
     if (_listener) {
         auto listener = _listener;
         auto args_ptr = args.shared_from_this();
-        auto sender_ptr = static_pointer_cast<SocketHelper>(sender.shared_from_this());
+        auto sender_ptr = static_pointer_cast<Session>(sender.shared_from_this());
         cb = [listener, sender_ptr, type, args_ptr, cb_in](const WebRtcInterface &rtc) {
             listener(*sender_ptr, type, *args_ptr, rtc);
             cb_in(rtc);
@@ -1613,11 +1612,11 @@ void WebRtcPluginManager::negotiateSdp(SocketHelper& sender, const string &type,
     it->second(sender, args, cb);
 }
 
-void echo_plugin(SocketHelper& sender, const WebRtcArgs &args, const onCreateWebRtc &cb) {
-    cb(*WebRtcEchoTest::create(EventPollerPool::Instance().getPoller()));
+void echo_plugin(Session& sender, const WebRtcArgs &args, const onCreateWebRtc &cb) {
+    cb(*WebRtcEchoTest::create(EventLoopThreadPool::Instance().getPoller()));
 }
 
-void push_plugin(SocketHelper& sender, const WebRtcArgs &args, const onCreateWebRtc &cb) {
+void push_plugin(Session& sender, const WebRtcArgs &args, const onCreateWebRtc &cb) {
     MediaInfo info(args["url"]);
     Broadcast::PublishAuthInvoker invoker = [cb, info](const string &err, const ProtocolOption &option) mutable {
         if (!err.empty()) {
@@ -1627,7 +1626,7 @@ void push_plugin(SocketHelper& sender, const WebRtcArgs &args, const onCreateWeb
 
         RtspMediaSourceImp::Ptr push_src;
         std::shared_ptr<void> push_src_ownership;
-        auto src = MediaSource::find(RTSP_SCHEMA, info.vhost, info.app, info.stream);
+        auto src = MediaSource::find(RTSP_SCHEMA, info._vhost, info._app, info._streamid);
         auto push_failed = (bool)src;
 
         while (src) {
@@ -1677,7 +1676,7 @@ void push_plugin(SocketHelper& sender, const WebRtcArgs &args, const onCreateWeb
     }
 }
 
-void play_plugin(SocketHelper &sender, const WebRtcArgs &args, const onCreateWebRtc &cb) {
+void play_plugin(Session &sender, const WebRtcArgs &args, const onCreateWebRtc &cb) {
 
     MediaInfo info(args["url"]);
     auto session_ptr = static_pointer_cast<Session>(sender.shared_from_this());
@@ -1783,7 +1782,7 @@ static onceToken s_rtc_auto_register([]() {
 #endif
     WebRtcPluginManager::Instance().registerPlugin("push", push_plugin);
     WebRtcPluginManager::Instance().registerPlugin("play", play_plugin);
-    WebRtcPluginManager::Instance().setListener([](SocketHelper& sender, const std::string &type, const WebRtcArgs &args, const WebRtcInterface &rtc) {
+    WebRtcPluginManager::Instance().setListener([](Session& sender, const std::string &type, const WebRtcArgs &args, const WebRtcInterface &rtc) {
         setWebRtcArgs(args, const_cast<WebRtcInterface&>(rtc));
     });
 });

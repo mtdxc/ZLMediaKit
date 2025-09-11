@@ -12,9 +12,9 @@
 #ifndef ZLMEDIAKIT_WEBRTC_ICE_SESSION_H
 #define ZLMEDIAKIT_WEBRTC_ICE_SESSION_H
 
-#include "Network/Session.h"
+#include "Session.h"
 #include "IceTransport.hpp"
-#include "Http/HttpRequestSplitter.h"
+#include "Util/HttpRequestSplitter.h"
 
 namespace mediakit {
 
@@ -29,8 +29,8 @@ public:
 
     //// Session override////
     // void attachServer(const Server &server) override;
-    void onRecv(const toolkit::Buffer::Ptr &) override;
-    void onError(const toolkit::SockException &err) override;
+    void onRecv(const toolkit::Buffer::Ptr &);
+    void onError(const toolkit::SockException &err);
     void onManager() override;
 
     // ice related callbacks ///

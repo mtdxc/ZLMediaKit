@@ -12,23 +12,29 @@
 #define ZLMEDIAKIT_WEBRTC_ICE_TRANSPORT_HPP
 
 #include <map>
+#include <set>
 #include <list>
 #include <string>
 #include <memory>
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
-#include "json/json.h"
+#include <unordered_set>
+#include "hv/json.hpp"
 #include "Util/Byte.hpp"
-#include "Poller/Timer.h"
-#include "Poller/EventPoller.h"
-#include "Network/Socket.h"
-#include "Network/UdpClient.h"
-#include "Network/Session.h"
+#include "Session.h"
+#include "hv/UdpClient.h"
+#include "hsocket.h"
 #include "logger.h"
 #include "StunPacket.hpp"
 
 namespace RTC {
+struct SockAddrHash {
+    std::size_t operator()(const sockaddr_u &a) const { return sockaddr_hash(&a, true); }
+};
+struct SockAddrEqual {
+    bool operator()(const sockaddr_u &a, const sockaddr_u &b) { return sockaddr_comp(&a, &b) == 0; }
+};
 
 uint64_t calCandidatePairPriority(uint32_t G, uint32_t D);
 
@@ -175,13 +181,13 @@ public:
         using Ptr = std::shared_ptr<Pair>;
 
         Pair() = default;
-        Pair(toolkit::SocketHelper::Ptr socket) : _socket(std::move(socket)) {}
-        Pair(toolkit::SocketHelper::Ptr socket, const sockaddr* peer_addr,
-             std::shared_ptr<sockaddr_storage> relayed_addr = nullptr) : 
+        Pair(toolkit::Session::Ptr socket) : _socket(std::move(socket)) {}
+        Pair(toolkit::Session::Ptr socket, const sockaddr* peer_addr,
+             std::shared_ptr<sockaddr_u> relayed_addr = nullptr) : 
             _socket(std::move(socket)), _relayed_addr(std::move(relayed_addr)) {
             if (peer_addr) {
                 _peer_addr = std::make_shared<sockaddr_storage>();
-                memcpy(_peer_addr.get(), peer_addr, toolkit::SockUtil::get_sock_len(peer_addr));
+                memcpy(_peer_addr.get(), peer_addr, SOCKADDR_LEN(peer_addr));
             }
         }
 
@@ -194,12 +200,12 @@ public:
 
         void get_peer_addr(sockaddr_storage &peer_addr) const {
             if (_peer_addr) {
-                peer_addr = *_peer_addr;
+                memcpy(&peer_addr, _peer_addr.get(), SOCKADDR_LEN(_peer_addr.get()));
             } else {
-                auto addr = _socket->get_peer_addr();
-                memcpy(&peer_addr, addr, toolkit::SockUtil::get_sock_len(addr));
+                auto addr = hio_peeraddr(_socket->io());
+                memcpy(&peer_addr, addr, SOCKADDR_LEN(addr));
                 // 不能返回这个地址，因为get_peer_ip(), 对于与ipv4兼容ipv6套接口会返回ipv4地址，导致这会udp包发送失败，
-                // 为此特地在toolkit::SocketHelper中增加了get_peer_addr()来返回原始的ipv6地址
+                // 为此特地在toolkit::Session中增加了get_peer_addr()来返回原始的ipv6地址
                 // peer_addr = toolkit::SockUtil::make_sockaddr(_socket->get_peer_ip().data(), _socket->get_peer_port());
             }
         }
@@ -208,7 +214,7 @@ public:
             if (!_relayed_addr) {
                 return false;
             }
-            addr = *_relayed_addr;
+            memcpy(&addr, _relayed_addr.get(), SOCKADDR_LEN(_relayed_addr.get()));
             return true;
         }
 
@@ -217,19 +223,22 @@ public:
         uint16_t get_local_port() const { return _socket->get_local_port(); }
 
         std::string get_peer_ip() const {
-            return _peer_addr ? toolkit::SockUtil::inet_ntoa((const struct sockaddr *)_peer_addr.get()) : _socket->get_peer_ip();
+            char buf[SOCKADDR_STRLEN] = { 0 };
+            return _peer_addr ? SOCKADDR_STR(_peer_addr.get(), buf) : _socket->get_peer_ip();
         }
 
         uint16_t get_peer_port() const {
-            return _peer_addr ? toolkit::SockUtil::inet_port((const struct sockaddr *)_peer_addr.get()) : _socket->get_peer_port();
+            return _peer_addr ? sockaddr_port(_peer_addr.get()) : _socket->get_peer_port();
         }
 
+
         std::string get_relayed_ip() const {
-            return _relayed_addr ? toolkit::SockUtil::inet_ntoa((const struct sockaddr *)_relayed_addr.get()) : "";
+            char buf[SOCKADDR_STRLEN] = { 0 };
+            return _relayed_addr ? SOCKADDR_STR(_relayed_addr.get(), buf) : "";
         }
 
         uint16_t get_relayed_port() const {
-            return _relayed_addr ? toolkit::SockUtil::inet_port((const struct sockaddr *)_relayed_addr.get()) : 0;
+            return _relayed_addr ? sockaddr_port(_relayed_addr.get()) : 0;
         };
 
 
@@ -237,7 +246,7 @@ public:
         static bool is_same_relayed_addr(Pair* a, Pair* b) {
             bool ret = (a->_relayed_addr == b->_relayed_addr);
             if (!ret && a->_relayed_addr && b->_relayed_addr) {
-                ret = toolkit::SockUtil::is_same_addr((const struct sockaddr*)a->_relayed_addr.get(), (const struct sockaddr*)b->_relayed_addr.get());
+                ret = 0==sockaddr_comp(a->_relayed_addr.get(), b->_relayed_addr.get());
             }
             return ret;
         }
@@ -255,7 +264,7 @@ public:
         std::string dumpString(uint8_t flag) const { 
             toolkit::_StrPrinter sp;
             static const char* fStr[] = { "<-", "->", "<->" };
-            sp << (_socket ? (_socket->getSock()->sockType() == toolkit::SockNum::Sock_TCP ? "tcp " : "udp ") : "")
+            sp << (_socket ? (hio_type(_socket->io()) & HIO_TYPE_TCP ? "tcp " : "udp ") : "")
                << get_local_ip() << ":" << get_local_port() << fStr[flag] << get_peer_ip() << ":" << get_peer_port();
             if (_relayed_addr && flag == 2) {
                 sp << " relay " << get_relayed_ip() << ":" << get_relayed_port();
@@ -263,9 +272,9 @@ public:
             return sp;
         }
     public:
-        toolkit::SocketHelper::Ptr _socket;
-        std::shared_ptr<sockaddr_storage> _peer_addr = nullptr;
-        std::shared_ptr<sockaddr_storage> _relayed_addr = nullptr;
+        toolkit::Session::Ptr _socket;
+        std::shared_ptr<sockaddr_u> _peer_addr = nullptr;
+        std::shared_ptr<sockaddr_u> _relayed_addr = nullptr;
     };
 
     class Listener {
@@ -361,8 +370,8 @@ protected:
     std::string _password;
 
     // For permissions
-    std::unordered_map<sockaddr_storage /*peer ip:port*/, uint64_t /* create or fresh time*/, 
-        toolkit::SockUtil::SockAddrHash, toolkit::SockUtil::SockAddrEqual> _permissions;
+    std::unordered_map<sockaddr_u /*peer ip:port*/, uint64_t /* create or fresh time*/, 
+        SockAddrHash, SockAddrEqual> _permissions;
 
     // For Channel Bind
     std::unordered_map<uint16_t /*channel number*/, sockaddr_storage /*peer ip:port*/> _channel_bindings;
@@ -397,14 +406,14 @@ protected:
     void sendDataIndication(const sockaddr_storage& peer_addr, const toolkit::Buffer::Ptr &buffer, const Pair::Ptr& pair);
     void sendUnauthorizedResponse(const StunPacket::Ptr& packet, const Pair::Ptr& pair) override;
 
-    toolkit::SocketHelper::Ptr allocateRelayed(const Pair::Ptr& pair);
-    toolkit::SocketHelper::Ptr createRelayedUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
+    toolkit::Session::Ptr allocateRelayed(const Pair::Ptr& pair);
+    toolkit::Session::Ptr createRelayedUdpSocket(const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
 
 protected:
     std::vector<toolkit::BufferLikeString> _nonce_list;
 
-    std::unordered_map<sockaddr_storage /*peer ip:port*/, std::pair<std::shared_ptr<uint16_t> /* port */, Pair::Ptr /*relayed_pairs*/>,
-        toolkit::SockUtil::SockAddrHash, toolkit::SockUtil::SockAddrEqual> _relayed_pairs;
+    std::unordered_map<sockaddr_u /*peer ip:port*/, std::pair<std::shared_ptr<uint16_t> /* port */, Pair::Ptr /*relayed_pairs*/>,
+        SockAddrHash, SockAddrEqual> _relayed_pairs;
     Pair::Ptr _session_pair;
 };
 
@@ -512,17 +521,17 @@ public:
     }
     void setSelectedPair(const Pair::Ptr& pair);
 
-    void removePair(const toolkit::SocketHelper *socket);
+    void removePair(const toolkit::Session *socket);
 
     std::vector<Pair::Ptr> getPairs() const;
 
     // 获取checklist信息，用于API查询
-    Json::Value getChecklistInfo() const;
+    nlohmann::json getChecklistInfo() const;
 
 protected:
-    toolkit::SocketHelper::Ptr createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
-    toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
-    toolkit::SocketHelper::Ptr createTcpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
+    toolkit::Session::Ptr createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
+    toolkit::Session::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
+    toolkit::Session::Ptr createTcpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
 
     void gatheringSrflxCandidate(const Pair::Ptr& pair);
     void gatheringRealyCandidate(const Pair::Ptr& pair);
@@ -581,19 +590,19 @@ protected:
     // 双向索引的候选地址管理结构
     struct SocketCandidateManager {
         // socket -> candidates 的一对多映射
-        std::unordered_map<toolkit::SocketHelper::Ptr, std::vector<CandidateInfo>> socket_to_candidates;
+        std::unordered_map<toolkit::Session::Ptr, std::vector<CandidateInfo>> socket_to_candidates;
         
         // candidate -> socket 的映射（用于快速查找）
-        std::unordered_map<CandidateInfo, toolkit::SocketHelper::Ptr, CandidateTuple::ClassHash, CandidateTuple::ClassEqual> candidate_to_socket;
+        std::unordered_map<CandidateInfo, toolkit::Session::Ptr, CandidateTuple::ClassHash, CandidateTuple::ClassEqual> candidate_to_socket;
         
         // 按类型分组的socket列表，方便遍历
-        std::set<toolkit::SocketHelper::Ptr> _host_sockets;    // HOST类型socket
-        std::set<toolkit::SocketHelper::Ptr> _relay_sockets;   // RELAY类型socket
+        std::set<toolkit::Session::Ptr> _host_sockets;    // HOST类型socket
+        std::set<toolkit::Session::Ptr> _relay_sockets;   // RELAY类型socket
 
         bool _has_relayed_candidate = false;
 
         // 添加映射关系，带5元组重复检查
-        bool addMapping(toolkit::SocketHelper::Ptr socket, const CandidateInfo& candidate) {
+        bool addMapping(toolkit::Session::Ptr socket, const CandidateInfo& candidate) {
             // 检查5元组是否已存在
             if (candidate_to_socket.find(candidate) != candidate_to_socket.end()) {
                 return false; // 已存在相同的5元组
@@ -612,19 +621,19 @@ protected:
         }
         
         // 获取socket对应的所有candidates
-        std::vector<CandidateInfo> getCandidates(const toolkit::SocketHelper::Ptr& socket) const {
+        std::vector<CandidateInfo> getCandidates(const toolkit::Session::Ptr& socket) const {
             auto it = socket_to_candidates.find(socket);
             return (it != socket_to_candidates.end()) ? it->second : std::vector<CandidateInfo>();
         }
         
         // 获取candidate对应的socket
-        toolkit::SocketHelper::Ptr getSocket(const CandidateInfo& candidate) const {
+        toolkit::Session::Ptr getSocket(const CandidateInfo& candidate) const {
             auto it = candidate_to_socket.find(candidate);
             return (it != candidate_to_socket.end()) ? it->second : nullptr;
         }
         
         // 获取所有socket（便于遍历）
-        std::set<toolkit::SocketHelper::Ptr> getAllSockets() const {
+        std::set<toolkit::Session::Ptr> getAllSockets() const {
             auto result = _host_sockets;
             result.insert(_relay_sockets.begin(), _relay_sockets.end());
             return result;
@@ -640,26 +649,26 @@ protected:
         }
         
         // 直接添加host socket
-        void addHostSocket(toolkit::SocketHelper::Ptr socket) {
+        void addHostSocket(toolkit::Session::Ptr socket) {
             _host_sockets.insert(socket);
         }
         
         // 直接添加relay socket
-        void addRelaySocket(toolkit::SocketHelper::Ptr socket) {
+        void addRelaySocket(toolkit::Session::Ptr socket) {
             _relay_sockets.insert(socket);
         }
         
         // 获取host sockets
-        const std::set<toolkit::SocketHelper::Ptr>& getHostSockets() const {
+        const std::set<toolkit::Session::Ptr>& getHostSockets() const {
             return _host_sockets;
         }
         
         // 获取relay sockets
-        const std::set<toolkit::SocketHelper::Ptr>& getRelaySockets() const {
+        const std::set<toolkit::Session::Ptr>& getRelaySockets() const {
             return _relay_sockets;
         }
         
-        void delMapping(toolkit::SocketHelper::Ptr socket) {
+        void delMapping(toolkit::Session::Ptr socket) {
             auto it = socket_to_candidates.find(socket);
             if (it != socket_to_candidates.end()) {
                 for (auto cand : it->second) {
@@ -670,13 +679,13 @@ protected:
         }
 
         // 移除host socket
-        void removeHostSocket(toolkit::SocketHelper::Ptr socket) { 
+        void removeHostSocket(toolkit::Session::Ptr socket) { 
             _host_sockets.erase(socket);
             delMapping(socket);
         }
         
         // 移除relay socket
-        void removeRelaySocket(toolkit::SocketHelper::Ptr socket) {
+        void removeRelaySocket(toolkit::Session::Ptr socket) {
             _relay_sockets.erase(socket);
         }
         

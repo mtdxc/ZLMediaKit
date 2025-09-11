@@ -20,9 +20,7 @@
 #include "StunPacket.hpp"
 #include "Sdp.h"
 #include "Util/mini.h"
-#include "Poller/EventPoller.h"
-#include "Network/Socket.h"
-#include "Network/Session.h"
+#include "Session.h"
 #include "Nack.h"
 #include "TwccContext.h"
 #include "SctpAssociation.hpp"
@@ -141,7 +139,7 @@ public:
     const std::string& getIdentifier() const override;
     const std::string& deleteRandStr() const override;
 
-    void inputSockData(const char *buf, int len, const toolkit::SocketHelper::Ptr& socket, struct sockaddr *addr = nullptr, int addr_len = 0);
+    void inputSockData(const char *buf, int len, const toolkit::Session::Ptr& socket, struct sockaddr *addr = nullptr, int addr_len = 0);
     void inputSockData(const char *buf, int len, const IceTransport::Pair::Ptr& pair = nullptr);
     void sendRtpPacket(const char *buf, int len, bool flush, void *ctx = nullptr);
     void sendRtcpPacket(const char *buf, int len, bool flush, void *ctx = nullptr);
@@ -151,7 +149,7 @@ public:
     void setPoller(toolkit::EventPoller::Ptr poller) { _poller = std::move(poller); }
 
     toolkit::Session::Ptr getSession() const;
-    void removePair(const toolkit::SocketHelper *socket);
+    void removePair(const toolkit::Session *socket);
 
     Role getRole() const { return _role; }
     void setRole(Role role) { _role = role; }
@@ -161,7 +159,7 @@ public:
 
     float getTimeOutSec();
 
-    void getTransportInfo(const std::function<void(Json::Value)> &callback) const;
+    void getTransportInfo(const std::function<void(nlohmann::json)> &callback) const;
 
     void setOnShutdown(std::function<void(const toolkit::SockException &ex)> cb);
 
@@ -236,13 +234,13 @@ private:
     mutable std::string _delete_rand_str;
     std::string _identifier;
     toolkit::EventPoller::Ptr _poller;
-    DtlsTransport::Ptr  _dtls_transport;
-    SrtpSession::Ptr _srtp_session_send;
-    SrtpSession::Ptr _srtp_session_recv;
+    std::shared_ptr<DtlsTransport>  _dtls_transport;
+    std::shared_ptr<SrtpSession> _srtp_session_send;
+    std::shared_ptr<SrtpSession> _srtp_session_recv;
     toolkit::Ticker _ticker;
     // 循环池  [AUTO-TRANSLATED:b7059f37]
     // Cycle pool
-    toolkit::ResourcePool<toolkit::BufferRaw> _packet_pool;
+    //toolkit::ResourcePool<toolkit::BufferRaw> _packet_pool;
 
     //超时功能实现
     toolkit::Ticker _recv_ticker;
@@ -420,14 +418,14 @@ public:
 using onCreateWebRtc = std::function<void(const WebRtcInterface &rtc)>;
 class WebRtcPluginManager {
 public:
-    using Plugin = std::function<void(toolkit::SocketHelper& sender, const WebRtcArgs &args, const onCreateWebRtc &cb)>;
-    using Listener = std::function<void(toolkit::SocketHelper& sender, const std::string &type, const WebRtcArgs &args, const WebRtcInterface &rtc)>;
+    using Plugin = std::function<void(toolkit::Session& sender, const WebRtcArgs &args, const onCreateWebRtc &cb)>;
+    using Listener = std::function<void(toolkit::Session& sender, const std::string &type, const WebRtcArgs &args, const WebRtcInterface &rtc)>;
 
     static WebRtcPluginManager &Instance();
 
     void registerPlugin(const std::string &type, Plugin cb);
     void setListener(Listener cb);
-    void negotiateSdp(toolkit::SocketHelper& sender, const std::string &type, const WebRtcArgs &args, const onCreateWebRtc &cb);
+    void negotiateSdp(toolkit::Session& sender, const std::string &type, const WebRtcArgs &args, const onCreateWebRtc &cb);
 
 private:
     WebRtcPluginManager() = default;

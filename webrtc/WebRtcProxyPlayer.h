@@ -11,9 +11,7 @@
 #ifndef ZLMEDIAKIT_WEBRTC_PROXY_PLAYER_H
 #define ZLMEDIAKIT_WEBRTC_PROXY_PLAYER_H
 
-#include "Network/Socket.h"
 #include "Player/PlayerBase.h"
-#include "Poller/Timer.h"
 #include "Util/TimeTicker.h"
 #include "WebRtcClient.h"
 #include <memory>

@@ -286,7 +286,8 @@ void WebRtcPlayer::onDestory() {
     if (_reader && getSession()) {
         WarnL << "RTC播放器(" << _media_info.shortUrl() << ")结束播放,耗时(s):" << duration;
         if (bytes_usage >= iFlowThreshold * 1024) {
-            NOTICE_EMIT(BroadcastFlowReportArgs, Broadcast::kBroadcastFlowReport, _media_info, bytes_usage, duration, true, *getSession());
+            NoticeCenter::Instance().emitEvent(
+                Broadcast::kBroadcastFlowReport, _media_info, bytes_usage, duration, true, *getSession());
         }
     }
     WebRtcTransportImp::onDestory();
