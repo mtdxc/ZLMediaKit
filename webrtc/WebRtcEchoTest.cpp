@@ -1,19 +1,20 @@
 ﻿/*
- * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
+ * Copyright (c) 2016-present The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/ZLMediaKit/ZLMediaKit).
  *
- * Use of this source code is governed by MIT license that can be found in the
+ * Use of this source code is governed by MIT-like license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "Util/logger.h"
 #include "WebRtcEchoTest.h"
+
+using namespace toolkit;
 
 namespace mediakit {
 
-WebRtcEchoTest::Ptr WebRtcEchoTest::create(const toolkit::EventPollerPtr &poller) {
+WebRtcEchoTest::Ptr WebRtcEchoTest::create(const EventPoller::Ptr &poller) {
     WebRtcEchoTest::Ptr ret(new WebRtcEchoTest(poller), [](WebRtcEchoTest *ptr) {
         ptr->onDestory();
         delete ptr;
@@ -22,7 +23,7 @@ WebRtcEchoTest::Ptr WebRtcEchoTest::create(const toolkit::EventPollerPtr &poller
     return ret;
 }
 
-WebRtcEchoTest::WebRtcEchoTest(const toolkit::EventPollerPtr &poller) : WebRtcTransportImp(poller) {}
+WebRtcEchoTest::WebRtcEchoTest(const EventPoller::Ptr &poller) : WebRtcTransportImp(poller) {}
 
 void WebRtcEchoTest::onRtcConfigure(RtcConfigure &configure) const {
     WebRtcTransportImp::onRtcConfigure(configure);
@@ -37,22 +38,17 @@ void WebRtcEchoTest::onRtp(const char *buf, size_t len, uint64_t stamp_ms) {
 }
 
 void WebRtcEchoTest::onRtcp(const char *buf, size_t len) {
-#if 0
-    std::vector<mediakit::RtcpHeader*> rtcps = mediakit::RtcpHeader::loadFromBytes(const_cast<char*>(buf), len);
-    for (auto rtcp : rtcps) {
-        InfoT << "recv rtcp:" << rtcp->dumpString();
-    }
-#endif
     sendRtcpPacket(buf, len, true, nullptr);
 }
 
-//修改mline的a=msid属性，目的是在echo test的情况下，如果offer和answer的msid相同，chrome会忽略远端的track
+// 修改mline的a=msid属性，目的是在echo test的情况下，如果offer和answer的msid相同，chrome会忽略远端的track  [AUTO-TRANSLATED:f2e3da54]
+// Modify the a=msid attribute of mline, the purpose is that in the echo test case, if the offer and answer have the same msid, chrome will ignore the remote track.
 void WebRtcEchoTest::onCheckSdp(SdpType type, RtcSession &sdp) {
     if (type == SdpType::answer) {
         for (auto &m : sdp.media) {
             for (auto &ssrc : m.rtp_rtx_ssrc) {
                 if (!ssrc.msid.empty()) {
-                    ssrc.msid = "zlmediakit msid";
+                    ssrc.msid = "zlmediakit-mslabel zlmediakit-label-" + m.mid;
                 }
             }
         }

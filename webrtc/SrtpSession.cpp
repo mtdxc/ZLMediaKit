@@ -23,8 +23,9 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "Util/logger.h"
 #include "Util/util.h"
-#include "Util/netdef.h"
 #include "logger.h"
+
+#include <srtp2/srtp.h>
 
 #include <cstring> // std::memset(), std::memcpy()
 #include <vector>
