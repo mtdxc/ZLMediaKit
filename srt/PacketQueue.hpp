@@ -34,8 +34,11 @@ public:
 
     PacketQueue(uint32_t max_size, uint32_t init_seq, uint32_t latency);
     ~PacketQueue() = default;
+    bool inputPacket(DataPacket::Ptr pkt, std::list<DataPacket::Ptr> &out);
 
     uint32_t timeLatency();
+    std::list<LostPair> getLostSeq();
+
     size_t getSize();
     size_t getExpectedSize();
     size_t getAvailableBufferSize();
@@ -44,8 +47,7 @@ public:
     std::string dump();
     // 丢包丢到last_seq
     bool drop(uint32_t first, uint32_t last, std::list<DataPacket::Ptr> &out);
-    bool inputPacket(DataPacket::Ptr pkt, std::list<DataPacket::Ptr> &out);
-    std::list<LostPair> getLostSeq();
+
 private:
     void tryInsertPkt(DataPacket::Ptr pkt);
 

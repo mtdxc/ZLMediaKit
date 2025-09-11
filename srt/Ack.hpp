@@ -62,16 +62,25 @@ public:
     ~ACKACKPacket() = default;
     ///////ControlPacket override///////
     bool loadFromData(uint8_t *buf, size_t len) override {
-        if (ControlPacket::loadFromData(buf, len)) {
-            ack_number = loadUint32(type_specific_info);
-            return true;
+        if (len < ControlPacket::HEADER_SIZE) {
+            return false;
         }
-        return false;
+        _data = BufferRaw::create();
+        _data->assign((char *)(buf), len);
+        ControlPacket::loadHeader();
+        ack_number = loadUint32(type_specific_info);
+        return true;
     }
-
     bool storeToData() override {
+        _data = BufferRaw::create();
+        _data->setCapacity(HEADER_SIZE);
+        _data->setSize(HEADER_SIZE);
+        control_type = ControlPacket::ACKACK;
+        sub_type = 0;
+
         storeUint32(type_specific_info, ack_number);
-        return storeHeader(ACKACK);
+        storeToHeader();
+        return true;
     }
 
     uint32_t ack_number;

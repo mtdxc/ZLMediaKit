@@ -67,5 +67,7 @@ PlayerBase::PlayerBase() {
     this->mINI::operator[](Client::kMediaTimeoutMS) = 5000;
     this->mINI::operator[](Client::kBeatIntervalMS) = 5000;
     this->mINI::operator[](Client::kWaitTrackReady) = true;
+    this->mINI::operator[](Client::kLatency) = 0;
+    this->mINI::operator[](Client::kPassPhrase) = "";
 }
 } /* namespace mediakit */

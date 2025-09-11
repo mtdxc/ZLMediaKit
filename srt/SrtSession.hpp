@@ -3,7 +3,7 @@
 
 #include "Session.h"
 #include "Util/TimeTicker.h"
-#include "Buffer.hpp"
+
 namespace SRT {
 
 class SrtTransport;
@@ -13,7 +13,7 @@ public:
     typedef std::shared_ptr<SrtSession> Ptr;
 
     SrtSession(hio_t* io);
-    ~SrtSession() override;
+    ~SrtSession() override {}
 
     void onRecv(uint8_t *data, size_t size);
     void onError(const toolkit::SockException &err);
@@ -22,7 +22,7 @@ public:
 private:
     bool _find_transport = true;
     toolkit::Ticker _ticker;
-    struct sockaddr_storage* _peer_addr;
+    struct sockaddr_storage _peer_addr;
     std::shared_ptr<SrtTransport> _transport;
 };
 

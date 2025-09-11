@@ -1,5 +1,6 @@
 ﻿#include "Ack.hpp"
 #include "Common.hpp"
+#include <strstream>
 
 namespace SRT {
 
@@ -7,11 +8,12 @@ bool ACKPacket::loadFromData(uint8_t *buf, size_t len) {
     if (len < ACK_CIF_SIZE + ControlPacket::HEADER_SIZE) {
         return false;
     }
-    if (!ControlPacket::loadFromData(buf, len))
-        return false;
-    ack_number = loadUint32(type_specific_info);
 
-    uint8_t *ptr = payloadData();
+    _data = BufferRaw::create();
+    _data->assign((char *)(buf), len);
+    ControlPacket::loadHeader();
+    ack_number = loadUint32(type_specific_info);
+    uint8_t *ptr = (uint8_t *)_data->data() + ControlPacket::HEADER_SIZE;
 
     last_ack_pkt_seq_number = loadUint32(ptr);
     ptr += 4;
@@ -38,10 +40,16 @@ bool ACKPacket::loadFromData(uint8_t *buf, size_t len) {
 }
 
 bool ACKPacket::storeToData() {
-    storeUint32(type_specific_info, ack_number);
-    ControlPacket::storeHeader(ACK, 0, ACK_CIF_SIZE);
+    _data = BufferRaw::create();
+    _data->setCapacity(HEADER_SIZE + ACK_CIF_SIZE);
+    _data->setSize(HEADER_SIZE + ACK_CIF_SIZE);
+    control_type = ControlPacket::ACK;
+    sub_type = 0;
 
-    uint8_t* ptr = payloadData();
+    storeUint32(type_specific_info, ack_number);
+    storeToHeader();
+
+    uint8_t *ptr = (uint8_t *)_data->data() + ControlPacket::HEADER_SIZE;
 
     storeUint32(ptr, last_ack_pkt_seq_number);
     ptr += 4;
@@ -68,11 +76,11 @@ bool ACKPacket::storeToData() {
 }
 
 std::string ACKPacket::dump() {
-    toolkit::_StrPrinter printer;
+    std::ostringstream printer;
     printer << "last_ack_pkt_seq_number=" << last_ack_pkt_seq_number << " rtt=" << rtt
             << " rtt_variance=" << rtt_variance << " pkt_recv_rate=" << pkt_recv_rate
             << " available_buf_size=" << available_buf_size << " estimated_link_capacity=" << estimated_link_capacity
             << " recv_rate=" << recv_rate;
-    return std::move(printer);
+    return printer.str();
 }
 } // namespace SRT

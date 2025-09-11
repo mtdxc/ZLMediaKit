@@ -1,9 +1,11 @@
 ﻿#include "Util/util.h"
-#include "Common/Stamp.h"
 #include <memory>
 #include "Common/Parser.h"
+#include "Common/config.h"
+#include "Util/NoticeCenter.h"
 #include "SrtTransportImp.hpp"
-using namespace toolkit;
+using namespace std;
+
 namespace SRT {
 using AutoLock = std::lock_guard<std::recursive_mutex>;
 
@@ -11,17 +13,46 @@ SrtTransportImp::SrtTransportImp(const EventPoller::Ptr &poller)
     : SrtTransport(poller) {}
 
 SrtTransportImp::~SrtTransportImp() {
-    InfoT;
     uint64_t duration = _alive_ticker.createdTime() / 1000;
     WarnT << (_is_pusher ? "srt 推流器(" : "srt 播放器(") << _media_info.shortUrl() << ")断开,耗时(s):" << duration;
 
     // 流量统计事件广播
     GET_CONFIG(uint32_t, iFlowThreshold, General::kFlowThreshold);
     if (_total_bytes >= iFlowThreshold * 1024) {
-        NoticeCenter::Instance().emitEvent(
-            Broadcast::kBroadcastFlowReport, _media_info, _total_bytes, duration, !_is_pusher, this);
+        try {
+            NoticeCenter::Instance().emitEvent(
+                Broadcast::kBroadcastFlowReport, _media_info, _total_bytes, duration, !_is_pusher, *this);
+        } catch (std::exception &ex) {
+            WarnL << "Exception occurred: " << ex.what();
+        }
     }
 }
+
+
+SrtTransport::Ptr querySrtTransport(uint8_t *data, size_t size, const EventPoller::Ptr& poller) {
+    if (DataPacket::isDataPacket(data, size)) {
+        uint32_t socket_id = DataPacket::getSocketID(data, size);
+        return SrtTransportManager::Instance().getItem(socket_id);
+    }
+
+    if (HandshakePacket::isHandshakePacket(data, size)) {
+        auto type = HandshakePacket::getHandshakeType(data, size);
+        if (type == HandshakePacket::HS_TYPE_INDUCTION) {
+            // 握手第一阶段
+            return poller ? std::make_shared<SrtTransportImp>(poller) : nullptr;
+        }
+
+        if (type == HandshakePacket::HS_TYPE_CONCLUSION) {
+            // 握手第二阶段
+            uint32_t sync_cookie = HandshakePacket::getSynCookie(data, size);
+            return SrtTransportManager::Instance().getHandshakeItem(sync_cookie);
+        }
+    }
+
+    uint32_t socket_id = ControlPacket::getSocketID(data, size);
+    return SrtTransportManager::Instance().getItem(socket_id);
+}
+
 
 void SrtTransportImp::onHandShakeFinished(std::string &streamid, struct sockaddr_storage *addr) {
     SrtTransport::onHandShakeFinished(streamid,addr);
@@ -35,10 +66,9 @@ void SrtTransportImp::onHandShakeFinished(std::string &streamid, struct sockaddr
         onShutdown(SockException(Err_shutdown, "stream id not vaild"));
         return;
     }
-    
-    // parse streamid like this zlmediakit.com/live/test?token=1213444&type=push
-    auto params = Parser::parseArgs(_media_info._param_strs);
-    if (params["m"] == "publish") {
+
+    auto kv = Parser::parseArgs(_media_info._param_strs);
+    if (kv["m"] == "publish") {
         _is_pusher = true;
         _decoder = DecoderImp::createDecoder(DecoderImp::decoder_ts, this);
         emitOnPublish();
@@ -91,6 +121,7 @@ bool SrtTransportImp::parseStreamid(std::string &streamid) {
 
     _media_info._app = app;
     _media_info._streamid = stream_name;
+    _media_info._full_url = _media_info.getUrl() + "?" + _media_info._param_strs;
 
     TraceL << " mediainfo=" << _media_info.shortUrl() << " params=" << _media_info._param_strs;
 
@@ -153,17 +184,23 @@ void SrtTransportImp::emitOnPublish() {
         if (!strong_self) {
             return;
         }
-        if (err.empty()) {
-            strong_self->_muxer = std::make_shared<MultiMediaSourceMuxer>(
-                strong_self->_media_info._vhost, strong_self->_media_info._app, strong_self->_media_info._streamid,
-                0.0f, option);
-            strong_self->_muxer->setMediaListener(strong_self);
-            strong_self->doCachedFunc();
-            InfoL << "允许 srt 推流";
-        } else {
-            WarnL << "禁止 srt 推流:" << err;
-            strong_self->onShutdown(SockException(Err_refused, err));
-        }
+        strong_self->getPoller()->async([weak_self, err, option](){
+            auto strong_self = weak_self.lock();
+            if (!strong_self) {
+                return;
+            }
+            if (err.empty()) {
+                strong_self->_muxer = std::make_shared<MultiMediaSourceMuxer>(
+                    strong_self->_media_info._vhost, strong_self->_media_info._app, strong_self->_media_info._streamid,
+                    0.0f, option);
+                strong_self->_muxer->setMediaListener(strong_self);
+                strong_self->doCachedFunc();
+                InfoL << "允许 srt 推流";
+            } else {
+                WarnL << "禁止 srt 推流:" << err;
+                strong_self->onShutdown(SockException(Err_refused, err));
+            }
+        });
     };
 
     // 触发推流鉴权事件
@@ -244,10 +281,7 @@ std::string SrtTransportImp::getIdentifier() const {
 
 bool SrtTransportImp::inputFrame(const Frame::Ptr &frame) {
     if (_muxer) {
-        //TraceL<<"before type "<<frame->getCodecName()<<" dts "<<frame->dts()<<" pts "<<frame->pts();
-        auto frame_tmp = std::make_shared<FrameStamp>(frame, _type_to_stamp[frame->getTrackType()],false);
-        //TraceL<<"after type "<<frame_tmp->getCodecName()<<" dts "<<frame_tmp->dts()<<" pts "<<frame_tmp->pts();
-        return _muxer->inputFrame(frame_tmp);
+        return _muxer->inputFrame(frame);
     }
     if (_cached_func.size() > 200) {
         WarnL << "cached frame of track(" << frame->getCodecName() << ") is too much, now dropped";
@@ -255,17 +289,11 @@ bool SrtTransportImp::inputFrame(const Frame::Ptr &frame) {
     }
     auto frame_cached = Frame::getCacheAbleFrame(frame);
     AutoLock lck(_func_mtx);
-    _cached_func.emplace_back([this, frame_cached]() { 
-        //TraceL<<"before type "<<frame_cached->getCodecName()<<" dts "<<frame_cached->dts()<<" pts "<<frame_cached->pts();
-        auto frame_tmp = std::make_shared<FrameStamp>(frame_cached, _type_to_stamp[frame_cached->getTrackType()],false);
-        //TraceL<<"after type "<<frame_tmp->getCodecName()<<" dts "<<frame_tmp->dts()<<" pts "<<frame_tmp->pts();
-        _muxer->inputFrame(frame_tmp);
-    });
+    _cached_func.emplace_back([this, frame_cached]() { _muxer->inputFrame(frame_cached); });
     return true;
 }
 
 bool SrtTransportImp::addTrack(const Track::Ptr &track) {
-    _type_to_stamp.emplace(track->getTrackType(),Stamp());
     if (_muxer) {
         return _muxer->addTrack(track);
     }
@@ -281,9 +309,6 @@ void SrtTransportImp::addTrackCompleted() {
     } else {
         AutoLock lck(_func_mtx);
         _cached_func.emplace_back([this]() { _muxer->addTrackCompleted(); });
-    }
-    if(_type_to_stamp.size() >1){
-        _type_to_stamp[TrackType::TrackAudio].syncTo(_type_to_stamp[TrackType::TrackVideo]);
     }
 }
 
@@ -311,6 +336,11 @@ float SrtTransportImp::getTimeOutSec() {
         return 5.0;
     }
     return timeOutSec;
+}
+
+std::string SrtTransportImp::getPassphrase() {
+    GET_CONFIG(string, passphrase, kPassPhrase);
+    return passphrase;
 }
 
 int SrtTransportImp::getPktBufSize() {

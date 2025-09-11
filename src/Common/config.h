@@ -386,6 +386,10 @@ extern const std::string kWaitTrackReady;
 // rtsp播放指定track，可选项有0(不指定，默认)、1(视频)、2(音频)
 // 设置方法:player[Client::kPlayTrack] = 0/1/2;
 extern const std::string kPlayTrack;
+// Set SRT delay
+extern const std::string kLatency;
+// Set SRT PassPhrase
+extern const std::string kPassPhrase;
 } // namespace Client
 } // namespace mediakit
 

@@ -11,27 +11,30 @@
 #include "Common.hpp"
 #include "NackContext.hpp"
 #include "Packet.hpp"
+#include "Crypto.hpp"
 #include "PacketQueue.hpp"
 #include "PacketSendQueue.hpp"
 #include "Statistic.hpp"
 namespace SRT {
 
+using namespace toolkit;
+
 extern const std::string kPort;
 extern const std::string kTimeOutSec;
 extern const std::string kLatencyMul;
 extern const std::string kPktBufSize;
+extern const std::string kPassPhrase;
 
 class SrtTransport : public std::enable_shared_from_this<SrtTransport> {
 public:
     friend class SrtSession;
     using Ptr = std::shared_ptr<SrtTransport>;
 
-    SrtTransport(const toolkit::EventPollerPtr &poller);
+    SrtTransport(const EventPoller::Ptr &poller);
     virtual ~SrtTransport();
-
-    const toolkit::EventPollerPtr &getPoller() const;
-    void setSession(toolkit::SessionPtr session);
-    const toolkit::SessionPtr &getSession() const;
+    const EventPoller::Ptr &getPoller() const;
+    void setSession(Session::Ptr session);
+    const Session::Ptr &getSession() const;
 
     /**
      * socket收到udp数据
@@ -40,23 +43,24 @@ public:
      * @param addr 数据来源地址
      */
     virtual void inputSockData(uint8_t *buf, int len, struct sockaddr_storage *addr);
-    virtual void onSendTSData(const toolkit::Buffer::Ptr &buffer, bool flush);
+    virtual void onSendTSData(const Buffer::Ptr &buffer, bool flush);
 
-    std::string getIdentifier();
+    std::string getIdentifier() const;
     void unregisterSelf();
     void unregisterSelfHandshake();
 
 protected:
     virtual bool isPusher() { return true; };
     virtual void onSRTData(DataPacket::Ptr pkt) {};
-    virtual void onShutdown(const toolkit::SockException &ex);
+    virtual void onShutdown(const SockException &ex);
     virtual void onHandShakeFinished(std::string &streamid, struct sockaddr_storage *addr) {
         _is_handleshake_finished = true;
     };
-    virtual void sendPacket(toolkit::Buffer::Ptr pkt, bool flush = true);
+    virtual void sendPacket(Buffer::Ptr pkt, bool flush = true);
     virtual int getLatencyMul() { return 4; };
     virtual int getPktBufSize() { return 8192; };
     virtual float getTimeOutSec(){return 5.0;};
+    virtual std::string getPassphrase() {return "";};
 
 private:
     void registerSelf();
@@ -76,17 +80,21 @@ private:
     void handleShutDown(uint8_t *buf, int len, struct sockaddr_storage *addr);
     void handleDropReq(uint8_t *buf, int len, struct sockaddr_storage *addr);
     void handleUserDefinedType(uint8_t *buf, int len, struct sockaddr_storage *addr);
+    void handleKeyMaterialReqPacket(uint8_t *buf, int len, struct sockaddr_storage *addr);
+    void handleKeyMaterialRspPacket(uint8_t *buf, int len, struct sockaddr_storage *addr);
     void handlePeerError(uint8_t *buf, int len, struct sockaddr_storage *addr);
     void handleDataPacket(uint8_t *buf, int len, struct sockaddr_storage *addr);
 
     void sendNAKPacket(std::list<PacketQueue::LostPair> &lost_list);
     void sendACKPacket();
+    void sendRejectPacket(SRT_REJECT_REASON reason, struct sockaddr_storage *addr);
     void sendLightACKPacket();
     void sendKeepLivePacket();
     void sendShutDown();
     void sendMsgDropReq(uint32_t first, uint32_t last);
+    void tryAnnounceKeyMaterial();
 
-    size_t getPayloadSize();
+    size_t getPayloadSize() const;
 
     void createTimerForCheckAlive();
 
@@ -98,11 +106,11 @@ protected:
 
 private:
     // 当前选中的udp链接
-    toolkit::SessionPtr _selected_session;
+    Session::Ptr _selected_session;
     // 链接迁移前后使用过的udp链接
-    std::unordered_map<toolkit::Session *, std::weak_ptr<toolkit::Session>> _history_sessions;
+    std::unordered_map<Session *, std::weak_ptr<Session>> _history_sessions;
 
-    toolkit::EventPollerPtr _poller;
+    EventPoller::Ptr _poller;
 
     uint32_t _peer_socket_id;
     uint32_t _socket_id = 0;
@@ -136,48 +144,53 @@ private:
     uint32_t _last_pkt_seq = 0;
     UTicker _ack_ticker;
     std::map<uint32_t, TimePoint> _ack_send_timestamp;
-    
+
     std::shared_ptr<PacketRecvRateContext> _pkt_recv_rate_context;
     std::shared_ptr<EstimatedLinkCapacityContext> _estimated_link_capacity_context;
     //std::shared_ptr<RecvRateContext> _recv_rate_context;
 
     UTicker _nak_ticker;
 
-    //保存发送的握手消息，防止丢失重发
+    // 保持发送的握手消息，防止丢失重发
     HandshakePacket::Ptr _handleshake_res;
 
-    std::shared_ptr<toolkit::Timer> _handleshake_timer;
+    Timer::Ptr _handleshake_timer;
 
     //ResourcePool<BufferRaw> _packet_pool;
 
     //检测超时的定时器
-    std::shared_ptr<toolkit::Timer> _timer;
+    Timer::Ptr _timer;
     //刷新计时器
-    toolkit::Ticker _alive_ticker;
+    Ticker _alive_ticker;
 
     bool _is_handleshake_finished = false;
+
+    // for encryption
+    Crypto::Ptr            _crypto;
+    Timer::Ptr             _announce_timer;
+    KeyMaterialPacket::Ptr _announce_req;
 };
 
 class SrtTransportManager {
 public:
     static SrtTransportManager &Instance();
-    SrtTransport::Ptr getItem(const std::string &key);
-    void addItem(const std::string &key, const SrtTransport::Ptr &ptr);
-    void removeItem(const std::string &key);
+    SrtTransport::Ptr getItem(const uint32_t key);
+    void addItem(const uint32_t key, const SrtTransport::Ptr &ptr);
+    void removeItem(const uint32_t key);
 
-    void addHandshakeItem(const std::string &key, const SrtTransport::Ptr &ptr);
-    void removeHandshakeItem(const std::string &key);
-    SrtTransport::Ptr getHandshakeItem(const std::string &key);
+    void addHandshakeItem(const uint32_t key, const SrtTransport::Ptr &ptr);
+    void removeHandshakeItem(const uint32_t key);
+    SrtTransport::Ptr getHandshakeItem(const uint32_t key);
 
 private:
     SrtTransportManager() = default;
 
 private:
     std::mutex _mtx;
-    std::unordered_map<std::string, std::weak_ptr<SrtTransport>> _map;
+    std::unordered_map<uint32_t , std::weak_ptr<SrtTransport>> _map;
 
     std::mutex _handshake_mtx;
-    std::unordered_map<std::string, std::weak_ptr<SrtTransport>> _handshake_map;
+    std::unordered_map<uint32_t, std::weak_ptr<SrtTransport>> _handshake_map;
 };
 
 } // namespace SRT
