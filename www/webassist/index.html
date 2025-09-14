@@ -73,9 +73,10 @@
                         </el-select>
                         <el-input v-model="getMediaList_queryparams.app" placeholder="请输入app名" style="width: 150px;"></el-input>
                         <el-input v-model="getMediaList_queryparams.stream" placeholder="请输入流id" style="width: 150px;"></el-input>
-                        <el-checkbox label="自动刷新" v-model="autorefresh_medialist" ></el-checkbox>
+                        <el-button @click="getMediaList">
+                            <el-checkbox v-model="autorefresh_medialist"/>刷新
+                        </el-button>
                         <span>共{{medialist.length}}项</span>
-                        <el-button type="primary" icon="el-icon-refresh" @click="getMediaList">查询</el-button>
                     </div>
 
                     <el-table :data="medialist" empty-text="暂无数据">
@@ -224,8 +225,10 @@
                     </el-dialog>
                     <el-divider><i class="el-icon-connection"></i></el-divider>
                     <div style="width: 100%;text-align: right;">
-                        <el-checkbox label="自动刷新" v-model="autorefresh_session" ></el-checkbox>
-                        <el-button type="primary" icon="el-icon-refresh" @click="getAllSession">刷新</el-button>
+                        <el-button @click="getAllSession">
+                            <el-checkbox v-model="autorefresh_session"/>刷新
+                        </el-button>
+                        <span>共{{sessionlist.length}}项</span>
                     </div>
 
                     <el-table :data="sessionlist" empty-text="暂无连接数据">
@@ -448,15 +451,19 @@
                                 </el-form-item>
                             </el-form>
                         </div>
-                        <div style="border-radius: 4px; background-color: #545c6421; margin: 10px;; flex: 1">
+                        <div style="border-radius: 4px; background-color: #545c6421; margin: 10px;; flex: 2">
                             <el-form style="margin: 10px;">
                                 <div style="width: 100%;text-align: left; margin-bottom: 10px;">
-                                    <el-button type="primary" @click="addStreamProxy">增加</el-button>
-                                    <el-button type="primary" icon="el-icon-refresh" @click="listStreamProxy">刷新</el-button>
+                                    <el-button @click="addStreamProxy">增加</el-button>
+                                    <el-button @click="listStreamProxy">
+                                        <el-checkbox v-model="streamProxyRefresh" @change="handleSelect(selectIndex, 'streamProxyRefresh')"/>
+                                        刷新
+                                    </el-button>
+                                    <span>共{{streamProxyList.length}}项</span>
                                 </div>
                                 <el-table :data="streamProxyList" empty-text="暂无拉流代理">
                                     <!-- <el-table-column sortable prop="key" label="key"> </el-table-column> -->
-                                    <el-table-column sortable prop="url" label="url"> </el-table-column>
+                                    <el-table-column sortable prop="url" label="url" min-width="240" show-overflow-tooltip></el-table-column>
                                     <el-table-column sortable prop="src.app" label="app"> </el-table-column>
                                     <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                                     <el-table-column sortable prop="status" label="状态"> </el-table-column>
@@ -518,14 +525,17 @@
                         <el-form-item label="">
                             <!-- <el-input type="textarea" :rows="5" v-model="addStreamPusherProxy_apiurl" readonly></el-input> -->
                             <div style="width: 100%;text-align: right;">
-                                <el-button type="primary" @click="addStreamPusherProxy">增加</el-button>
-                                <el-button type="primary" icon="el-icon-refresh" @click="listStreamPusherProxy">刷新</el-button>
+                                <el-button @click="addStreamPusherProxy">增加</el-button>
+                                <el-button @click="listStreamPusherProxy">
+                                    <el-checkbox v-model="streamPusherRefresh" @change="handleSelect(selectIndex, 'streamPusherRefresh')"/>刷新
+                                </el-button>
+                                <span>共{{pusherProxyList.length}}项</span>
                             </div>
                         </el-form-item>
                     </el-form>
                     <el-table :data="pusherProxyList" empty-text="暂无推流代理">
                         <!-- <el-table-column sortable prop="key" label="key"> </el-table-column> -->
-                        <el-table-column sortable prop="url" label="url"> </el-table-column>
+                        <el-table-column sortable prop="url" label="url" min-width="230"> </el-table-column>
                         <el-table-column sortable prop="src.app" label="app"> </el-table-column>
                         <el-table-column sortable prop="src.stream" label="stream"> </el-table-column>
                         <el-table-column sortable prop="status" label="状态"> </el-table-column>
@@ -563,8 +573,11 @@
                             <el-input v-model="addFFmpeg_param.timeout_ms"></el-input>
                         </el-form-item>
                         <el-form-item label="">
-                            <el-button type="primary" @click="addFFmpegSource">增加</el-button>
-                            <el-button type="primary" icon="el-icon-refresh" @click="listFFmpegSource">刷新</el-button>
+                            <el-button @click="addFFmpegSource">增加</el-button>
+                            <el-button @click="listFFmpegSource">
+                                <el-checkbox v-model="ffmpegRefresh" @change="handleSelect(selectIndex, 'ffmpegRefresh')"/>刷新
+                            </el-button>
+                            <span>共{{ffmpeglist.length}}项</span>
                         </el-form-item>
                     </el-form>
                     <el-table :data="ffmpeglist" empty-text="暂无数据">
@@ -615,8 +628,11 @@
                             <el-input v-model="addRtpServer_param.ssrc"></el-input>
                         </el-form-item>
                         <el-form-item label="">
-                            <el-button type="primary" @click="openRtpServer">增加</el-button>
-                            <el-button type="primary" icon="el-icon-refresh" @click="listRtpServer">刷新</el-button>
+                            <el-button @click="openRtpServer">增加</el-button>
+                            <el-button @click="listRtpServer">
+                                <el-checkbox v-model="rtpRefresh" @change="handleSelect(selectIndex, 'rtpRefresh')"/>刷新
+                            </el-button>
+                            <span>共{{rtpserverlist.length}}项</span>
                         </el-form-item>
                     </el-form>
                     <el-table :data="rtpserverlist" empty-text="暂无数据">
@@ -674,6 +690,14 @@
                                                 <el-select v-model="serverConfig.general.enableVhost" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                刷新周期(ms)
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text" v-model="refreshInterval"></el-input>
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -1898,7 +1922,7 @@
                                                 </el-select>
                                             </div>
                                         </div>
-                                    </div>
+                                            </div>
                                 </el-col>
                                 <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
                                     <div class="confs">
@@ -2518,7 +2542,7 @@
                 return
             }
             else {
-                this.updatetimer = setInterval(this.update_status, 1000)
+                this.updatetimer = setInterval(this.update_status, this.refreshInterval)
             }
             this.chart1 = echarts.init(this.$refs.chart1);
             this.chart2 = echarts.init(this.$refs.chart2);
@@ -2621,6 +2645,12 @@
                 statistic: null,
                 medialist: [],
                 ffmpeglist: [],
+                ffmpegRefresh: false,
+                rtpRefresh: false,
+                ossRefresh: false,
+                streamProxyRefresh: false,
+                streamPusherRefresh: false,
+                refreshInterval: 1000,
                 addFFmpeg_param: {
                     src_url: "",
                     dst_url: "",
@@ -2950,15 +2980,27 @@
                 }
                 else if (this.selectIndex == '3') {
                     this.listStreamProxy();
+                    if (this.streamProxyRefresh) {
+                        this.updatetimer = setInterval(this.listStreamProxy, this.refreshInterval)
+                    }
                 }
                 else if (this.selectIndex == '4') {
                     this.listStreamPusherProxy();
+                    if (this.streamPusherRefresh) {
+                        this.updatetimer = setInterval(this.listFFmpegSource, this.refreshInterval)
+                    }
                 }
                 else if (this.selectIndex == '5') {
                     this.listFFmpegSource();
+                    if (this.ffmpegRefresh) {
+                        this.updatetimer = setInterval(this.listFFmpegSource, this.refreshInterval)
+                    }
                 }
                 else if (this.selectIndex == '6') {
                     this.listRtpServer();
+                    if (this.rtpRefresh) {
+                        this.updatetimer = setInterval(this.listRtpServer, this.refreshInterval)
+                    }
                 }
                 else if (this.selectIndex == '2') {
                     var ishttps = 'https:' == document.location.protocol ? true : false
@@ -3320,7 +3362,7 @@
                             type: 'bar',
                             data: Object.values(this.statistic)
                         }]
-                    })
+                })
                 })
             },
             restartServer() {
