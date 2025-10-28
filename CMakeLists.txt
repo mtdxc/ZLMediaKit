@@ -574,6 +574,7 @@ add_subdirectory(src)
 if(ENABLE_PLAYER AND ENABLE_FFMPEG)
   add_subdirectory(player)
 endif()
+add_subdirectory(SDL3Test)
 
 #MediaServer主程序
 #MediaServer main program
