@@ -339,6 +339,20 @@
                                     <el-input v-model="addStreamProxy_params.url"
                                         placeholder="例如rtmp://live.hkstv.hk.lxdns.com/live/hks2"></el-input>
                                 </el-form-item>
+                                <el-form-item label="Onvif设备" label-width="180px">
+                                    <div style="display: flex;">
+                                    <el-select v-model="onvif_url">
+                                        <el-option v-for="(item, index) in onvifList"
+                                            :key="index"
+                                            :label="item.name"
+                                            :value="item.onvif_url" />
+                                    </el-select>
+                                    <el-button @click="searchOnvif">搜索</el-button>
+                                    <el-input v-model="onvif_username" placeholder="username" style="width: 80px;"> </el-input>
+                                    <el-input v-model="onvif_password" placeholder="password" style="width: 80px;"> </el-input>
+                                    <el-button @click="testOnvif">测试</el-button>
+                                    </div>
+                                </el-form-item>
                                 <el-form-item label="" label-width="180px">
                                     <el-row style="text-align: left;">
                                         <el-col :span="8">
@@ -2580,6 +2594,10 @@
                     1: "接收时间戳",
                     2: "相对时间戳"
                 },
+                onvifList: [],
+                onvif_url: '',
+                onvif_username: '',
+                onvif_password: '',
                 getMediaList_queryparams: {
                     schema: "rtc",
                     vhost: "__defaultVhost__",
@@ -3076,6 +3094,32 @@
                 this.performRequest(url, "", "", resp => {
                     if (resp.data.data) this.streamProxyList = resp.data.data;
                     else this.streamProxyList = [];
+                })
+            },
+            searchOnvif() {
+                const url = `${this.host}/index/api/searchOnvifDevice?secret=${this.secret}&timeout_ms=10000`;
+                this.performRequest(url, "", "", resp => {
+                    console.log(resp.data);
+                    if (resp.data.data) this.onvifList = resp.data.data;
+                    else this.onvifList = [];
+                })
+            },
+            testOnvif() {
+                const url = `${this.host}/index/api/getStreamUrl?secret=${this.secret}&onvif_url=${this.onvif_url}&user_name=${this.onvif_username}&password=${this.onvif_password}`;
+                this.performRequest(url, "", "", resp => {
+                    if (resp.data.code == 0) {
+                        this.addStreamProxy_params.url = resp.data.url;
+                        this.$message({
+                            message: '获取成功',
+                            type: 'success',
+                        });
+                    }
+                    else {
+                        this.$message({
+                            message: '获取失败',
+                            type: 'error',
+                        });
+                    }
                 })
             },
             listStreamPusherProxy() {
