@@ -276,6 +276,7 @@
                                 <el-form-item label="method">
                                     <el-radio-group v-model="webrtc.type">
                                         <el-radio label="echo"></el-radio>
+                                        <el-radio label="talk"></el-radio>
                                         <el-radio label="push"></el-radio>
                                         <el-radio label="play"></el-radio>
                                     </el-radio-group>
@@ -2786,8 +2787,6 @@
                 this.webrtc.zlmsdpUrl = url.toString()
                 if (newv == "play") {
                     this.webrtc.recvOnly = true;
-                } else if (newv == "echo") {
-                    this.webrtc.recvOnly = false;
                 } else {
                     this.webrtc.recvOnly = false;
                 }
