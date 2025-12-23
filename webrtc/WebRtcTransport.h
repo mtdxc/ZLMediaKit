@@ -70,6 +70,7 @@ public:
     virtual void setLocalIp(std::string localIp) {}
     virtual void setPreferredTcp(bool flag) {}
     virtual void setRembBitrate(size_t remb_bitrate) {}
+    virtual void setPreferredCodecs(const std::string& audio, const std::string& video) {}
 
     using onGatheringCandidateCB = std::function<void(const std::string& transport_identifier, const std::string& candidate, const std::string& ufrag, const std::string& pwd)>;
     virtual void gatheringCandidate(IceServerInfo::Ptr ice_server, onGatheringCandidateCB cb = nullptr) = 0;
@@ -379,7 +380,7 @@ public:
     toolkit::Ticker rtcp_sr_send_ticker;
     toolkit::Ticker rtcp_rr_send_ticker;
 
-    // 绑定的rtp流id，一般为ssrc
+    //for recv rtp
     std::string rtp_id;
     // 发送rtp流的ext映射关系
     std::shared_ptr<RtpExtContext> origin_rtp_ext_ctx;
@@ -410,7 +411,7 @@ struct WrappedRtxTrack : public WrappedMediaTrack {
     void inputRtp(const char *buf, size_t len, uint64_t stamp_ms, RtpHeader *rtp, const std::string &rid) override;
 };
 
-// RFC 2198 RED (Redundant Audio Data) 包处理
+
 struct WrappedRedTrack: public WrappedMediaTrack {
     explicit WrappedRedTrack(MediaTrack::Ptr ptr, WebRtcTransportImp &t)
         : WrappedMediaTrack(std::move(ptr))
@@ -495,7 +496,13 @@ public:
     virtual void onConfig(toolkit::mINI& cfg);
     bool setRembBitRate(size_t val);
     size_t getRembBitRate() const {return _remb_bitrate;}
+    void setPreferredCodecs(const std::string& audio, const std::string& video) override {
+        audio_codecs = audio;
+        video_codecs = video;
+    }
 private:
+    std::string audio_codecs, video_codecs;
+
     mutable size_t _remb_bitrate = 0;
 
     bool _preferred_tcp = false;
@@ -511,16 +518,16 @@ private:
     // 刷新计时器  [AUTO-TRANSLATED:61eb11e5]
     // Refresh timer
     toolkit::Ticker _alive_ticker;
-    // twcc rtcp发送上下文对象  [AUTO-TRANSLATED:aef6476a]
-    // twcc rtcp send context object
+    // pli rtcp计时器  [AUTO-TRANSLATED:a1a5fd18]
+    // pli rtcp timer
     TwccContext _twcc_ctx;
-    // 根据rtcp的ssrc获取相关信息，收发rtp和rtx的ssrc都会记录  [AUTO-TRANSLATED:6c57cd48]
-    // Get relevant information based on the ssrc of the rtcp, the ssrc of sending and receiving rtp and rtx will be recorded
+    // 根据发送rtp的track类型获取相关信息  [AUTO-TRANSLATED:ff31c272]
+    // Get relevant information based on the track type of the sent rtp
     std::unordered_map<uint32_t/*ssrc*/, MediaTrack::Ptr> _ssrc_to_track_recv;
     std::unordered_map<uint32_t/*ssrc*/, MediaTrack::Ptr> _ssrc_to_track_send;
-    // 根据接收rtp的rid和pt获取相关信息
+    // 根据rtcp的ssrc获取相关信息，收发rtp和rtx的ssrc都会记录  [AUTO-TRANSLATED:6c57cd48]
     std::unordered_map<std::string/*mid*/, std::unordered_map<uint8_t/*pt*/, std::unique_ptr<WrappedMediaTrack>>> _mid_to_track_recv;
-    // 发送rtp时，如果未指定Track信息，那么随机分配一个未使用的track
+    // Get relevant information based on the ssrc of the rtcp, the ssrc of sending and receiving rtp and rtx will be recorded
     std::unordered_map<std::string/*ssrc*/, MediaTrack::Ptr > _send_rtp_map;
 
     std::vector<SdpAttrCandidate> _cands;
