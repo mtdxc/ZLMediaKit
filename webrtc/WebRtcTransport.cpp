@@ -1100,6 +1100,12 @@ void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
         }
     }
     }
+    if (audio_codecs.length()) {
+        configure.audio.setCodecs(audio_codecs);
+    }
+    if (video_codecs.length()) {
+        configure.video.setCodecs(video_codecs);
+    }
 }
 
 void WebRtcTransportImp::setPreferredTcp(bool flag) {
@@ -1800,6 +1806,8 @@ static void setWebRtcArgs(const WebRtcArgs &args, WebRtcInterface &rtc) {
     {
         rtc.setPreferredTcp(preferred_tcp);
     }
+
+    rtc.setPreferredCodecs(args["audio_codecs"], args["video_codecs"]);
 
     {
         vector<SdpAttrCandidate> cands;

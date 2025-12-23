@@ -733,6 +733,7 @@ public:
         std::vector<SdpAttrCandidate> candidate;
 
         void setDefaultSetting(TrackType type);
+        bool setCodecs(const std::string& codecs);
         void enableTWCC(bool enable = true);
         void enableREMB(bool enable = true);
     };
