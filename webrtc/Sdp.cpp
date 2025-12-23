@@ -1443,6 +1443,15 @@ static vector<CodecId> toCodecArray(const string &str) {
     return ret;
 }
 
+bool RtcConfigure::RtcTrackConfigure::setCodecs(const std::string& codecs) {
+    auto lst = toCodecArray(codecs);
+    if (lst.empty()) {
+        return false;
+    }
+    preferred_codec = std::move(lst);
+    return true;
+}
+
 void RtcConfigure::RtcTrackConfigure::setDefaultSetting(TrackType type) {
     rtcp_mux = true;
     rtcp_rsize = false;
