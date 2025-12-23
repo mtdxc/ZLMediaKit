@@ -68,7 +68,7 @@ public:
     virtual void setIceCandidate(std::vector<SdpAttrCandidate> cands) {}
     virtual void setLocalIp(std::string localIp) {}
     virtual void setPreferredTcp(bool flag) {}
-
+    virtual void setPreferredCodecs(const std::string& audio, const std::string& video) {}
     using onGatheringCandidateCB = std::function<void(const std::string& transport_identifier, const std::string& candidate, const std::string& ufrag, const std::string& pwd)>;
     virtual void gatheringCandidate(IceServerInfo::Ptr ice_server, onGatheringCandidateCB cb = nullptr) = 0;
 };
@@ -367,7 +367,13 @@ public:
     virtual void onConfig(toolkit::mINI& cfg);
     bool setRembBitRate(size_t val);
     size_t getRembBitRate() const {return _remb_bitrate;}
+    void setPreferredCodecs(const std::string& audio, const std::string& video) override {
+        audio_codecs = audio;
+        video_codecs = video;
+    }
 private:
+    std::string audio_codecs, video_codecs;
+
     mutable size_t _remb_bitrate = 0;
 
     bool _preferred_tcp = false;

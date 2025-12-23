@@ -1070,6 +1070,12 @@ void WebRtcTransportImp::onRtcConfigure(RtcConfigure &configure) const {
         return;
     }
 
+    if (audio_codecs.length()) {
+        configure.audio.setCodecs(audio_codecs);
+    }
+    if (video_codecs.length()) {
+        configure.video.setCodecs(video_codecs);
+    }
     //P2P的不直接在answer中返回candication
     if (getSignalingProtocols() != SignalingProtocols::WHEP_WHIP) {
         return;
@@ -1812,6 +1818,8 @@ static void setWebRtcArgs(const WebRtcArgs &args, WebRtcInterface &rtc) {
         GET_CONFIG(bool, s_preferred_tcp, Rtc::kPreferredTcp);
         rtc.setPreferredTcp(s_preferred_tcp);
     }
+
+    rtc.setPreferredCodecs(args["audio_codecs"], args["video_codecs"]);
 
     {
         vector<SdpAttrCandidate> cands;
