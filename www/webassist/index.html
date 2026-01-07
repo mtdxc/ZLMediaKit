@@ -416,6 +416,10 @@
                                             <el-checkbox
                                                 v-model="addStreamProxy_params.add_mute_audio">添加静音音轨</el-checkbox>
                                         </el-col>
+                                        <el-col :span="8">
+                                            <el-checkbox
+                                                v-model="addStreamProxy_params.audio_transcode">音频转码</el-checkbox>
+                                        </el-col>
                                         <el-col :span="16">
                                             <el-checkbox
                                                 v-model="addStreamProxy_params.mp4_as_player">MP4录制当作观看者参与播放人数计数</el-checkbox>
@@ -845,6 +849,38 @@
                                             <div class="conf_item_label">
                                                 <el-tooltip effect="dark" placement="bottom-start">
                                                     <div slot="content">
+                                                        在开启ffmpeg后，可根据app/stream_width来获取对应分辨率(最大为原始宽度)的流来进行转码，0表示不转码
+                                                    </div>
+                                                    <span>长度转码</span>
+                                                </el-tooltip>
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="number"
+                                                    v-model="serverConfig.general.transcode_size"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                Aac转码码率
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="number"
+                                                    v-model="serverConfig.general.aacBitrate"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                Opus转码码率
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="number"
+                                                    v-model="serverConfig.general.opusBitrate"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                <el-tooltip effect="dark" placement="bottom-start">
+                                                    <div slot="content">
                                                         播放器或推流器在断开后会触发hook.on_flow_report事件(使用多少流量事件)，
                                                         <br>flowThreshold参数控制触发hook.on_flow_report事件阈值，使用流量超过该阈值后才触发，单位KB
                                                     </div>
@@ -922,6 +958,50 @@
                                             </div>
                                         </div>
                                             </div>
+                                </el-col>
+                                <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
+                                    <div class="confs">
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                文本logo
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text" v-model="serverConfig.transcode.logo_text"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                h264解码器
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text" v-model="serverConfig.transcode.decoder_h264"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                h264编码器
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text" v-model="serverConfig.transcode.encoder_h264"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                h265解码器
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text" v-model="serverConfig.transcode.decoder_h265"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                h265编码器
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text" v-model="serverConfig.transcode.encoder_h265"></el-input>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </el-col>
                             </el-row>
                         </el-tab-pane>
@@ -1480,6 +1560,17 @@
                                             </div>
                                             <div class="conf_item_value">
                                                 <el-select v-model="serverConfig.protocol.add_mute_audio" placeholder="请选择" style="width: 100%;">
+                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
+                                                </el-select>
+
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                音频转码
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-select v-model="serverConfig.protocol.audio_transcode" placeholder="请选择" style="width: 100%;">
                                                     <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
                                                 </el-select>
 
@@ -2165,7 +2256,6 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-
                                                 Gop缓冲大小
                                             </div>
                                             <div class="conf_item_value">
@@ -2346,13 +2436,11 @@
                                                         RtpSender相关功能是否提前开启gop缓存优化级联秒开体验，默认开启
                                                         <br>如果不调用startSendRtp相关接口，可以置0节省内存
                                                     </div>
-                                                    <span>开启gop缓存优化</span>
+                                                    <span>gop缓存个数</span>
                                                 </el-tooltip>
                                             </div>
                                             <div class="conf_item_value">
-                                                <el-select v-model="serverConfig.rtp_proxy.gop_cache" placeholder="请选择" style="width: 100%;">
-                                                    <el-option v-for="(val,key) in yesNo" :label="val" :value="key"></el-option>
-                                                </el-select>
+                                                <el-input type="text" v-model="serverConfig.rtp_proxy.gop_cache"></el-input>
                                             </div>
                                         </div>
                                         <div class="conf_item">
@@ -2627,6 +2715,7 @@
                     ts_demand: false,
                     fmp4_demand: false,
                     enable_audio: true,
+                    audio_transcode: false,
                     add_mute_audio: true,
                     add_mute_video: 1,
                     mp4_save_path: "",

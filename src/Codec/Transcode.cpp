@@ -38,8 +38,10 @@ const string kH264DecoderList = TRANSCODE_FIELD "decoder_h264";
 const string kH265DecoderList = TRANSCODE_FIELD "decoder_h265";
 const string kH264EncoderList = TRANSCODE_FIELD "encoder_h264";
 const string kH265EncoderList = TRANSCODE_FIELD "encoder_h265";
+const string kLogoText = TRANSCODE_FIELD "logo_text";
 
 static onceToken token([]() {
+    mINI::Instance()[kLogoText] = "ZLMediaKit";
     mINI::Instance()[kH264DecoderList] = "h264_cuvid,h264_qsv,h264_videotoolbox,h264_nvmpi,h264_bm,libopenh264";
     mINI::Instance()[kH265DecoderList] = "hevc_cuvid,hevc_qsv,hevc_videotoolbox,hevc_nvmpi,hevc_bm";
     mINI::Instance()[kH264EncoderList] = "h264_nvenc,h264_qsv,h264_videotoolbox,h264_nvmpi,h264_bm,libx264,libopenh264";
@@ -869,7 +871,7 @@ std::tuple<bool, std::string> FFmpegUtils::saveFrame(const FFmpegFrame::Ptr &fra
     const AVFilter *buffersrc = nullptr;
     const AVFilter *buffersink = nullptr;
     // kServerName
-    const string mark = "ZLMediaKit"; 
+    GET_CONFIG(std::string, mark, kLogoText);
     char drawtext_args1[512];
     _StrPrinter ss;
 
