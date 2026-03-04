@@ -119,11 +119,13 @@ RtpPacket::Ptr RtpTrack::inputRtp(TrackType type, int sample_rate, uint8_t *ptr,
     return rtp;
 }
 
-void RtpTrack::setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms) {
+int RtpTrack::setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms) {
+    int ret = 0;
     _disable_ntp = rtp_stamp == 0 && ntp_stamp_ms == 0;
     if (!_disable_ntp) {
-        _ntp_stamp.setNtpStamp(rtp_stamp, ntp_stamp_ms);
+        ret = _ntp_stamp.setNtpStamp(rtp_stamp, ntp_stamp_ms);
     }
+    return ret;
 }
 
 void RtpTrack::setPayloadType(uint8_t pt) {

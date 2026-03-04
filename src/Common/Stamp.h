@@ -23,20 +23,19 @@ public:
     virtual ~DeltaStamp() = default;
 
     /**
-     * 计算时间戳增量
+     * 计算与前一帧的时间戳增量，增量被限制在max_delta范围内，默认允许回退
+     * @note 当时间戳回退或跳跃过大(超过max_delta)时，将返回_last_delta即为1
      * @param stamp 绝对时间戳
      * @param enable_rollback 是否允许相当时间戳回退
      * @return 时间戳增量
-     * Calculate the timestamp increment
-     * @param stamp Absolute timestamp
-     * @param enable_rollback Whether to allow the timestamp to roll back
-     * @return Timestamp increment
-     
-     * [AUTO-TRANSLATED:e8d21dcd]
      */
     int64_t deltaStamp(int64_t stamp, bool enable_rollback = true);
-    int64_t relativeStamp(int64_t stamp, bool enable_rollback = true);
-    int64_t relativeStamp();
+    // 获取相对时间戳, 相对时间戳是从0开始，不断累加deltaStamp的值
+    int64_t relativeStamp(int64_t stamp, bool enable_rollback = true) {
+        _relative_stamp += deltaStamp(stamp, enable_rollback);
+        return _relative_stamp;
+    }
+    // int64_t relativeStamp() const {return _relative_stamp;}
 
     // 设置最大允许回退或跳跃幅度  [AUTO-TRANSLATED:e5b44ede]
     // Set the maximum allowed rollback or jump amplitude
@@ -55,77 +54,59 @@ protected:
     int64_t _relative_stamp = 0;
 };
 
-// 该类解决时间戳回环、回退问题  [AUTO-TRANSLATED:b442692c]
-// This class solves the problem of timestamp loopback and rollback
-// 计算相对时间戳或者产生平滑时间戳  [AUTO-TRANSLATED:0deabd6e]
-// Calculate the relative timestamp or generate a smooth timestamp
-class Stamp : public DeltaStamp{
+// 该类解决时间戳回环、回退问题
+// 计算相对时间戳或者产生平滑时间戳
+class Stamp : public DeltaStamp {
 public:
     /**
-     * 求取相对时间戳,同时实现了音视频同步、限制dts回退等功能
+     * 求取相对时间戳, 同时实现了音视频同步、限制dts回退等功能
+     * 在revise_l上，增加限制dts回退功能
      * @param dts 输入dts，如果为0则根据系统时间戳生成
      * @param pts 输入pts，如果为0则等于dts
      * @param dts_out 输出dts
      * @param pts_out 输出pts
      * @param modifyStamp 是否用系统时间戳覆盖
-     * Get the relative timestamp, which also implements audio and video synchronization, limits dts rollback, etc.
-     * @param dts Input dts, if it is 0, it will be generated according to the system timestamp
-     * @param pts Input pts, if it is 0, it is equal to dts
-     * @param dts_out Output dts
-     * @param pts_out Output pts
-     * @param modifyStamp Whether to overwrite with the system timestamp
-     
-     * [AUTO-TRANSLATED:0b939dc5]
      */
     void revise(int64_t dts, int64_t pts, int64_t &dts_out, int64_t &pts_out,bool modifyStamp = false);
 
     /**
-     * 再设置相对时间戳，用于seek用
+     * 设置相对时间戳，主要用于seek
      * @param relativeStamp 相对时间戳
-     * Set the relative timestamp again, used for seek
-     * @param relativeStamp Relative timestamp
-     
-     * [AUTO-TRANSLATED:fc087399]
      */
-    void setRelativeStamp(int64_t relativeStamp);
+    void setRelativeStamp(int64_t relativeStamp) {
+        _relative_stamp = relativeStamp;
+    }
 
     /**
      * 获取当前相对时间戳
      * @return
-     * Get the current relative timestamp
-     * @return
-     
-     * [AUTO-TRANSLATED:7ca29fde]
      */
-    int64_t getRelativeStamp() const ;
+    int64_t getRelativeStamp() const {return _relative_stamp;}
 
     /**
-     * 设置是否为回放模式，回放模式运行时间戳回退
+     * 设置回放模式，回放模式允许时间戳回退
      * @param playback 是否为回放模式
-     * Set whether it is playback mode, playback mode allows timestamp rollback
-     * @param playback Whether it is playback mode
-     
-     * [AUTO-TRANSLATED:ffe5e40b]
      */
-    void setPlayBack(bool playback = true);
+    void setPlayBack(bool playback = true) {
+        _playback = playback;
+    }
 
     /**
      * 音视频同步用，音频应该同步于视频(只修改音频时间戳)
      * 因为音频时间戳修改后不影响播放速度
-     * Used for audio and video synchronization, audio should be synchronized with video (only modify audio timestamp)
-     * Because modifying the audio timestamp does not affect the playback speed
-     
-     * [AUTO-TRANSLATED:7ac41a76]
      */
-    void syncTo(Stamp &other, int count = 1);
+    void syncTo(Stamp &other, int count = 1) {
+        _need_sync += count;
+        _sync_master = &other;
+    }
 
     /**
      * 是否允许时间戳回退
      * Whether to allow timestamp rollback
-     
-     * [AUTO-TRANSLATED:1d32f7e3]
      */
-    void enableRollback(bool flag);
+    void enableRollback(bool flag) {
+        _enable_rollback = flag;
+    }
 
     /**
      * 重置
@@ -133,34 +114,32 @@ public:
     void reset();
 
 private:
-    // 主要实现音视频时间戳同步功能  [AUTO-TRANSLATED:45863fce]
-    // Mainly implements audio and video timestamp synchronization function
+    // 在revise_l2上，增加音视频时间戳同步
     void revise_l(int64_t dts, int64_t pts, int64_t &dts_out, int64_t &pts_out,bool modifyStamp = false);
 
-    // 主要实现获取相对时间戳功能  [AUTO-TRANSLATED:4e042942]
-    // Mainly implements the function of obtaining the relative timestamp
+    // 主要实现获取相对时间戳功能
     void revise_l2(int64_t dts, int64_t pts, int64_t &dts_out, int64_t &pts_out,bool modifyStamp = false);
 
-    void needSync() override;
+    void needSync() override {++_need_sync;}
 
 private:
     bool _playback = false;
-    int _need_sync = 0;
-    // 默认不允许时间戳回滚  [AUTO-TRANSLATED:0163ff03]
     // Default does not allow timestamp rollback
     bool _enable_rollback = false;
-    int64_t _relative_stamp = 0;
+
     int64_t _last_dts_in = 0;
     int64_t _last_dts_out = 0;
     int64_t _last_pts_out = 0;
+    // modifyStamp时用
     toolkit::SmoothTicker _ticker;
+    // 同步源
     Stamp *_sync_master = nullptr;
+    // 同步计数
+    int _need_sync = 0;
 };
 
-// dts生成器，  [AUTO-TRANSLATED:d8a794a2]
-// dts generator,
-// pts排序后就是dts  [AUTO-TRANSLATED:439ac368]
-// pts after sorting is dts
+// dts生成器
+// 原理: pts排序后就是dts
 class DtsGenerator{
 public:
     bool getDts(uint64_t pts, uint64_t &dts);
@@ -181,7 +160,7 @@ private:
 
 class NtpStamp {
 public:
-    void setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms);
+    int setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms);
     uint64_t getNtpStamp(uint32_t rtp_stamp, uint32_t sample_rate);
 
 private:
@@ -191,6 +170,7 @@ private:
 private:
     uint32_t _last_rtp_stamp = 0;
     uint64_t _last_ntp_stamp_us = 0;
+    uint32_t _last_sample_rate = 0;
 };
 
 }//namespace mediakit
