@@ -254,7 +254,7 @@ public:
     void clear();
     uint32_t getSSRC() const;
     RtpPacket::Ptr inputRtp(TrackType type, int sample_rate, uint8_t *ptr, size_t len);
-    void setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms);
+    int setNtpStamp(uint32_t rtp_stamp, uint64_t ntp_stamp_ms);
     void setPayloadType(uint8_t pt);
 
 protected:
