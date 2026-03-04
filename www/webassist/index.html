@@ -2375,6 +2375,57 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="confs">
+                                        <div class="conf_item">时间戳设置</div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                同步个数
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.stamp.sync_count"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                最大间隔(ms)
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.stamp.max_delta"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                最大CTS间隔(ms)
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.stamp.max_cts"></el-input>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="confs">
+                                        <div class="conf_item">Ntp设置</div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                最大间隔(ms)
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.ntp.max_delta"></el-input>
+                                            </div>
+                                        </div>
+                                        <div class="conf_item">
+                                            <div class="conf_item_label">
+                                                回环间隔(ms)
+                                            </div>
+                                            <div class="conf_item_value">
+                                                <el-input type="text"
+                                                    v-model="serverConfig.ntp.loop_delta"></el-input>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </el-col>
                                 <el-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
                                     <div class="confs">
