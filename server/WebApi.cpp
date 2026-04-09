@@ -2293,7 +2293,13 @@ void installWebApi() {
             invoker(200, headerOut, success_val.toStyledString());
         });
     });
-
+    api_regist("/index/api/getIceServers", [](API_ARGS_MAP) {
+        CHECK_SECRET();
+        RTC::IceServerInfo ice_server;
+        if (getIceServerInfo(ice_server)) {
+            val.append(ice_server.ToJson());
+        }
+    });
     api_regist("/index/api/addWebrtcRoomKeeper",[](API_ARGS_MAP_ASYNC){
         CHECK_SECRET();
         CHECK_ARGS("server_host", "server_port", "room_id", "ssl");

@@ -459,7 +459,7 @@ private:
 };
 
 void translateIPFromEnv(std::vector<std::string> &v);
-
+bool getIceServerInfo(RTC::IceServerInfo& info);
 }// namespace mediakit
 
 #endif // ZLMEDIAKIT_WEBRTC_TRANSPORT_H

@@ -90,6 +90,24 @@ static bool checkIceTransportPolicy(const IceAgent::CandidatePair& pair_info, co
 }
 
 ////////////  IceServerInfo //////////////////////////
+Json::Value IceServerInfo::ToJson() const{
+    Json::Value json;
+    json["url"] = _full_url;
+    json["ufrag"] = _ufrag;
+    json["pwd"] = _pwd;
+    return json;
+}
+
+bool IceServerInfo::FromJson(const Json::Value &json){
+    if (json.isMember("url") && json["url"].isString()) {
+        parse(json["url"].asString());
+        _ufrag = json.get("ufrag", "").asString();
+        _pwd = json.get("pwd", "").asString();
+        return true;
+    }
+    return false;
+}
+
 void IceServerInfo::parse(const std::string &url_in) {
     DebugL << url_in;
 
