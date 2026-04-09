@@ -58,8 +58,10 @@
 #include "../webrtc/WebRtcPlayer.h"
 #include "../webrtc/WebRtcPusher.h"
 #include "../webrtc/WebRtcEchoTest.h"
+#ifdef WEBRTC_WS
 #include "../webrtc/WebRtcSignalingPeer.h"
 #include "../webrtc/WebRtcSignalingSession.h"
+#endif
 #include "../webrtc/WebRtcProxyPlayer.h"
 #include "../webrtc/WebRtcProxyPlayerImp.h"
 #endif
@@ -2337,6 +2339,7 @@ void installWebApi() {
             val.append(ice_server.ToJson());
         }
     });
+#ifdef WEBRTC_WS
     api_regist("/index/api/addWebrtcRoomKeeper",[](API_ARGS_MAP_ASYNC){
         CHECK_SECRET();
         CHECK_ARGS("server_host", "server_port", "room_id", "ssl");
@@ -2387,6 +2390,7 @@ void installWebApi() {
             val["data"].append(item);
         });
     });
+#endif
 #endif
 
 #if defined(ENABLE_VERSION)

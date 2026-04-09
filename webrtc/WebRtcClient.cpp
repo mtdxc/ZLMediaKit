@@ -129,7 +129,9 @@ void WebRtcClient::onNegotiateFinish() {
     _is_negotiate_finished = true;
     if (WebRtcTransport::SignalingProtocols::WEBSOCKET == _url._signaling_protocols) {
         // P2P模式需要gathering candidates
+#ifdef WEBRTC_WS
         gatheringCandidate(_peer->getIceServer());
+#endif
     } else if (WebRtcTransport::SignalingProtocols::WHEP_WHIP == _url._signaling_protocols) {
         // SFU模式不会存在IP不通的情况， answer中就携带了candidates, 直接进行connectivityCheck
         connectivityCheck();
@@ -140,7 +142,9 @@ void WebRtcClient::doNegotiate() {
     DebugL;
     switch (_url._signaling_protocols) {
         case WebRtcTransport::SignalingProtocols::WHEP_WHIP: return doNegotiateWhepOrWhip();
+#ifdef WEBRTC_WS
         case WebRtcTransport::SignalingProtocols::WEBSOCKET: return doNegotiateWebsocket();
+#endif
         default: throw std::invalid_argument(StrPrinter << "not support signaling_protocols: " << (int)_url._signaling_protocols);
     }
 }
@@ -181,6 +185,7 @@ void WebRtcClient::doNegotiateWhepOrWhip() {
     }, getTimeOutSec());
 }
 
+#ifdef WEBRTC_WS
 void WebRtcClient::doNegotiateWebsocket() {
     DebugL;
 #if 0
@@ -245,22 +250,18 @@ void WebRtcClient::checkOut() {
     }
 }
 
-void WebRtcClient::candidate(const std::string &candidate, const std::string &ufrag, const std::string &pwd) {
-    _peer->candidate(_transport->getIdentifier(), candidate, ufrag, pwd);
-}
-
 void WebRtcClient::gatheringCandidate(IceServerInfo::Ptr ice_server) {
     DebugL;
     std::weak_ptr<WebRtcClient> weak_self = std::static_pointer_cast<WebRtcClient>(shared_from_this());
     _transport->gatheringCandidate(ice_server, [weak_self](const std::string& transport_identifier, const std::string& candidate,
         const std::string& ufrag, const std::string& pwd) {
         auto strong_self = weak_self.lock();
-        if (!strong_self) {
-            return;
+        if (strong_self && strong_self->_peer) {
+            strong_self->_peer->candidate(transport_identifier, candidate, ufrag, pwd);
         }
-        strong_self->candidate(candidate, ufrag, pwd);
     });
 }
+#endif
 
 void WebRtcClient::doBye() {
     DebugL;
@@ -270,7 +271,9 @@ void WebRtcClient::doBye() {
 
     switch (_url._signaling_protocols) {
         case WebRtcTransport::SignalingProtocols::WHEP_WHIP: return doByeWhepOrWhip();
+#ifdef WEBRTC_WS
         case WebRtcTransport::SignalingProtocols::WEBSOCKET: return checkOut();
+#endif
         default: throw std::invalid_argument(StrPrinter << "not support signaling_protocols: " << (int)_url._signaling_protocols);
     }
     _is_negotiate_finished = false;

@@ -14,7 +14,9 @@
 #include "Http/HttpRequester.h"
 #include "Sdp.h"
 #include "WebRtcTransport.h"
+#ifdef WEBRTC_WS
 #include "WebRtcSignalingPeer.h"
+#endif
 #include <memory>
 #include <string>
 
@@ -65,16 +67,18 @@ protected:
     virtual float getTimeOutSec();
 
     void doNegotiate();
-    void doNegotiateWebsocket();
     void doNegotiateWhepOrWhip();
-    void checkIn();
+
     void doBye();
     void doByeWhepOrWhip();
-    void checkOut();
-
-    void gatheringCandidate(IceServerInfo::Ptr ice_server);
     void connectivityCheck();
-    void candidate(const std::string &candidate, const std::string &ufrag, const std::string &pwd);
+
+#ifdef WEBRTC_WS
+    void doNegotiateWebsocket();
+    void checkIn();
+    void checkOut();
+    void gatheringCandidate(IceServerInfo::Ptr ice_server);
+#endif
 
 protected:
     toolkit::EventPoller::Ptr _poller;
@@ -82,7 +86,9 @@ protected:
     // for _negotiate_sdp
     WebRTCUrl _url;
     HttpRequester::Ptr _negotiate = nullptr;
+#ifdef WEBRTC_WS
     WebRtcSignalingPeer::Ptr _peer = nullptr;
+#endif
     WebRtcTransport::Ptr _transport = nullptr;
     bool _is_negotiate_finished = false;
 
