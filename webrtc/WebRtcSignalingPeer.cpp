@@ -317,10 +317,8 @@ void WebRtcSignalingPeer::handleRegisterAccept(SIGNALING_MSG_ARGS) {
 
     for (auto &ice_server : ice_servers) {
         // only support 1 ice_server now
-        auto url = ice_server[URL_KEY].asString();
-        _ice_server = std::make_shared<RTC::IceServerInfo>(url);
-        _ice_server->_ufrag = ice_server[UFRAG_KEY].asString();
-        _ice_server->_pwd = ice_server[PWD_KEY].asString();
+        _ice_server = std::make_shared<RTC::IceServerInfo>();
+        _ice_server->FromJson(ice_server);
     }
 
     trigger(SockException(Err_success), getRoomKey());

@@ -189,7 +189,8 @@ public:
         TURN = 1,
         STUN,
     };
-
+    Json::Value ToJson() const;
+    bool FromJson(const Json::Value &json);
 public:
     std::string   _full_url;
     std::string   _param_strs;
