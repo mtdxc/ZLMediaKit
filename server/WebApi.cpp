@@ -58,8 +58,6 @@
 #include "../webrtc/WebRtcPlayer.h"
 #include "../webrtc/WebRtcPusher.h"
 #include "../webrtc/WebRtcEchoTest.h"
-#include "../webrtc/WebRtcSignalingPeer.h"
-#include "../webrtc/WebRtcSignalingSession.h"
 #include "../webrtc/WebRtcProxyPlayer.h"
 #include "../webrtc/WebRtcProxyPlayerImp.h"
 #endif
@@ -2299,56 +2297,6 @@ void installWebApi() {
         if (getIceServerInfo(ice_server)) {
             val.append(ice_server.ToJson());
         }
-    });
-    api_regist("/index/api/addWebrtcRoomKeeper",[](API_ARGS_MAP_ASYNC){
-        CHECK_SECRET();
-        CHECK_ARGS("server_host", "server_port", "room_id", "ssl");
-        //server_host: 信令服务器host
-        //server_post: 信令服务器host
-        //room_id: 注册的id,信令服务器会对该id进行唯一性检查
-        addWebrtcRoomKeeper(allArgs["server_host"], allArgs["server_port"], allArgs["room_id"], allArgs["ssl"],
-            [val, headerOut, invoker](const SockException &ex, const string &key) mutable {
-                if (ex) {
-                    val["code"] = API::OtherFailed;
-                    val["msg"] = ex.what();
-                } else {
-                    val["msg"] = "success";
-                    val["data"]["room_key"] = key;
-                }
-                invoker(200, headerOut, val.toStyledString());
-            });
-    });
-
-    api_regist("/index/api/delWebrtcRoomKeeper",[](API_ARGS_MAP_ASYNC){
-        CHECK_SECRET();
-        CHECK_ARGS("room_key");
-
-        delWebrtcRoomKeeper(allArgs["room_key"],
-            [val, headerOut, invoker](const SockException &ex) mutable {
-                if (ex) {
-                    val["code"] = API::OtherFailed;
-                    val["msg"] = ex.what();
-                }
-                invoker(200, headerOut, val.toStyledString());
-            });
-    });
-
-    api_regist("/index/api/listWebrtcRoomKeepers", [](API_ARGS_MAP) {
-        CHECK_SECRET();
-        listWebrtcRoomKeepers([&val](const std::string& key, const WebRtcSignalingPeer::Ptr& p) {
-            Json::Value item = ToJson(p);
-            item["room_key"] = key;
-            val["data"].append(item);
-        });
-    });
-
-    api_regist("/index/api/listWebrtcRooms", [](API_ARGS_MAP) {
-        CHECK_SECRET();
-        listWebrtcRooms([&val](const std::string& key, const WebRtcSignalingSession::Ptr& p) {
-            Json::Value item = ToJson(p);
-            item["room_id"] = key;
-            val["data"].append(item);
-        });
     });
 #endif
 

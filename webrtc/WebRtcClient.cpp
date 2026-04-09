@@ -84,11 +84,6 @@ void WebRTCUrl::parse(const string &strUrl, bool isPlayer) {
         _peer_room_id = it->second;
     }
 
-    it = kv.find("signaling_protocols");
-    if (it != kv.end()) {
-        _signaling_protocols = (WebRtcTransport::SignalingProtocols)(stoi(it->second));
-    }
-
     auto suffix = _host + ":" + to_string(_port);
     suffix += (isPlayer ? "/index/api/whep" : "/index/api/whip");
     suffix += "?app=" + _app + "&stream=" + _stream;
@@ -127,25 +122,10 @@ void WebRtcClient::connectivityCheck() {
 void WebRtcClient::onNegotiateFinish() {
     DebugL;
     _is_negotiate_finished = true;
-    if (WebRtcTransport::SignalingProtocols::WEBSOCKET == _url._signaling_protocols) {
-        // P2P模式需要gathering candidates
-        gatheringCandidate(_peer->getIceServer());
-    } else if (WebRtcTransport::SignalingProtocols::WHEP_WHIP == _url._signaling_protocols) {
-        // SFU模式不会存在IP不通的情况， answer中就携带了candidates, 直接进行connectivityCheck
-        connectivityCheck();
-    }
+    connectivityCheck();
 }
 
 void WebRtcClient::doNegotiate() {
-    DebugL;
-    switch (_url._signaling_protocols) {
-        case WebRtcTransport::SignalingProtocols::WHEP_WHIP: return doNegotiateWhepOrWhip();
-        case WebRtcTransport::SignalingProtocols::WEBSOCKET: return doNegotiateWebsocket();
-        default: throw std::invalid_argument(StrPrinter << "not support signaling_protocols: " << (int)_url._signaling_protocols);
-    }
-}
-
-void WebRtcClient::doNegotiateWhepOrWhip() {
     DebugL << _url._negotiate_url;
 
     weak_ptr<WebRtcClient> weak_self = static_pointer_cast<WebRtcClient>(shared_from_this());
@@ -181,103 +161,11 @@ void WebRtcClient::doNegotiateWhepOrWhip() {
     }, getTimeOutSec());
 }
 
-void WebRtcClient::doNegotiateWebsocket() {
-    DebugL;
-#if 0
-    //TODO: 当前暂将每一路呼叫都使用一个独立的peer_connection,不复用
-    _peer = getWebrtcRoomKeeper(_url._host, _url._port);
-    if (_peer) {
-        checkIn();
-        return;
-    }
-#endif
-
-    // 未注册的,先增加注册流程，并在此次播放结束后注销
-    InfoL << (StrPrinter << "register to signaling server " << _url._host << "::" << _url._port << " first");
-    auto room_id = "ringing_" + makeRandStr(16);
-    _peer = make_shared<WebRtcSignalingPeer>(_url._host, _url._port, _url._is_ssl, room_id);
-    weak_ptr<WebRtcClient> weak_self = static_pointer_cast<WebRtcClient>(shared_from_this());
-    _peer->setOnConnect([weak_self](const SockException &ex) {
-        if (auto strong_self = weak_self.lock()) {
-            if (ex) {
-                strong_self->onResult(ex);
-                return;
-            }
-
-            auto cb = [weak_self](const SockException &ex, const string &key) {
-                if (auto strong_self = weak_self.lock()) {
-                    strong_self->checkIn();
-                }
-            };
-            strong_self->_peer->regist(cb);
-        }
-    });
-    _peer->connect();
-}
-
-void WebRtcClient::checkIn() {
-    DebugL;
-    weak_ptr<WebRtcClient> weak_self = static_pointer_cast<WebRtcClient>(shared_from_this());
-    auto tuple = MediaTuple(_url._vhost, _url._app, _url._stream, _url._params);
-    _peer->checkIn(_url._peer_room_id, tuple, _transport->getIdentifier(), _transport->createOfferSdp(), isPlayer(),
-                   [weak_self](const SockException &ex, const std::string &answer) {
-        auto strong_self = weak_self.lock();
-        if (!strong_self) {
-            return;
-        }
-        if (ex) {
-            WarnL << "network err:" << ex;
-            strong_self->onResult(ex);
-            return;
-        }
-
-        strong_self->_transport->setAnswerSdp(answer);
-        strong_self->onNegotiateFinish();
-    }, getTimeOutSec());
-}
-
-void WebRtcClient::checkOut() {
-    DebugL;
-    auto tuple = MediaTuple(_url._vhost, _url._app, _url._stream);
-    if (_peer) {
-        _peer->checkOut(_url._peer_room_id);
-        _peer->unregist([](const SockException &ex) {});
-    }
-}
-
-void WebRtcClient::candidate(const std::string &candidate, const std::string &ufrag, const std::string &pwd) {
-    _peer->candidate(_transport->getIdentifier(), candidate, ufrag, pwd);
-}
-
-void WebRtcClient::gatheringCandidate(IceServerInfo::Ptr ice_server) {
-    DebugL;
-    std::weak_ptr<WebRtcClient> weak_self = std::static_pointer_cast<WebRtcClient>(shared_from_this());
-    _transport->gatheringCandidate(ice_server, [weak_self](const std::string& transport_identifier, const std::string& candidate,
-        const std::string& ufrag, const std::string& pwd) {
-        auto strong_self = weak_self.lock();
-        if (!strong_self) {
-            return;
-        }
-        strong_self->candidate(candidate, ufrag, pwd);
-    });
-}
-
 void WebRtcClient::doBye() {
     DebugL;
     if (!_is_negotiate_finished) {
         return;
     }
-
-    switch (_url._signaling_protocols) {
-        case WebRtcTransport::SignalingProtocols::WHEP_WHIP: return doByeWhepOrWhip();
-        case WebRtcTransport::SignalingProtocols::WEBSOCKET: return checkOut();
-        default: throw std::invalid_argument(StrPrinter << "not support signaling_protocols: " << (int)_url._signaling_protocols);
-    }
-    _is_negotiate_finished = false;
-}
-
-void WebRtcClient::doByeWhepOrWhip() {
-    DebugL;
     if (!_negotiate) {
         return;
     }
@@ -290,6 +178,7 @@ void WebRtcClient::doByeWhepOrWhip() {
         }
         DebugL << "status:" << response.status();
     }, getTimeOutSec());
+    _is_negotiate_finished = false;
 }
 
 float WebRtcClient::getTimeOutSec() {

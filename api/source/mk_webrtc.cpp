@@ -34,8 +34,6 @@ using namespace mediakit;
 
 #include "webrtc/WebRtcProxyPlayer.h"
 #include "webrtc/WebRtcProxyPlayerImp.h"
-#include "webrtc/WebRtcSignalingPeer.h"
-#include "webrtc/WebRtcSignalingSession.h"
 #include "webrtc/WebRtcSession.h"
 
 static UdpServer::Ptr rtcServer_udp;
@@ -115,76 +113,3 @@ API_EXPORT void API_CALL mk_webrtc_get_proxy_player_info(mk_proxy_player ctx, on
 #endif
 }
 
-API_EXPORT void API_CALL mk_webrtc_add_room_keeper(
-    const char *room_id, const char *server_host, uint16_t server_port, int ssl, on_mk_webrtc_room_keeper_info_cb cb, void *user_data) {
-    mk_webrtc_add_room_keeper2(room_id, server_host, server_port, ssl, cb, user_data, nullptr);
-}
-
-API_EXPORT void API_CALL mk_webrtc_add_room_keeper2(
-    const char *room_id, const char *server_host, uint16_t server_port, int ssl, on_mk_webrtc_room_keeper_info_cb cb, void *user_data,
-    on_user_data_free user_data_free) {
-#ifdef ENABLE_WEBRTC
-    assert(server_host && server_port && room_id && cb);
-    // server_host: 信令服务器host
-    // server_post: 信令服务器host
-    // room_id: 注册的id,信令服务器会对该id进行唯一性检查
-    std::string server_host_str(server_host), room_id_str(room_id);
-    std::shared_ptr<void> ptr(user_data, user_data_free ? user_data_free : [](void *) {});
-    addWebrtcRoomKeeper(server_host_str, server_port, room_id_str, ssl, [ptr,cb](const SockException &ex, const string &key) mutable {
-        if (ex) {
-            cb(ptr.get(), nullptr, ex.what());
-        } else {
-            cb(ptr.get(), key.c_str(), nullptr);
-        }
-    });
-#else
-    WarnL << "未启用webrtc功能, 编译时请开启ENABLE_WEBRTC";
-#endif
-}
-
-API_EXPORT void API_CALL mk_webrtc_del_room_keeper(const char *room_key, on_mk_webrtc_room_keeper_info_cb cb, void *user_data) {
-    mk_webrtc_del_room_keeper2(room_key,cb,user_data,nullptr);
-}
-
-API_EXPORT void API_CALL
-mk_webrtc_del_room_keeper2(const char *room_key, on_mk_webrtc_room_keeper_info_cb cb, void *user_data, on_user_data_free user_data_free) {
-#ifdef ENABLE_WEBRTC
-    assert(room_key && cb);
-    std::string room_key_str(room_key);
-    std::shared_ptr<void> ptr(user_data, user_data_free ? user_data_free : [](void *) {});
-    delWebrtcRoomKeeper(room_key_str, [room_key_str, ptr, cb](const SockException &ex) mutable {
-        if (ex) {
-            cb(ptr.get(), room_key_str.c_str(), ex.what());
-        }
-        cb(ptr.get(), room_key_str.c_str(), nullptr);
-    });
-#else
-    WarnL << "未启用webrtc功能, 编译时请开启ENABLE_WEBRTC";
-#endif
-}
-
-API_EXPORT void API_CALL mk_webrtc_list_room_keeper(on_mk_webrtc_room_keeper_data_cb cb) {
-#ifdef ENABLE_WEBRTC
-    assert(cb);
-    listWebrtcRoomKeepers([cb](const std::string &key, const WebRtcSignalingPeer::Ptr &p) {
-        Json::Value item = ToJson(p);
-        item["room_key"] = key;
-        cb(strdup(item.toStyledString().c_str()));
-    });
-#else
-    WarnL << "未启用webrtc功能, 编译时请开启ENABLE_WEBRTC";
-#endif
-}
-
-API_EXPORT void API_CALL mk_webrtc_list_rooms(on_mk_webrtc_room_keeper_data_cb cb){
-#ifdef ENABLE_WEBRTC
-    assert(cb);
-    listWebrtcRooms([cb](const std::string &key, const WebRtcSignalingSession::Ptr &p) {
-        Json::Value item = ToJson(p);
-        item["room_id"] = key;
-        cb(strdup(item.toStyledString().c_str()));
-    });
-#else
-    WarnL << "未启用webrtc功能, 编译时请开启ENABLE_WEBRTC";
-#endif
-}
