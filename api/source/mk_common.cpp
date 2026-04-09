@@ -40,7 +40,9 @@ static RtpServer::Ptr rtpServer;
 #ifdef ENABLE_WEBRTC
 #include "webrtc/WebRtcSession.h"
 #include "webrtc/IceSession.hpp"
+#ifdef WEBRTC_WS
 #include "webrtc/WebRtcSignalingSession.h"
+#endif
 #include "webrtc/WebRtcTransport.h"
 static UdpServer::Ptr rtcServer_udp;
 static TcpServer::Ptr rtcServer_tcp;
@@ -299,7 +301,7 @@ API_EXPORT uint16_t API_CALL mk_rtc_server_start(uint16_t port) {
 
 
 API_EXPORT uint16_t API_CALL mk_signaling_server_start(uint16_t port, int ssl) {
-#ifdef ENABLE_WEBRTC
+#if defined(ENABLE_WEBRTC) and defined(WEBRTC_WS)
     ssl = MAX(0, MIN(ssl, 1));
     try {
         signaling_server[ssl] = std::make_shared<TcpServer>();

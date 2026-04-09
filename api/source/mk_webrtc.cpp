@@ -34,8 +34,10 @@ using namespace mediakit;
 
 #include "webrtc/WebRtcProxyPlayer.h"
 #include "webrtc/WebRtcProxyPlayerImp.h"
+#ifdef WEBRTC_WS
 #include "webrtc/WebRtcSignalingPeer.h"
 #include "webrtc/WebRtcSignalingSession.h"
+#endif
 #include "webrtc/WebRtcSession.h"
 
 static UdpServer::Ptr rtcServer_udp;
@@ -123,7 +125,7 @@ API_EXPORT void API_CALL mk_webrtc_add_room_keeper(
 API_EXPORT void API_CALL mk_webrtc_add_room_keeper2(
     const char *room_id, const char *server_host, uint16_t server_port, int ssl, on_mk_webrtc_room_keeper_info_cb cb, void *user_data,
     on_user_data_free user_data_free) {
-#ifdef ENABLE_WEBRTC
+#if defined(ENABLE_WEBRTC) and defined(WEBRTC_WS)
     assert(server_host && server_port && room_id && cb);
     // server_host: 信令服务器host
     // server_post: 信令服务器host
@@ -148,7 +150,7 @@ API_EXPORT void API_CALL mk_webrtc_del_room_keeper(const char *room_key, on_mk_w
 
 API_EXPORT void API_CALL
 mk_webrtc_del_room_keeper2(const char *room_key, on_mk_webrtc_room_keeper_info_cb cb, void *user_data, on_user_data_free user_data_free) {
-#ifdef ENABLE_WEBRTC
+#if defined(ENABLE_WEBRTC) and defined(WEBRTC_WS)
     assert(room_key && cb);
     std::string room_key_str(room_key);
     std::shared_ptr<void> ptr(user_data, user_data_free ? user_data_free : [](void *) {});
@@ -164,7 +166,7 @@ mk_webrtc_del_room_keeper2(const char *room_key, on_mk_webrtc_room_keeper_info_c
 }
 
 API_EXPORT void API_CALL mk_webrtc_list_room_keeper(on_mk_webrtc_room_keeper_data_cb cb) {
-#ifdef ENABLE_WEBRTC
+#if defined(ENABLE_WEBRTC) and defined(WEBRTC_WS)
     assert(cb);
     listWebrtcRoomKeepers([cb](const std::string &key, const WebRtcSignalingPeer::Ptr &p) {
         Json::Value item = ToJson(p);
@@ -177,7 +179,7 @@ API_EXPORT void API_CALL mk_webrtc_list_room_keeper(on_mk_webrtc_room_keeper_dat
 }
 
 API_EXPORT void API_CALL mk_webrtc_list_rooms(on_mk_webrtc_room_keeper_data_cb cb){
-#ifdef ENABLE_WEBRTC
+#if defined(ENABLE_WEBRTC) and defined(WEBRTC_WS)
     assert(cb);
     listWebrtcRooms([cb](const std::string &key, const WebRtcSignalingSession::Ptr &p) {
         Json::Value item = ToJson(p);
