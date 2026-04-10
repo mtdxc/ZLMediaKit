@@ -20,7 +20,11 @@
 #include "webrtc/WebRtcTransport.h"
 
 namespace mediakit {
-
+/** ID规则
+ * room_id， peer_room_id 指的都是用户id
+ * identifier，transport_identifier 是 WebTransport的ID
+ * guest_id 和 peer_guest_id 指的是呼叫id，由发起方id+_+16位随机字符串组成
+ */
 class WebRtcSignalingPeer : public WebSocketClient<toolkit::TcpClient>  {
 public:
     struct ClassMethodHash {
@@ -39,7 +43,9 @@ public:
     void regist(const std::function<void(const toolkit::SockException &ex, const std::string &key)> &cb);
     void unregist(const std::function<void(const toolkit::SockException &ex)> &cb);
     void checkIn(const std::string& peer_room_id, const MediaTuple &tuple, const std::string& identifier,
-                 const std::string& offer, bool is_play, const std::function<void(const toolkit::SockException &ex, const std::string& answer)> &cb, float timeout_sec);
+                 const std::string& offer, bool is_play, 
+                 const std::function<void(const toolkit::SockException &ex, const std::string& answer)> &cb, 
+                 float timeout_sec);
     void checkOut(const std::string& peer_room_id);
     void candidate(const std::string& transport_identifier, const std::string& candidate, const std::string& ice_ufrag, const std::string& ice_pwd);
 

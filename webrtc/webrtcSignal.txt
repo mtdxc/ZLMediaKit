@@ -1,4 +1,7 @@
 webrtc websocket 信令
+这里注意：
+- room其实是peer的意思
+- guest应该是呼叫的意思
 
 # register 注册
 

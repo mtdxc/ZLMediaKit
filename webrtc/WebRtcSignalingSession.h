@@ -69,7 +69,7 @@ protected:
     void sendPacket(const Json::Value &body);
 
 private:
-    std::string _room_id; //
+    std::string _room_id; // 用户Id
     std::unordered_map<std::string /*guest id*/, std::string /*peer_room_id*/> _tours;  //作为主叫
     std::unordered_map<std::string /*peer_guest_id*/, WebRtcSignalingSession::WeakPtr /*session*/> _guests; //作为被叫
 };

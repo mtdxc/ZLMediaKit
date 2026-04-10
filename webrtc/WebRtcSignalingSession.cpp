@@ -83,7 +83,7 @@ void WebRtcSignalingSession::onRecv(const Buffer::Ptr &buffer) {
 }
 
 void WebRtcSignalingSession::onError(const SockException &err) {
-    WarnL << "room_id: " << _room_id;
+    WarnL << "room_id: " << _room_id << err.what();
     notifyByeIndication();
     s_rooms.erase(_room_id);
 }
@@ -219,7 +219,7 @@ void WebRtcSignalingSession::handleByeIndication(SIGNALING_MSG_ARGS) {
         }
         auto session = it->second.lock();
         if (!session) {
-            WarnL << "guest_id: \"" << guest_id << "\" leave alreadly";
+            WarnL << "guest_id: \"" << guest_id << "\" leave already";
             return;
         }
         _guests.erase(guest_id);
