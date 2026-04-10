@@ -55,4 +55,4 @@ extern const char* const PWD_KEY;
 } // namespace mediakit
 //
 
-#endif //ZLMEDIAKIT_WEBRTC_SIGNALING_PEER_H
+#endif //ZLMEDIAKIT_WEBRTC_SIGNALING_MSG_H

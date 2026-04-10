@@ -113,7 +113,8 @@ void WebRtcSignalingPeer::unregist(const function<void(const SockException &ex)>
 
 void WebRtcSignalingPeer::checkIn(const std::string& peer_room_id, const MediaTuple &tuple, const std::string& identifier,
                                   const std::string& offer, bool is_play,
-                                  const function<void(const SockException &ex, const std::string& answer)> &cb, float timeout_sec) {
+                                  const function<void(const SockException &ex, const std::string& answer)> &cb, 
+                                  float timeout_sec) {
     DebugL;
     std::weak_ptr<WebRtcSignalingPeer> weak_self = std::static_pointer_cast<WebRtcSignalingPeer>(shared_from_this());
     getPoller()->async([=] () mutable {
