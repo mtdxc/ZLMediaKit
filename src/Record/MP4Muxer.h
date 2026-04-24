@@ -37,6 +37,7 @@ public:
      * [AUTO-TRANSLATED:c91b5ec6]
      */
     bool inputFrame(const Frame::Ptr &frame) override;
+    bool inputFrame2(const Frame::Ptr &frame);
 
     /**
      * 重置所有track
@@ -85,7 +86,12 @@ public:
      * [AUTO-TRANSLATED:d87afcfb]
      */
     uint64_t getDuration() const;
-
+    // remix时设成1, 关闭时间戳改写
+    void setPlayback(bool playback = true) {
+        for (auto &pr : _tracks) {
+            pr.second.stamp.setPlayBack(playback);
+        }
+    }
 protected:
     virtual MP4FileIO::Writer createWriter() = 0;
 
@@ -126,12 +132,19 @@ public:
     /**
      * 打开mp4
      * @param file 文件完整路径
+     * @param type 格式如下:
+     * @ref -1 根据file扩展名(.webm/mp4/fmp4)来决定格式
+     * @ref  0 正规mp4
+     * @ref  1 fmp4
+     * @ref  2 webm
+     * @param flag 标记字段 0 正常, 1 faststart, 2 fmp4 segment...
+     * 
      * Open mp4
      * @param file Full file path
      
      * [AUTO-TRANSLATED:416892f4]
      */
-    void openMP4(const std::string &file);
+    void openMP4(const std::string &file, int flag = 0, int type = -1);
 
     /**
      * 手动关闭文件(对象析构时会自动关闭)
@@ -147,6 +160,7 @@ protected:
 private:
     std::string _file_name;
     MP4FileDisk::Ptr _mp4_file;
+    int _flag, _type;
 };
 
 class MP4MuxerMemory : public MP4MuxerInterface{

@@ -10,8 +10,10 @@
 
 #ifdef ENABLE_MP4
 
+#include <inttypes.h>
 #include <algorithm>
 #include "MP4Demuxer.h"
+#include "MP4Muxer.h"
 #include "Util/File.h"
 #include "Util/logger.h"
 #include "Extension/Factory.h"
@@ -315,5 +317,222 @@ std::vector<Track::Ptr> MultiMP4Demuxer::getTracks(bool trackReady) const {
     return ret;
 }
 
+void mp4Dump(const std::string &path, TrackType type) {
+    try {
+        MP4Demuxer src;
+        src.openMP4(path);
+        printf(">>> file:%s\n", path.c_str());
+        printf("duration %" PRIu64 " s\n", src.getDurationMS() / 1000);
+        for (auto &track : src.getTracks(true)) {
+            if (type == TrackMax || type == TrackInvalid || track->getTrackType() == type) {
+                printf("track %d: %s\n", track->getIndex(), track->getInfo().c_str());
+            }
+        }
+        if (type == TrackInvalid) {
+            return;
+        }
+        bool key = false;
+        bool eof = false;
+        while (!eof) {
+            auto frame = src.readFrame(key, eof);
+            if (!frame)
+                break;
+            if (type == TrackMax || frame->getTrackType() == type) {
+                printf("frame %d, %s %4zu tsp %" PRIu64 ",%" PRIu64 " %d%s\n", 
+                  frame->getIndex(), frame->getCodecName(), frame->size(), 
+                  frame->pts(), frame->dts(), key,
+                  frame->keyFrame() ? " key" : "");
+            }
+        }
+    } catch (std::exception &ex) {
+        WarnL << ex.what();
+    }
+}
+
+uint64_t copyMp4(MP4Demuxer &src, MP4Muxer &dst, TrackType type) {
+    std::vector<Track::Ptr> vecs;
+    for (auto t : src.getTracks(true)) {
+        if (t->getTrackType() == type || type == TrackMax) {
+            vecs.push_back(t);
+        }
+    }
+    if (vecs.empty()) {
+        InfoL << "no tracks " << getTrackString(type);
+        return 0;
+    }
+
+    toolkit::Ticker tick;
+    for (auto t : vecs) {
+        dst.addTrack(t);
+        t->addDelegate([&dst](const Frame::Ptr &frame) { 
+          dst.inputFrame(frame);
+          return true;
+        });
+    }
+    dst.addTrackCompleted();
+    // 禁用时间戳修改
+    dst.setPlayback();
+    // support fmp4 segment
+    dst.initSegment();
+
+    bool key = false;
+    bool eof = false;
+    while (src.readFrame(key, eof)) {
+    }
+
+    uint64_t ret = dst.getDuration();
+    auto timeMs = tick.elapsedTime();
+    if (timeMs) {
+        InfoL << "tooks " << timeMs << " ms, speed=" << ret * 1.0 / timeMs << "x, diff=" << ((int64_t)src.getDurationMS() - (int64_t)ret) << " ms";
+    }
+    return ret;
+}
+
+uint64_t copyMp4(const std::string &srcPath, const std::string &dstPath, int flag, int type) {
+    MP4Demuxer src;
+    src.openMP4(srcPath);
+    InfoL << srcPath << " -> " << dstPath << ", durationMs=" << src.getDurationMS();
+
+    MP4Muxer dst;
+    dst.openMP4(dstPath, flag, type);
+    return copyMp4(src, dst, TrackMax);
+}
+
+uint64_t copyMp4Raw(const std::string &srcPath, const std::string &dstPath, int flag, TrackType track) {
+    toolkit::Ticker tick;
+    auto srcFile = std::make_shared<MP4FileDisk>();
+    srcFile->openFile(srcPath.data(), "rb+");
+    auto srcReader = srcFile->createReader();
+
+    auto dstFile = std::make_shared<MP4FileDisk>();
+    dstFile->openFile(dstPath.data(), "wb+");
+
+    struct CopyCtx {
+        MP4FileIO::Writer writer;
+        std::map<int, int> track_map;
+        TrackType type;
+        // copy context for onalloc callback
+        std::vector<uint8_t> buffer;
+        uint32_t track_id;
+        size_t bytes;
+        int64_t pts, dts;
+        int flags;
+    };
+    auto dst = std::make_shared<CopyCtx>();
+    int type = dstPath.find(".fmp4") != std::string::npos ? 1 : 0;
+    dst->writer = dstFile->createWriter(flag, type);
+    dst->type = track;
+
+    static mov_reader_trackinfo_t s_on_track
+        = { [](void *param, uint32_t track, uint8_t object, int width, int height, const void *extra, size_t bytes) {
+               // onvideo
+               CopyCtx *ctx = (CopyCtx *)param;
+               if (ctx->type == TrackAudio || ctx->type == TrackMax) {
+                   ctx->track_map[track] = mp4_writer_add_video(ctx->writer.get(), getCodecByMovId(object), width, height, extra, bytes);
+               }
+           },
+            [](void *param, uint32_t track, uint8_t object, int channel_count, int bit_per_sample, int sample_rate, const void *extra, size_t bytes) {
+                // onaudio
+                CopyCtx *ctx = (CopyCtx *)param;
+                if (ctx->type == TrackVideo || ctx->type == TrackMax) {
+                    ctx->track_map[track] = mp4_writer_add_audio(ctx->writer.get(), getCodecByMovId(object), channel_count, bit_per_sample, sample_rate, extra, bytes);
+                }
+            },
+            [](void *param, uint32_t track, uint8_t object, const void *extra, size_t bytes) {
+                // onsubtitle, do nothing
+            } };
+    mov_reader_getinfo(srcReader.get(), &s_on_track, dst.get());
+    mp4_writer_init_segment(dst->writer.get());
+    uint64_t duration_ms = mov_reader_getduration(srcReader.get());
+    InfoL << srcPath << " -> " << dstPath << ", durationMs=" << duration_ms << ", openms=" << tick.elapsedTime();
+
+    static mov_reader_onread2 mov_onalloc = [](void *param, uint32_t track_id, size_t bytes, int64_t pts, int64_t dts, int flags) -> void * {
+        CopyCtx *ctx = (CopyCtx *)param;
+        if (ctx->buffer.size() < bytes) {
+            ctx->buffer.resize(bytes + 1);
+        }
+        ctx->bytes = bytes;
+        ctx->track_id = track_id;
+        ctx->pts = pts;
+        ctx->dts = dts;
+        ctx->flags = flags;
+        return ctx->buffer.data();
+    };
+    while (1 == mov_reader_read2(srcReader.get(), mov_onalloc, dst.get())) {
+        auto it = dst->track_map.find(dst->track_id);
+        if (it != dst->track_map.end()) {
+            mp4_writer_write(dst->writer.get(), it->second, dst->buffer.data(), dst->bytes, dst->pts, dst->dts, dst->flags);
+        }
+    }
+    auto timeMs = tick.elapsedTime();
+    if (timeMs) {
+        InfoL << "tooks " << timeMs << " ms, speed=" << duration_ms * 1.0 / timeMs << "x";
+    }
+    return duration_ms;
+}
+
+uint64_t splitMp4(const std::string &srcPath, const std::string &dstPath, TrackType type) {
+    MP4Demuxer src;
+    src.openMP4(srcPath);
+    InfoL << srcPath << " -> " << dstPath << ", durationMs=" << src.getDurationMS() << ", track type: " << getTrackString(type);
+
+    MP4Muxer dst;
+    dst.openMP4(dstPath);
+    return copyMp4(src, dst, type);
+}
+
+int Mp4DropVideo(const char *srcPath, const char *dstPath, uint64_t start, uint64_t end) {
+    MP4Demuxer src;
+    MP4Muxer dst;
+    src.openMP4(srcPath);
+    dst.openMP4(dstPath);
+    if (!end)
+        end = src.getDurationMS();
+
+    CodecId videoId = CodecInvalid;
+    auto tracks = src.getTracks(true);
+    for (auto track : tracks) {
+        if (track->getTrackType() == TrackVideo)
+            videoId = track->getCodecId();
+        dst.addTrack(track);
+    }
+    if (videoId == CodecInvalid) {
+        printf("no need to convert\n");
+        return 0;
+    }
+    dst.addTrackCompleted();
+    // 禁用时间戳修改
+    dst.setPlayback();
+
+    int drop = 0;
+    bool key, eof = false;
+    while (!eof) {
+        auto frame = src.readFrame(key, eof);
+        if (!frame)
+            break;
+        if (frame->getCodecId() == videoId) {
+            if (frame->pts() >= start && frame->pts() < end) {
+                if (!drop) {
+                    InfoL << "begin drop with tsp " << frame->pts();
+                }
+                drop++;
+                continue;
+            } else if (drop) {
+                if (key) {
+                    InfoL << "end drop " << drop << " with tsp " << frame->pts();
+                    drop = 0;
+                } else {
+                    drop++;
+                    continue;
+                }
+            }
+        }
+        dst.inputFrame2(frame);
+    }
+    if (drop) {
+        InfoL << "end drop " << drop << " at eof";
+    }
+    return 0;
+}
 }//namespace mediakit
 #endif// ENABLE_MP4

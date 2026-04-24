@@ -18,6 +18,11 @@
 #include "Util/ResourcePool.h"
 
 namespace mediakit {
+uint64_t copyMp4(const std::string &srcPath, const std::string &dstPath, int flag, int type = -1);
+uint64_t copyMp4Raw(const std::string &srcPath, const std::string &dstPath, int flag, TrackType type = TrackMax);
+uint64_t splitMp4(const std::string &srcPath, const std::string &dstPath, TrackType type);
+void mp4Dump(const std::string &path, TrackType type);
+int Mp4DropVideo(const char *srcPath, const char *dstPath, uint64_t start, uint64_t end);
 
 class MP4Demuxer : public TrackSource {
 public:

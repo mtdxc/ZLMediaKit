@@ -41,8 +41,15 @@ MP4Recorder::~MP4Recorder() {
 void MP4Recorder::createFile() {
     closeFile();
     auto date = getTimeStr("%Y-%m-%d");
-    bool use_webm = _video_codec == CodecVP8 || _video_codec == CodecVP9;
-    auto file_name = getTimeStr("%H-%M-%S") + "-" + std::to_string(_file_index++) + (use_webm ? ".webm" : ".mp4");
+    GET_CONFIG(bool, mp4FastStart, Record::kFastStart);
+    GET_CONFIG(bool, recordEnableFmp4, Record::kEnableFmp4);
+    auto ext = "mp4";
+    if (_video_codec == CodecVP8 || _video_codec == CodecVP9) {
+        ext = "webm";
+    } else if(recordEnableFmp4) {
+        ext = "fmp4";
+    }
+    auto file_name = getTimeStr("%H-%M-%S") + "-" + std::to_string(_file_index++) + "." + ext;
     auto full_path = _info.folder + date + "/" + file_name;
     auto full_path_tmp = _info.folder + date + "/." + file_name;
 
@@ -55,7 +62,7 @@ void MP4Recorder::createFile() {
     try {
         _muxer = std::make_shared<MP4Muxer>();
         TraceL << "Open tmp mp4 file: " << full_path_tmp;
-        _muxer->openMP4(full_path_tmp);
+        _muxer->openMP4(full_path_tmp, mp4FastStart);
         for (auto &track :_tracks) {
             // Add track
             _muxer->addTrack(track);
