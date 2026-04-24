@@ -12,6 +12,8 @@
 
 #include "MP4Muxer.h"
 #include "Common/config.h"
+#include "ext-codec/H264.h"
+#include "Extension/Factory.h"
 
 using namespace std;
 using namespace toolkit;
@@ -26,20 +28,34 @@ MP4Muxer::~MP4Muxer() {
     }
 }
 
-void MP4Muxer::openMP4(const string &file) {
+void MP4Muxer::openMP4(const string &file, int flag, int type) {
     closeMP4();
     _file_name = file;
+    if (type == -1) {
+        auto pos = file.rfind('.');
+        auto ext = file.substr(pos + 1);
+        if (ext == "webm") {
+            type = 2;
+            flag |= MKV_OPTION_WEBM;
+        } else if (ext == "fmp4") {
+            type = 1;
+            // flag: 0 normal, 2 segment
+        } else if (ext == "mp4") {
+            type = 0;
+            // flag: 0 normal, 1 faststart
+        } else {
+            WarnL << "unknown type: " << file;
+            return;
+        }
+    }
+    _type = type;
+    _flag = flag;
     _mp4_file = std::make_shared<MP4FileDisk>();
     _mp4_file->openFile(_file_name.data(), "wb+");
 }
 
 MP4FileIO::Writer MP4Muxer::createWriter() {
-    if (_file_name.find(".webm") != std::string::npos) {
-        return _mp4_file->createWriter(MKV_OPTION_WEBM, 2);
-    }
-    GET_CONFIG(bool, mp4FastStart, Record::kFastStart);
-    GET_CONFIG(bool, recordEnableFmp4, Record::kEnableFmp4);
-    return _mp4_file->createWriter(mp4FastStart ? MOV_FLAG_FASTSTART : 0, recordEnableFmp4);
+    return _mp4_file->createWriter(_flag, _type);
 }
 
 void MP4Muxer::closeMP4() {
@@ -49,7 +65,7 @@ void MP4Muxer::closeMP4() {
 
 void MP4Muxer::resetTracks() {
     MP4MuxerInterface::resetTracks();
-    openMP4(_file_name);
+    openMP4(_file_name, _flag, _type);
 }
 
 /////////////////////////////////////////// MP4MuxerInterface /////////////////////////////////////////////
@@ -87,6 +103,32 @@ void MP4MuxerInterface::flush() {
     for (auto &pr : _tracks) {
         pr.second.merger.flush();
     }
+}
+
+bool MP4MuxerInterface::inputFrame2(const Frame::Ptr &frame) {
+    bool ret = false;
+    auto it = _tracks.find(frame->getIndex());
+    if (it == _tracks.end()) {
+        // 该Track不存在或初始化失败
+        return ret;
+    }
+    switch (frame->getCodecId()) {
+        case CodecH264:
+        case CodecH265: 
+         splitH264(frame->data(), frame->size(), frame->prefixSize(), [&](const char *ptr, size_t len, size_t prefix) {
+              auto sub = Factory::getFrameFromPtr(frame->getCodecId(), (char *)ptr, len, frame->dts(), frame->pts());
+              if (sub) {
+                  sub->setIndex(frame->getIndex());
+                  // inputFrame不支持同时输入多个nal帧
+                  ret = inputFrame(sub);
+              }
+         });
+          break;
+        default: 
+          ret = inputFrame(frame);
+          break;
+    }
+    return ret;
 }
 
 bool MP4MuxerInterface::inputFrame(const Frame::Ptr &frame) {

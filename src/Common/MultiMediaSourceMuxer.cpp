@@ -428,9 +428,9 @@ std::string MultiMediaSourceMuxer::startRecord(const std::string &file_path, int
         path = file_path;
     }
     TraceL << "mp4 save path: " << path;
-
+    GET_CONFIG(bool, mp4FastStart, Record::kFastStart);
     auto muxer = std::make_shared<MP4Muxer>();
-    muxer->openMP4(path);
+    muxer->openMP4(path, mp4FastStart);
     for (auto &track : MediaSink::getTracks()) {
         muxer->addTrack(track);
     }
