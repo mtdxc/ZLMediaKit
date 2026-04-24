@@ -91,15 +91,9 @@ int TranscodeAudio(const char *srcPath, const char *dstPath) {
     toolkit::Ticker tick;
     printf("startReadMp4 %" PRIu64 "ms\n", srcMp4.getDurationMS());
     bool key, eof;
-    Frame::Ptr frame;
-    while (true) {
-        // srcMp4->srcTrack
-        frame = srcMp4.readFrame(key, eof);
-        if (eof) {
-            printf("eof break loop, it tooks %" PRIu64 " ms\n", tick.elapsedTime());
-            break;
-        }
+    while (srcMp4.readFrame(key, eof)) {
     }
+    printf("it tooks %" PRIu64 " ms\n", tick.elapsedTime());
     return 0;
 }
 
