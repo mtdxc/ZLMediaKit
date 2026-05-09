@@ -380,9 +380,6 @@ protected:
     bool hasChannelBind(uint16_t channel_number);
     bool hasChannelBind(const sockaddr_storage& addr, uint16_t& channel_number);
     void addChannelBind(uint16_t channel_number, const sockaddr_storage& addr);
-
-    toolkit::SocketHelper::Ptr createSocket(CandidateTuple::TransportType type, const std::string &peer_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
-    toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port);
     
     void checkRequestTimeouts();
     void retransmitRequest(const std::string& transaction_id, RequestInfo& req_info);
@@ -446,6 +443,7 @@ protected:
     Pair::Ptr _session_pair;
 };
 
+struct SocketCandidateManager;
 class IceAgent : public IceTransport {
 
 public:
@@ -560,6 +558,11 @@ public:
     size_t getSendTotalBytes();
 
 protected:
+    toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
+    void createTcpSocket(const std::string &peer_host, uint16_t peer_port, std::function<void(toolkit::SocketHelper::Ptr)> cb);
+    void onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer, const Pair::Ptr& pair) {
+        _listener->onIceTransportRecvData(buffer, pair);
+    }
     void gatheringSrflxCandidate(const Pair::Ptr& pair);
     void gatheringRelayCandidate(const Pair::Ptr& pair);
     void localRelayedConnectivityCheck(CandidateInfo& candidate);
@@ -616,133 +619,8 @@ protected:
     StunPacket::Ptr _nominated_response;
     std::list<std::weak_ptr<Pair> > _old_pairs;
 
-    // 双向索引的候选地址管理结构
-    struct SocketCandidateManager {
-        // socket -> candidates 的一对多映射
-        std::unordered_map<toolkit::SocketHelper::Ptr, std::vector<CandidateInfo>> socket_to_candidates;
-        
-        // candidate -> socket 的映射（用于快速查找）
-        std::unordered_map<CandidateInfo, toolkit::SocketHelper::Ptr, CandidateTuple::ClassHash, CandidateTuple::ClassEqual> candidate_to_socket;
-        
-        // 按类型分组的socket列表，方便遍历
-        std::vector<toolkit::SocketHelper::Ptr> _host_sockets;    // HOST类型socket
-        std::vector<toolkit::SocketHelper::Ptr> _relay_sockets;   // RELAY类型socket
-
-        bool _has_relayed_candidate = false;
-
-        // 添加映射关系，带5元组重复检查
-        bool addMapping(toolkit::SocketHelper::Ptr socket, const CandidateInfo& candidate) {
-            // 检查5元组是否已存在
-            if (candidate_to_socket.find(candidate) != candidate_to_socket.end()) {
-                return false; // 已存在相同的5元组
-            }
-            
-            socket_to_candidates[socket].push_back(candidate);
-            candidate_to_socket[candidate] = socket;
-            
-            // 按类型分组
-            if (candidate._type != CandidateInfo::AddressType::RELAY) {
-                addHostSocket(std::move(socket));
-            } else if (candidate._type == CandidateInfo::AddressType::RELAY) {
-                addRelaySocket(std::move(socket));
-            }
-            
-            return true;
-        }
-        
-        // 获取socket对应的所有candidates
-        std::vector<CandidateInfo> getCandidates(const toolkit::SocketHelper::Ptr& socket) const {
-            auto it = socket_to_candidates.find(socket);
-            return (it != socket_to_candidates.end()) ? it->second : std::vector<CandidateInfo>();
-        }
-        
-        // 获取candidate对应的socket
-        toolkit::SocketHelper::Ptr getSocket(const CandidateInfo& candidate) const {
-            auto it = candidate_to_socket.find(candidate);
-            return (it != candidate_to_socket.end()) ? it->second : nullptr;
-        }
-        
-        // 获取所有socket（便于遍历）
-        std::vector<toolkit::SocketHelper::Ptr> getAllSockets() const {
-            std::vector<toolkit::SocketHelper::Ptr> result;
-            result.reserve(_host_sockets.size() + _relay_sockets.size());
-            result.insert(result.end(), _host_sockets.begin(), _host_sockets.end());
-            result.insert(result.end(), _relay_sockets.begin(), _relay_sockets.end());
-            return result;
-        }
-        
-        // 获取所有candidates（便于遍历）
-        std::vector<CandidateInfo> getAllCandidates() const {
-            std::vector<CandidateInfo> result;
-            for (auto& pair : candidate_to_socket) {
-                result.push_back(pair.first);
-            }
-            return result;
-        }
-        
-        // 直接添加host socket
-        void addHostSocket(toolkit::SocketHelper::Ptr socket) {
-            if (std::find(_host_sockets.begin(), _host_sockets.end(), socket) == _host_sockets.end()) {
-                _host_sockets.emplace_back(std::move(socket));
-            }
-        }
-        
-        // 直接添加relay socket
-        void addRelaySocket(toolkit::SocketHelper::Ptr socket) {
-            if (std::find(_relay_sockets.begin(), _relay_sockets.end(), socket) == _relay_sockets.end()) {
-                _relay_sockets.emplace_back(std::move(socket));
-            }
-        }
-        
-        // 获取host sockets
-        const std::vector<toolkit::SocketHelper::Ptr>& getHostSockets() const {
-            return _host_sockets;
-        }
-        
-        // 获取relay sockets
-        const std::vector<toolkit::SocketHelper::Ptr>& getRelaySockets() const {
-            return _relay_sockets;
-        }
-        
-        // 移除host socket
-        void removeHostSocket(const toolkit::SocketHelper::Ptr& socket) {
-            auto it = std::find(_host_sockets.begin(), _host_sockets.end(), socket);
-            if (it != _host_sockets.end()) {
-                _host_sockets.erase(it);
-            }
-        }
-        
-        // 移除relay socket
-        void removeRelaySocket(const toolkit::SocketHelper::Ptr& socket) {
-            auto it = std::find(_relay_sockets.begin(), _relay_sockets.end(), socket);
-            if (it != _relay_sockets.end()) {
-                _relay_sockets.erase(it);
-            }
-        }
-        
-        // 清空host sockets
-        void clearHostSockets() {
-            _host_sockets.clear();
-        }
-        
-        // 清空relay sockets
-        void clearRelaySockets() {
-            _relay_sockets.clear();
-        }
-        
-        // 获取host socket数量
-        size_t getHostSocketCount() const {
-            return _host_sockets.size();
-        }
-        
-        // 获取relay socket数量
-        size_t getRelaySocketCount() const {
-            return _relay_sockets.size();
-        }
-    };
-
     //for GATHERING_CANDIDATE
-    SocketCandidateManager _socket_candidate_manager; //local candidates
+    std::shared_ptr<SocketCandidateManager> _socket_candidate_manager; //local candidates
 
     //for CONNECTIVITY_CHECK
     using CandidateSet = std::unordered_set<CandidateInfo, CandidateTuple::ClassHash, CandidateTuple::ClassEqual>;
