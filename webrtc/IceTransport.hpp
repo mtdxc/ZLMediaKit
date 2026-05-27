@@ -242,7 +242,10 @@ public:
                 }
             }
         }
-
+        // ice tcp要发送两字节头部，而turn tcp因为只承载stun和channel两种数据不需要
+        bool isTcp() const { return _socket->getSock()->sockType() == toolkit::SockNum::Sock_TCP; }
+        bool isIceTcp() const { return isTcp() && !_relayed_addr; }
+        bool isIurnTcp() const { return isTcp() && _relayed_addr; }
         bool get_relayed_addr(sockaddr_storage &peerAddr) const {
             if (!_relayed_addr) {
                 return false;
@@ -560,7 +563,8 @@ public:
 protected:
     toolkit::SocketHelper::Ptr createUdpSocket(const std::string &target_host, uint16_t peer_port, const std::string &local_ip, uint16_t local_port = 0);
     void createTcpSocket(const std::string &peer_host, uint16_t peer_port, std::function<void(toolkit::SocketHelper::Ptr)> cb);
-    void onIceTransportRecvData(const toolkit::Buffer::Ptr& buffer, const Pair::Ptr& pair) {
+    void createTurnTcpSocket(const std::string &peer_host, uint16_t peer_port, std::function<void(toolkit::SocketHelper::Ptr)> cb);
+    void onIceTransportRecvData(const toolkit::Buffer::Ptr &buffer, const Pair::Ptr &pair) {
         _listener->onIceTransportRecvData(buffer, pair);
     }
     void gatheringSrflxCandidate(const Pair::Ptr& pair);

@@ -12,6 +12,7 @@
 #include <random>
 #include <algorithm>
 #include "json/json.h"
+#include "Util/Byte.hpp"
 #include "Util/onceToken.h"
 #include "Network/UdpClient.h"
 #include "Network/TcpClient.h"
@@ -19,7 +20,7 @@
 #include "Common/config.h"
 #include "IceTransport.hpp"
 #include "WebRtcTransport.h"
-
+#include "IceSession.hpp"
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;
@@ -196,7 +197,7 @@ void IceTransport::sendSocketData_l(const Buffer::Ptr& buf, const Pair::Ptr& pai
 
     // 一次性发送一帧的rtp数据，提高网络io性能  [AUTO-TRANSLATED:fbab421e]
     // Send one frame of rtp data at a time to improve network io performance
-    if (pair->_socket->getSock()->sockType() == SockNum::Sock_TCP) {
+    if (pair->isIceTcp()) {
         // 增加tcp两字节头
         uint16_t len = htons(buf->size());
         pair->_socket->SockSender::send((char *)&len, 2);
@@ -277,7 +278,7 @@ StunPacket::Authentication IceTransport::checkResponseAuthentication(const StunP
 void IceTransport::processResponse(const StunPacket::Ptr& packet, const Pair::Ptr& pair) {
     // TraceL;
 
-    auto it = _response_handlers.find(packet->getTransactionId().data());
+    auto it = _response_handlers.find(packet->getTransactionId());
     if (it == _response_handlers.end()) {
         WarnL << "not support stun transaction_id ignore: " << packet->dumpString(true);
         return;
@@ -396,7 +397,11 @@ void IceTransport::sendChannelData(uint16_t channel_number, const Buffer::Ptr& b
     // ChannelData不是STUN消息，需要单独实现
     // ChannelData格式：2字节Channel Number + 2字节数据长度 + 数据内容
     auto data_len = buffer->size();
-    size_t total_len = 4 + data_len;
+    int padding = data_len % 4;
+    if (padding > 0) {
+        padding = 4 - padding;
+    }
+    size_t total_len = 4 + data_len + padding;
     // 分配缓冲区：头部4字节 + 数据长度
     auto channel_data = toolkit::BufferRaw::create(total_len);
     auto header = reinterpret_cast<ChannelDataHeader *>(channel_data->data());
@@ -406,6 +411,10 @@ void IceTransport::sendChannelData(uint16_t channel_number, const Buffer::Ptr& b
     header->data_length = htons(data_len);
     // 拷贝数据
     memcpy(channel_data->data() + 4, buffer->data(), data_len);
+    // RFC 5766: ChannelData can be padded to 4 bytes; clear padding to avoid leaking stale memory.
+    if (padding > 0) {
+        memset(channel_data->data() + 4 + data_len, 0, padding);
+    }
     channel_data->setSize(total_len);
 
 #if 0
@@ -430,7 +439,7 @@ void IceTransport::sendErrorResponse(const StunPacket::Ptr& packet, const Pair::
 
 void IceTransport::sendRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair, MsgHandler handler) {
     // TraceL;
-    _response_handlers.emplace(packet->getTransactionId().data(), RequestInfo(packet, std::move(handler), pair));
+    _response_handlers.emplace(packet->getTransactionId(), RequestInfo(packet, std::move(handler), pair));
     sendPacket(packet, pair);
 }
 
@@ -728,6 +737,15 @@ void IceServer::handleAllocateRequest(const StunPacket::Ptr& packet, const Pair:
 
 void IceServer::handleRefreshRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair) {
     // TraceL
+    auto response = packet->createSuccessResponse();
+    response->setUfrag(_ufrag);
+    response->setPassword(_password);
+
+    auto attr_lifetime = std::make_shared<StunAttrLifeTime>();
+    attr_lifetime->setLifetime(600);
+    response->addAttribute(std::move(attr_lifetime));
+
+    sendPacket(response, pair);
 }
 
 void IceServer::handleCreatePermissionRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair) {
@@ -1193,6 +1211,53 @@ private:
     OnErr _on_err;
 };
 
+void IceAgent::createTurnTcpSocket(const std::string &peer_host, uint16_t peer_port, std::function<void(SocketHelper::Ptr)> cb) {
+    auto socket = std::make_shared<IceTcpClient>(getPoller());
+    weak_ptr<IceAgent> weak_self = static_pointer_cast<IceAgent>(shared_from_this());
+
+    // RFC 6544: ICE-TCP passive 模式下，TCP数据有2字节长度前缀
+    // 接收到完整数据包后调用 listener 的 onIceTransportRecvData
+    auto tcp_buf = std::make_shared<TurnSplit>();
+    auto sockPtr = socket.get();
+    socket->setOnRecv([weak_self, tcp_buf, sockPtr](const Buffer::Ptr &buf) {
+        auto strong_self = weak_self.lock();
+        if (!strong_self) {
+            return;
+        }
+
+        // 追加到缓冲区
+        if (tcp_buf->input(buf->data(), buf->size())) {
+            while (auto pkt = tcp_buf->nextPdu()) {
+                auto pair = std::make_shared<Pair>(sockPtr->shared_from_this());
+                strong_self->onIceTransportRecvData(pkt, pair);
+            }
+        }
+    });
+
+    socket->setOnConnected([weak_self, socket, cb](const SockException &ex) {
+        auto strong_self = weak_self.lock();
+        if (!strong_self) {
+            return;
+        }
+        if (ex) {
+            WarnL << "TurnTCP connect to " << socket->get_peer_ip() << ":" << socket->get_peer_port() << " failed: " << ex;
+        } else {
+            InfoL << "TurnTCP connected to " << socket->get_peer_ip() << ":" << socket->get_peer_port();
+            if (cb)
+                cb(socket);
+        }
+    });
+
+    socket->setOnErr([weak_self, sockPtr](const SockException &err) {
+        auto strong_self = weak_self.lock();
+        if (strong_self) {
+            strong_self->removePair(sockPtr);
+        }
+    });
+
+    socket->startConnect(peer_host, peer_port, 5.0f);
+}
+
 void IceAgent::createTcpSocket(const std::string &peer_host, uint16_t peer_port, std::function<void(SocketHelper::Ptr)> cb) {
     auto socket = std::make_shared<IceTcpClient>(getPoller());
     weak_ptr<IceAgent> weak_self = static_pointer_cast<IceAgent>(shared_from_this());
@@ -1284,6 +1349,7 @@ SocketHelper::Ptr IceAgent::createUdpSocket(const std::string &peer_host, uint16
 IceAgent::IceAgent(Listener* listener, Implementation implementation, Role role, std::string ufrag, std::string password, toolkit::EventPoller::Ptr poller)
 : IceTransport(listener, std::move(ufrag), std::move(password), std::move(poller)), _implementation(implementation) ,_role(role) {
     DebugL;
+    _request_handlers.emplace(std::make_pair(StunPacket::Class::INDICATION, StunPacket::Method::DATA), std::bind(&IceAgent::handleDataIndication, this, placeholders::_1, placeholders::_2));
     _socket_candidate_manager = std::make_shared<SocketCandidateManager>();
     _tiebreaker = makeRandNum();
     // 创建定时器，每分钟检查一次权限和通道绑定是否需要刷新
@@ -1316,12 +1382,6 @@ void IceAgent::gatheringCandidate(const CandidateTuple::Ptr& candidate_tuple, bo
             (CandidateTuple &)remote = *candidate_tuple;
             addToChecklist(pair, remote);
         });
-        if (gathering_relay) {
-            createTcpSocket(candidate_tuple->_addr._host, candidate_tuple->_addr._port, [=](toolkit::SocketHelper::Ptr socket) {
-                _socket_candidate_manager->addRelaySocket(socket);
-                gatheringRelayCandidate(std::make_shared<Pair>(std::move(socket)));
-            });
-        }
         return;
     }
     // return;    // force use iceTcp
@@ -1561,9 +1621,6 @@ void IceAgent::sendChannelBindRequest(const Pair::Ptr& pair, uint16_t channel_nu
 }
 
 void IceAgent::processRequest(const StunPacket::Ptr& packet, const Pair::Ptr& pair) {
-    static toolkit::onceToken token([this]() {
-        _request_handlers.emplace(std::make_pair(StunPacket::Class::INDICATION, StunPacket::Method::DATA), std::bind(&IceAgent::handleDataIndication, this, placeholders::_1, placeholders::_2));
-    });
     return IceTransport::processRequest(packet, pair);
 }
 
@@ -1642,6 +1699,7 @@ void IceAgent::handleGatheringCandidateResponse(const StunPacket::Ptr& packet, c
     if (!srflx) {
         WarnL << "Binding request missing XOR_MAPPED_ADDRESS attribute";
         sendErrorResponse(packet, pair, StunAttrErrorCode::Code::BadRequest);
+        return;
     }
 
     CandidateInfo candidate;
@@ -1692,6 +1750,7 @@ void IceAgent::handleConnectivityCheckResponse(const StunPacket::Ptr& packet, co
     if (!srflx) {
         WarnL << "Binding request missing XOR_MAPPED_ADDRESS attribute";
         sendErrorResponse(packet, pair, StunAttrErrorCode::Code::BadRequest);
+        return;
     }
 
     if (!pair->_relayed_addr) {
@@ -1748,6 +1807,7 @@ void IceAgent::handleNominatedResponse(const StunPacket::Ptr& packet, const Pair
     if (!srflx) {
         WarnL << "Binding request missing XOR_MAPPED_ADDRESS attribute";
         sendErrorResponse(packet, pair, StunAttrErrorCode::Code::BadRequest);
+        return;
     }
 
     onCompleted(pair);
@@ -1768,6 +1828,7 @@ void IceAgent::handleAllocateResponse(const StunPacket::Ptr& packet, const Pair:
     if (!srflx) {
         WarnL << "Binding request missing XOR_MAPPED_ADDRESS attribute";
         sendErrorResponse(packet, pair, StunAttrErrorCode::Code::BadRequest);
+        return;
     }
 
 #if 0
@@ -1786,6 +1847,7 @@ void IceAgent::handleAllocateResponse(const StunPacket::Ptr& packet, const Pair:
     if (!relay) {
         WarnL << "Binding request missing XOR_RELAYED_ADDRESS attribute";
         sendErrorResponse(packet, pair, StunAttrErrorCode::Code::BadRequest);
+        return;
     }
 
     CandidateInfo candidate;

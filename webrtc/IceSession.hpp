@@ -14,18 +14,39 @@
 
 #include "Network/Session.h"
 #include "IceTransport.hpp"
-#include "Http/HttpRequestSplitter.h"
+#include <string>
 
 namespace mediakit {
+class TurnSplit {
+    std::string buffer_;
+    int pduLen() const;
 
-class IceSession : public toolkit::Session, public RTC::IceTransport::Listener, public HttpRequestSplitter {
+public:
+    void clear() { buffer_.clear(); }
+    bool input(const void *data, int len) { 
+        buffer_.append((const char*)data, len);
+        return pduLen() > 0;
+    }
+    toolkit::Buffer::Ptr nextPdu() { 
+      int len = pduLen();
+      if (len) {
+          auto ret = toolkit::BufferRaw::create(len);
+          ret->assign(buffer_.data(), len);
+          buffer_.erase(0, len);
+          return ret;
+      }
+      return nullptr;
+    }
+};
+
+// 建议改成TurnSession，负责封装turn tcp和udp会话，与IceServer合在一起使用
+class IceSession : public toolkit::Session, public RTC::IceTransport::Listener {
 public:
     using Ptr = std::shared_ptr<IceSession>;
     using WeakPtr = std::weak_ptr<IceSession>;
+
     IceSession(const toolkit::Socket::Ptr &sock);
     ~IceSession() override;
-
-    static toolkit::EventPoller::Ptr queryPoller(const toolkit::Buffer::Ptr &buffer);
 
     //// Session override////
     // void attachServer(const Server &server) override;
@@ -39,32 +60,14 @@ public:
     void onIceTransportDisconnected() override;
     void onIceTransportCompleted() override;
 
-    //// HttpRequestSplitter override ////
-    ssize_t onRecvHeader(const char *data, size_t len) override;
-    const char *onSearchPacketTail(const char *data, size_t len) override;
-
     void onRecv_l(const char *data, size_t len);
 protected:
     bool _over_tcp = false;
-
+    TurnSplit _tcp_split;
     RTC::IceTransport::Pair::Ptr _session_pair = nullptr;
     RTC::IceServer::Ptr _ice_transport;
 };
 
-class IceSessionManager {
-public:
-    static IceSessionManager &Instance();
-    IceSession::Ptr getItem(const std::string& key);
-    void addItem(const std::string& key, const IceSession::Ptr &ptr);
-    void removeItem(const std::string& key);
-
-private:
-    IceSessionManager() = default;
-
-private:
-    std::mutex _mtx;
-    std::unordered_map<std::string, std::weak_ptr<IceSession>> _map;
-};
 }// namespace mediakit
 
 #endif //ZLMEDIAKIT_WEBRTC_ICE_SESSION_H
