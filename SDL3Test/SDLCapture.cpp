@@ -3,11 +3,15 @@
 #include "Util/logger.h"
 
 std::string ToString(const SDL_AudioSpec &sp) {
-    return toolkit::_StrPrinter() << SDL_GetAudioFormatName(sp.format) << " " << sp.freq << "x" << sp.channels;
+    char line[64];
+    snprintf(line, sizeof(line), "%s %dx%d", SDL_GetAudioFormatName(sp.format), sp.freq, sp.channels);
+    return line;
 }
 
 std::string ToString(const SDL_CameraSpec &sp) {
-    return toolkit::_StrPrinter() << SDL_GetPixelFormatName(sp.format) << " " << sp.width << "x" << sp.height << "@" << sp.framerate_numerator / sp.framerate_denominator;
+    char line[64];
+    snprintf(line, sizeof(line), "%s %dx%d@%d", SDL_GetPixelFormatName(sp.format), sp.width, sp.height, sp.framerate_numerator / sp.framerate_denominator);
+    return line;
 }
 
 SDLCapture::SDLCapture() {
@@ -99,14 +103,40 @@ bool SDLCapture::startCamera(int width, int height, int fps, uint32_t cid) {
     SDL_GetCameraFormat(_camera, &_cameraSpec);
     fps = _cameraSpec.framerate_numerator / _cameraSpec.framerate_denominator;
     InfoL << "open camera " << cid << " with format " << ToString(_cameraSpec) << ", fps " << fps;
-    _timerID = SDL_AddTimer(1000 / fps, [](void *userdata, SDL_TimerID timerID, Uint32 interval) {
-        auto loop = static_cast<SDLCapture *>(userdata);
-        if (loop) {
-            loop->captureFrame();
-        }
-        return interval;
-    }, this);
+    setVideoCapturePaused(false);
     return true;
+}
+
+void SDLCapture::setVideoCapturePaused(bool paused) {
+    if (!_camera) return ;
+    if (paused) {
+        if (_timerID) {
+            SDL_RemoveTimer(_timerID);
+            _timerID = 0;
+        }
+    } else if(!_timerID) {
+        int fps = _cameraSpec.framerate_numerator / _cameraSpec.framerate_denominator;
+        _timerID = SDL_AddTimer(1000 / fps, [](void *userdata, SDL_TimerID timerID, Uint32 interval) {
+            auto loop = static_cast<SDLCapture *>(userdata);
+            if (loop) {
+                loop->captureFrame();
+            }
+            return interval;
+        }, this);
+    }
+}
+
+void SDLCapture::setPaused(SDL_AudioStream* stream, bool paused) {
+    if (!stream) return;
+    if (paused)
+        SDL_PauseAudioStreamDevice(stream);
+    else if(SDL_AudioStreamDevicePaused(stream))
+        SDL_ResumeAudioStreamDevice(stream);
+}
+
+bool SDLCapture::isPaused(SDL_AudioStream* stream) {
+    if(!stream) return true;
+    return SDL_AudioStreamDevicePaused(stream);
 }
 
 bool SDLCapture::startAudioPlay(int sampelrate, int channels, uint32_t id) {
@@ -130,12 +160,9 @@ bool SDLCapture::startAudioPlay(int sampelrate, int channels, uint32_t id) {
                 loop->_spkBuffer.resize(additional_amount);
             }
             uint8_t* buffer = loop->_spkBuffer.data();
+            auto channels = loop->_playSpec.channels;
             // 读取可用的音频数据
-            if (loop->_pcmFillCb) {
-                auto channels = loop->_playSpec.channels;
-                loop->_pcmFillCb((short *)buffer, additional_amount / 2 / channels, channels);
-            }
-            else{
+            if (!loop->onPcmFill((short *)buffer, additional_amount / 2 / channels, channels)) {
                 memset(buffer, 0, additional_amount);
             }
             SDL_PutAudioStreamData(stream, buffer, additional_amount);
@@ -147,9 +174,9 @@ bool SDLCapture::startAudioPlay(int sampelrate, int channels, uint32_t id) {
         return false;
     }
     else {
-        SDL_AudioSpec inspec;
-        SDL_GetAudioStreamFormat(_spkStream, &inspec, &_playSpec);
-        InfoL << id << " stream param: " << ToString(inspec) << " -> " << ToString(_playSpec);
+        SDL_AudioSpec outspec;
+        SDL_GetAudioStreamFormat(_spkStream, &_playSpec, &outspec);
+        InfoL << id << " stream param: " << ToString(_playSpec) << " -> " << ToString(outspec);
         SDL_ResumeAudioStreamDevice(_spkStream);
         return true;
     }
@@ -193,9 +220,9 @@ bool SDLCapture::startAudioRecord(int sampelrate, int channels, uint32_t id) {
             }
             uint8_t* buffer = loop->_micBuffer.data();
             int got = SDL_GetAudioStreamData(stream, buffer, additional_amount);
-            if (got > 0 && loop->_pcmCallback) {
+            if (got > 0) {
                 auto channels = loop->_recordSpec.channels;
-                loop->_pcmCallback((short *)buffer, got / 2 / channels, channels);
+                loop->onPcm((short *)buffer, got / 2 / channels, channels);
             }
         }
     }, this);
@@ -214,26 +241,109 @@ bool SDLCapture::startAudioRecord(int sampelrate, int channels, uint32_t id) {
 }
 
 void SDLCapture::captureFrame() {
-    if (!_camera || !_yuvCallback) return; 
+    if (!_camera) return; 
     Uint64 tsp;
     SDL_Surface* frame = SDL_AcquireCameraFrame(_camera, &tsp);
     if (frame) {
         if (frame->format != SDL_PIXELFORMAT_IYUV) {
             WarnL << "unkonwn format " << SDL_GetPixelFormatName(frame->format);
         } else {
-            _yuvCallback((uint8_t*)frame->pixels, frame->w, frame->h);
-#if YUV_DUMP
-            static int count = 0;
-            if (count++ < 10) {
-                char path[64];
-                sprintf(path, "%dx%d_%d.yuv", frame->w, frame->h, count);
-                if (FILE *fp = fopen(path, "wb")) {
-                    fwrite(frame->pixels, 1, size * 3 / 2, fp);
-                    fclose(fp);
-                }
+            if (_preview) {
+                _preview->display(frame);
             }
-#endif
+            onYuv((uint8_t*)frame->pixels, frame->w, frame->h);
         }
         SDL_ReleaseCameraFrame(_camera, frame);
     }
+}
+
+///////////////////////////////////
+// YuvDisplayer
+YuvDisplayer::~YuvDisplayer() {
+    if (_texture) {
+        SDL_DestroyTexture(_texture);
+        _texture = nullptr;
+    }
+    if (_render) {
+        SDL_DestroyRenderer(_render);
+        _render = nullptr;
+    }
+    if (_win) {
+        SDL_DestroyWindow(_win);
+        _win = nullptr;
+    }
+}
+
+void YuvDisplayer::checkWind(int width, int height) {
+    if (!_win) {
+        if (_hwnd) {
+            SDL_PropertiesID props = SDL_CreateProperties();
+            // 根据平台设置正确的属性
+            const char *platform = SDL_GetPlatform();
+
+            if (strcmp(platform, "Windows") == 0) {
+                SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, _hwnd);
+            }
+            else if (strcmp(platform, "Linux") == 0) {
+                // 尝试 X11
+                // SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_X11_WINDOW_POINTER, _hwnd);
+            }
+            else if (strcmp(platform, "macOS") == 0) {
+                SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_COCOA_WINDOW_POINTER, _hwnd);
+            }
+            _win = SDL_CreateWindowWithProperties(props);
+            SDL_DestroyProperties(props);
+        }
+        else {
+            _win = SDL_CreateWindow(_title.data(), width, height, SDL_WINDOW_OPENGL);
+        }
+    }
+    if (_win && !_render) {
+        _render = SDL_CreateRenderer(_win, "direct3d,opengl,software"); // "direct3d", "metal", "software", "opengl"
+    }
+    if (_render && (!_texture || _texture->w != width || _texture->h != height)) {
+        if (_texture) {
+            SDL_DestroyTexture(_texture);
+            _texture = nullptr;
+        }
+        _texture = SDL_CreateTexture(_render, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, width, height);
+    }
+}
+
+bool YuvDisplayer::display(SDL_Surface *frame) {
+    checkWind(frame->w, frame->h);
+    if (_texture && frame->format == SDL_PIXELFORMAT_IYUV) {
+        int stride = frame->pitch ? frame->pitch : frame->w;
+        int size = stride * frame->h;
+        uint8_t *pixels = (uint8_t *)frame->pixels;
+        SDL_UpdateYUVTexture(_texture, nullptr, pixels, stride, pixels + size, stride / 2, pixels + size * 5 / 4, stride / 2);
+        SDL_RenderClear(_render);
+        SDL_RenderTexture(_render, _texture, nullptr, nullptr);
+        SDL_RenderPresent(_render);
+        return true;
+    }
+    return false;
+}
+
+#ifdef ENABLE_FFMPEG
+#include "libavutil/frame.h"
+#endif
+
+bool YuvDisplayer::displayYUV(AVFrame *pFrame) {
+#ifdef ENABLE_FFMPEG
+    checkWind(pFrame->width, pFrame->height);
+    if (_texture) {
+        SDL_UpdateYUVTexture(_texture, nullptr, 
+            pFrame->data[0], pFrame->linesize[0], 
+            pFrame->data[1], pFrame->linesize[1], 
+            pFrame->data[2], pFrame->linesize[2]);
+
+        // SDL_UpdateTexture(_texture, nullptr, pFrame->data[0], pFrame->linesize[0]);
+        SDL_RenderClear(_render);
+        SDL_RenderTexture(_render, _texture, nullptr, nullptr);
+        SDL_RenderPresent(_render);
+        return true;
+    }
+    return false;
+#endif // ENABLE_FFMPEG
 }
