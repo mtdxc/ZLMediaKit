@@ -861,11 +861,12 @@
                                         </div>
                                         <div class="conf_item">
                                             <div class="conf_item_label">
-                                                Aac转码码率
+                                                Aac转码参数
                                             </div>
-                                            <div class="conf_item_value">
-                                                <el-input type="number"
-                                                    v-model="serverConfig.general.aacBitrate"></el-input>
+                                            <div class="conf_item_value" style="display:flex">
+                                                <el-input type="text" placeholder="samplerate" v-model="serverConfig.general.aacSamplerate"></el-input>
+x<el-input type="text" placeholder="channels" v-model="serverConfig.general.aacChannel"></el-input>
+@<el-input type="text" placeholder="bitrate" v-model="serverConfig.general.aacBitrate"></el-input>
                                             </div>
                                         </div>
                                         <div class="conf_item">

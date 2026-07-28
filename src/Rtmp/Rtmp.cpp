@@ -111,7 +111,6 @@ uint8_t getAudioRtmpFlags(const Track::Ptr &track) {
                     // opus/aac does not get audio information through flags
                     iSampleRate = 44100;
                     iSampleBit = 16;
-                    iChannel = 2;
                     break;
                 }
                 default: break;

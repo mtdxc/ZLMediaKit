@@ -108,6 +108,8 @@ const string kBroadcastPlayerCountChanged = GENERAL_FIELD "broadcast_player_coun
 const string kListenIP = GENERAL_FIELD "listen_ip";
 const string kOpusBitrate = GENERAL_FIELD"opusBitrate";
 const string kAacBitrate = GENERAL_FIELD"aacBitrate";
+const string kAacSamplerate = GENERAL_FIELD"aacSamplerate";
+const string kAacChannel = GENERAL_FIELD"aacChannel";
 const string kTranscodeSize = GENERAL_FIELD"transcode_size";
 
 static onceToken token([]() {
@@ -117,6 +119,8 @@ static onceToken token([]() {
     mINI::Instance()[kEnableVhost] = 0;
     mINI::Instance()[kOpusBitrate] = 64000;
     mINI::Instance()[kAacBitrate] = 64000;
+    mINI::Instance()[kAacSamplerate] = 0;
+    mINI::Instance()[kAacChannel] = 0;
     mINI::Instance()[kTranscodeSize] = 1;
     mINI::Instance()[kResetWhenRePlay] = 1;
     mINI::Instance()[kMergeWriteMS] = 0;

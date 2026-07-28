@@ -56,8 +56,15 @@ public:
         auto t = track;
         if (_option.audio_transcode && track->getCodecId() == CodecOpus) {
             GET_CONFIG(int, bitrate, General::kAacBitrate);
-            int channels = std::dynamic_pointer_cast<AudioTrack>(track)->getAudioChannel();
-            _trans = track->getTransodeTrack(CodecAAC, 44100, channels, bitrate);
+            int samplerate = toolkit::mINI::Instance()[General::kAacSamplerate];
+            int channels = toolkit::mINI::Instance()[General::kAacChannel];
+            if (channels <= 0) {
+                channels = std::dynamic_pointer_cast<AudioTrack>(track)->getAudioChannel();
+            }
+            if (samplerate <= 0) {
+                samplerate = std::dynamic_pointer_cast<AudioTrack>(track)->getAudioSampleRate();
+            }
+            _trans = track->getTransodeTrack(CodecAAC, samplerate, channels, bitrate);
             if (_trans) {
                 t = _trans;
                 if (readerCount())

@@ -277,6 +277,8 @@ extern const std::string kBroadcastPlayerCountChanged;
 extern const std::string kListenIP;
 extern const std::string kOpusBitrate;
 extern const std::string kAacBitrate;
+extern const std::string kAacSamplerate;
+extern const std::string kAacChannel;
 extern const std::string kTranscodeSize;
 } // namespace General
 
