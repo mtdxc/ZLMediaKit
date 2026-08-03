@@ -1087,7 +1087,8 @@ RtcSessionSdp::Ptr RtcSession::toRtcSessionSdp() const {
         sdp.addItem(std::make_shared<SdpConnection>(connection));
     }
     sdp.addAttr(std::make_shared<SdpAttrGroup>(group));
-    sdp.addAttr(std::make_shared<SdpAttrExtmapAllowMixed>());
+    // 禁用这个attr, 否则r50的rtc会出现sdp parser error，旧版attr好像必须有值
+    //sdp.addAttr(std::make_shared<SdpAttrExtmapAllowMixed>());
     sdp.addAttr(std::make_shared<SdpAttrMsidSemantic>(msid_semantic));
 
     bool ice_lite = false;
