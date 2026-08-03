@@ -2061,13 +2061,18 @@ bool RtcConfigure::onCheckCodecProfile(const RtcCodecPlan &plan, CodecId codec) 
         GET_CONFIG(string, profileH265, Rtp::kH265Profile);
         const string& profile = codec == CodecH264 ? profileH264 : profileH265;
         const string& key = codec == CodecH264 ? kH264Profile : kH265Profile;
+        auto it = plan.fmtp.find(key);
+        if (it == plan.fmtp.end()) {
+            // offer sdp中没有profile-level-id
+            return true;
+        }
         if (_rtsp_video_plan && getCodecId(_rtsp_video_plan->codec) == codec) {
-            if (strcasecmp(_rtsp_video_plan->fmtp[key].data(), const_cast<RtcCodecPlan &>(plan).fmtp[key].data())) {
+            if (strcasecmp(_rtsp_video_plan->fmtp[key].data(), it->second.data())) {
                 // profile-level-id does not match
                 return false;
             }
         } else {
-            if (profile.length() && strncasecmp(profile.data(), const_cast<RtcCodecPlan &>(plan).fmtp[key].data(), profile.length())) {
+            if (profile.length() && strncasecmp(profile.data(), it->second.data(), profile.length())) {
                 // profile-level-id does not match
                 return false;
             }
