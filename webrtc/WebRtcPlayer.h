@@ -16,8 +16,8 @@
 
 namespace mediakit {
 /**
- * @brief H.264 B 帧过滤器
- * 用于从 H.264 RTP 流中移除 B 帧
+ * @brief H.264/H.265 B 帧过滤器
+ * 用于从 H.264/H.265 RTP 流中移除 B 帧
  */
 class H264BFrameFilter {
 public:
@@ -55,8 +55,10 @@ public:
      * @param packet 输入的 RTP 包
      * @return 如果不是 B 帧则返回原包，否则返回 nullptr
      */
-    RtpPacket::Ptr processPacket(const RtpPacket::Ptr &packet);
-
+    RtpPacket::Ptr processPacket(const RtpPacket::Ptr &packet, CodecId codec = CodecH264);
+    bool isSupportCodec(CodecId codec) const {
+        return codec == CodecH264 || codec == CodecH265;
+    }
 private:
     /**
      * @brief 判断 RTP 包是否包含 H.264 的 B 帧
@@ -64,6 +66,8 @@ private:
      * @return 如果是 B 帧返回 true，否则返回 false
      */
     bool isH264BFrame(const RtpPacket::Ptr &packet) const;
+
+    bool isH265BFrame(const RtpPacket::Ptr &packet) const;
 
     /**
      * @brief 根据 NAL 类型和数据判断是否是 B 帧
@@ -115,6 +119,14 @@ private:
    */
     bool handleStapA(const uint8_t *payload, size_t payload_size) const;
 
+    bool handleH265Ap(const uint8_t *payload, size_t payload_size) const;
+
+    bool handleH265Fu(const uint8_t *payload, size_t payload_size) const;
+
+    bool isH265BFrameByNalType(uint8_t nal_type, const uint8_t *data, size_t size) const;
+
+    uint8_t extractH265SliceType(uint8_t nal_type, const uint8_t *data, size_t size) const;
+
 
 private:
     uint16_t _last_seq; // 维护输出流的序列号
@@ -156,7 +168,7 @@ private:
     // Reader object for playing rtsp source
     RtspMediaSource::RingType::RingReader::Ptr _reader;
 
-    bool _is_h264 { false };
+    CodecId _video_codec { CodecInvalid };
     bool _bfliter_flag { false };
     std::shared_ptr<H264BFrameFilter> _bfilter;
 };

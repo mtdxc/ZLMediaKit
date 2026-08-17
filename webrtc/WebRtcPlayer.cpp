@@ -13,6 +13,7 @@
 #include "Common/config.h"
 #include "Extension/Factory.h"
 #include "Util/base64.h"
+#include "ext-codec/H265.h"
 
 using namespace std;
 using namespace toolkit;
@@ -30,12 +31,12 @@ H264BFrameFilter::H264BFrameFilter()
     , _last_stamp(0)
     , _first_packet(true) {}
 
-RtpPacket::Ptr H264BFrameFilter::processPacket(const RtpPacket::Ptr &packet) {
+RtpPacket::Ptr H264BFrameFilter::processPacket(const RtpPacket::Ptr &packet, CodecId codec) {
     if (!packet) {
         return nullptr;
     }
 
-    if (isH264BFrame(packet)) {
+    if ((codec == CodecH264 && isH264BFrame(packet)) || (codec == CodecH265 && isH265BFrame(packet))) {
         return nullptr;
     }
 
@@ -84,6 +85,73 @@ bool H264BFrameFilter::isH264BFrame(const RtpPacket::Ptr &packet) const {
             }
             return false;
     }
+}
+
+bool H264BFrameFilter::isH265BFrame(const RtpPacket::Ptr &packet) const {
+    const uint8_t *payload = packet->getPayload();
+    size_t payload_size = packet->getPayloadSize();
+
+    if (payload_size < 2) {
+        return false;
+    }
+
+    uint8_t nal_unit_type = H265_TYPE(payload[0]);
+    switch (nal_unit_type) {
+        case 48: // Aggregation Packet
+            return handleH265Ap(payload, payload_size);
+        case 49: // Fragmentation Unit
+            return handleH265Fu(payload, payload_size);
+        default:
+            return nal_unit_type <= 31 && isH265BFrameByNalType(nal_unit_type, payload + 2, payload_size - 2);
+    }
+}
+
+bool H264BFrameFilter::handleH265Ap(const uint8_t *payload, size_t payload_size) const {
+    size_t offset = 2;
+    while (offset + 2 <= payload_size) {
+        uint16_t nalu_size = (payload[offset] << 8) | payload[offset + 1];
+        offset += 2;
+        if (nalu_size < 2 || offset + nalu_size > payload_size) {
+            return false;
+        }
+        uint8_t nal_unit_type = H265_TYPE(payload[offset]);
+        if (nal_unit_type <= 31 && isH265BFrameByNalType(nal_unit_type, payload + offset + 2, nalu_size - 2)) {
+            return true;
+        }
+        offset += nalu_size;
+    }
+    return false;
+}
+
+bool H264BFrameFilter::handleH265Fu(const uint8_t *payload, size_t payload_size) const {
+    if (payload_size < 3 || !(payload[2] & 0x80)) {
+        return false;
+    }
+    uint8_t nal_unit_type = payload[2] & 0x3F;
+    return nal_unit_type <= 31 && isH265BFrameByNalType(nal_unit_type, payload + 3, payload_size - 3);
+}
+
+bool H264BFrameFilter::isH265BFrameByNalType(uint8_t nal_type, const uint8_t *data, size_t size) const {
+    return extractH265SliceType(nal_type, data, size) == 0;
+}
+
+uint8_t H264BFrameFilter::extractH265SliceType(uint8_t nal_type, const uint8_t *data, size_t size) const {
+    if (size < 1 || getBit(data, 0) == 0) {
+        return 0xFF;
+    }
+
+    size_t bitPos = 1;
+    if (nal_type >= 16 && nal_type <= 23) {
+        if (bitPos >= size * 8) {
+            return 0xFF;
+        }
+        ++bitPos;
+    }
+    if (decodeExpGolomb(data, size, bitPos) < 0) {
+        return 0xFF;
+    }
+    int slice_type = decodeExpGolomb(data, size, bitPos);
+    return slice_type >= 0 && slice_type <= 2 ? static_cast<uint8_t>(slice_type) : 0xFF;
 }
 
 bool H264BFrameFilter::handleStapA(const uint8_t *payload, size_t payload_size) const {
@@ -195,7 +263,7 @@ WebRtcPlayer::WebRtcPlayer(const EventPoller::Ptr &poller,
 
     GET_CONFIG(bool, enable, Rtc::kBfilter);
     _bfliter_flag = enable;
-    _is_h264 = false;
+    _video_codec = CodecInvalid;
     _bfilter = std::make_shared<H264BFrameFilter>();
 }
 
@@ -231,8 +299,8 @@ void WebRtcPlayer::onStartWebRTC() {
             size_t i = 0;
             pkt->for_each([&](const RtpPacket::Ptr &rtp) {
                 if (strong_self->_bfliter_flag) {
-                    if (TrackVideo == rtp->type && strong_self->_is_h264) {
-                        auto rtp_filter = strong_self->_bfilter->processPacket(rtp);
+                    if (TrackVideo == rtp->type && strong_self->_bfilter->isSupportCodec(strong_self->_video_codec)) {
+                        auto rtp_filter = strong_self->_bfilter->processPacket(rtp, strong_self->_video_codec);
                         if (rtp_filter) {
                             strong_self->onSendRtp(rtp_filter, ++i == pkt->size());
                         }
@@ -311,7 +379,7 @@ void WebRtcPlayer::sendConfigFrames(const RtpPacket::Ptr &packet) {
     if (!video_track) {
         return;
     }
-    _is_h264 = video_track->getCodecId() == CodecH264;
+    _video_codec = video_track->getCodecId();
     auto frames = video_track->getConfigFrames();
     if (frames.empty()) {
         return;
