@@ -12,3 +12,5 @@
 [简体中文](./README.md) | English
 
 ZLMediakit's web management assistant
+
+You can provide the API `secret` in the URL to log in directly, or open the page without it and enter the API Secret to log in through `/index/api/login`.

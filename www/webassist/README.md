@@ -70,7 +70,7 @@
 
 直接放在zlm的www根目录下即可。
 
-访问的时候务必在url中加上secret参数，否则就是个花架子，看不到数据。
+可以在 URL 中添加正确的 `secret` 参数直接访问；也可以不添加 `secret`，打开页面后输入 API Secret，页面会调用 `/index/api/login` 登录。
 
 如果打开网页是乱码，修改config.ini配置文件中http的charSet为utf-8，然后再重启MediaServer
 

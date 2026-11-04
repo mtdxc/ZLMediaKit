@@ -12,10 +12,23 @@
 
 <body>
     <div id="app">
-        <el-container>
+        <div v-if="!authenticated" style="max-width: 420px; margin: 10vh auto;">
+            <el-card>
+                <div slot="header">登录 ZLMediaKit</div>
+                <el-form @submit.native.prevent="login">
+                    <el-form-item label="API Secret">
+                        <el-input v-model="loginSecret" type="password" show-password
+                            placeholder="请输入 API Secret" @keyup.enter.native="login"></el-input>
+                    </el-form-item>
+                    <el-button type="primary" :loading="loginLoading" style="width: 100%;"
+                        @click="login">登录</el-button>
+                </el-form>
+            </el-card>
+        </div>
+        <el-container v-else>
             <el-header>
                 <el-row>
-                    <el-col :xs="23" :sm="23" :md="23" :lg="23" :xl="23">
+                    <el-col :xs="20" :sm="20" :md="21" :lg="21" :xl="21">
                         <el-menu :default-active="selectIndex" class="el-menu-demo" mode="horizontal"
                             @select="handleSelect" background-color="#545c64" text-color="#fff"
                             active-text-color="#ffd04b">
@@ -31,9 +44,11 @@
                             <el-menu-item index="7">服务器配置</el-menu-item>
                         </el-menu>
                     </el-col>
-                    <el-col :xs="1" :sm="1" :md="1" :lg="1" :xl="1" v-show="selectIndex==='7'">
+                    <el-col :xs="4" :sm="4" :md="3" :lg="3" :xl="3" style="text-align: right;">
+                        <el-button type="info" plain @click="logout">登出</el-button>
                         <el-popconfirm confirm-button-text='好的' cancel-button-text='不用了' icon="el-icon-info"
-                            icon-color="red" title="这只有Daemon方式才能重启，否则是直接关闭！确定重启吗？" @confirm="restartServer">
+                            icon-color="red" title="这只有Daemon方式才能重启，否则是直接关闭！确定重启吗？"
+                            @confirm="restartServer" v-show="selectIndex==='7'">
                             <el-button type="danger" plain slot="reference" icon="el-icon-refresh-right">重启</el-button>
                         </el-popconfirm>
                     </el-col>
@@ -2673,6 +2688,8 @@ x<el-input type="text" placeholder="channels" v-model="serverConfig.general.aacC
                 this.version();
                 this.getServerConfig();
                 this.getApiList();
+            } else {
+                this.version();
             }
 
             //获取支持的分辨率
@@ -2690,26 +2707,15 @@ x<el-input type="text" placeholder="channels" v-model="serverConfig.general.aacC
             this.webrtc.zlmsdpUrl = document.location.protocol + "//" + window.location.host + "/index/api/webrtc?app=live&stream=test&type=play"
         },
         mounted() {
-            if (this.secret == "") {
-                this.$message({
-                    message: '在url路径中添加正确的secret参数',
-                    type: 'error'
-                });
-                return
-            }
-            else {
-                this.updatetimer = setInterval(this.update_status, this.refreshInterval)
-            }
-            this.chart1 = echarts.init(this.$refs.chart1);
-            this.chart2 = echarts.init(this.$refs.chart2);
-            this.chart3 = echarts.init(this.$refs.chart3);
-            this.getMediaList();
-            this.getAllSession();
+            this.initialize();
         },
         data: function () {
             return {
                 host: "",
                 secret: "",
+                loginSecret: "",
+                loginLoading: false,
+                authenticated: true,
                 selectIndex: '1',
                 yesNo:{
                     0:'否',
@@ -2936,6 +2942,14 @@ x<el-input type="text" placeholder="channels" v-model="serverConfig.general.aacC
         },
 
         methods: {
+            getCookie() {
+                return this.cookie || localStorage.getItem('cookie') || '';
+            },
+
+            setCookie(cookie) {
+                this.cookie = cookie;
+                localStorage.setItem('cookie', cookie);
+            },
             filterSchema(value, row) {
                 return row.schema === value;
             },
@@ -3127,8 +3141,11 @@ x<el-input type="text" placeholder="channels" v-model="serverConfig.general.aacC
             onSubmit() {
                 this.setServerConfig()
             },
-
             handleSelect(key, keyPath) {
+                if (key === 'logout') {
+                    this.logout();
+                    return;
+                }
                 if (this.updatetimer) {
                     clearInterval(this.updatetimer);
                     this.updatetimer = null;
@@ -3179,6 +3196,69 @@ x<el-input type="text" placeholder="channels" v-model="serverConfig.general.aacC
                 }
                 console.log(key, keyPath);
             },
+            initialize() {
+                this.version();
+                this.getServerConfig();
+                this.getApiList();
+                this.chart1 = echarts.init(this.$refs.chart1);
+                this.chart2 = echarts.init(this.$refs.chart2);
+                this.chart3 = echarts.init(this.$refs.chart3);
+                this.getMediaList();
+                this.getAllSession();
+                this.updatetimer = setInterval(this.update_status, this.refreshInterval);
+            },
+            async login() {
+                if (this.loginLoading) return;
+                if (!this.loginSecret) {
+                    this.$message({ message: "请输入 API Secret", type: "error" });
+                    return;
+                }
+                this.loginLoading = true;
+                try {
+                    const cookie = this.getCookie();
+                    const digest = md5(`zlmediakit:${this.loginSecret}:${cookie}`);
+                    const url = `${this.host}/index/api/login?digest=${digest}`;
+                    const loginResponse = await axios.get(url);
+                    if (loginResponse.data.code !== 0) {
+                        throw new Error(loginResponse.data.msg || "登录失败");
+                    }
+
+                    this.secret = "";
+                    this.loginSecret = "";
+                    this.authenticated = true;
+                    this.$nextTick(() => this.initialize());
+                } catch (error) {
+                    const responseData = error.response && error.response.data;
+                    this.$message({
+                        message: (responseData && responseData.msg) || error.message || "登录失败",
+                        type: "error"
+                    });
+                } finally {
+                    this.loginLoading = false;
+                }
+            },
+            async logout() {
+                try {
+                    this.performRequest(`${this.host}/index/api/logout`, "已登出", "登出失败", ()=>{
+                        if (this.updatetimer) {
+                            clearInterval(this.updatetimer);
+                            this.updatetimer = null;
+                        }
+                        this.secret = "";
+                        this.authenticated = false;
+                        this.selectIndex = '1';
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.delete("secret");
+                        window.history.replaceState({}, "", currentUrl.toString());
+                    });
+                } catch (error) {
+                    const responseData = error.response && error.response.data;
+                    this.$message({
+                        message: (responseData && responseData.msg) || error.message || "登出失败",
+                        type: "error"
+                    });
+                }
+            },
             async performRequest(url, successMessage, errorMessage, callback) {
                 try {
                     const response = await axios.get(url);
@@ -3193,6 +3273,11 @@ x<el-input type="text" placeholder="channels" v-model="serverConfig.general.aacC
                             if (callback) {
                                 callback(response);
                             }
+                        } else if (response.data.code === -100) {
+                            if (response.data.cookie) {
+                                this.setCookie(response.data.cookie);
+                            }
+                            this.authenticated = false;
                         } else {
                             this.$message({
                                 message: errorMessage || response.data.msg,
